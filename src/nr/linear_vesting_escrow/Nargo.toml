@@ -1,0 +1,9 @@
+[package]
+name = "linear_vesting_escrow"
+type = "contract"
+compiler_version = ">=1.0.0"
+authors = [""]
+
+[dependencies]
+aztec = { git = "https://github.com/AztecProtocol/aztec-packages/", tag = "v1.2.1", directory = "noir-projects/aztec-nr/aztec" }
+escrow_standard = { git = "https://github.com/defi-wonderland/aztec-standards/", tag = "feat/logic-contract-library", directory = "src/escrow_contract" }
