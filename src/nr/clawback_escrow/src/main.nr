@@ -14,8 +14,10 @@ contract ClawbackEscrowLogic {
             storage::storage,
         },
         messages::logs::note::encode_and_encrypt_note,
+        note::note_interface::NoteProperties,
         prelude::{AztecAddress, NoteGetterOptions, PrivateSet, PublicImmutable},
         protocol_types::{public_keys::PublicKeys, traits::{Serialize, ToField}},
+        utils::comparison::Comparator,
     };
     use escrow_standard::library::logic::{
         _check_escrow, _secret_keys_to_public_keys, _share_escrow, _withdraw, _withdraw_nft,
@@ -29,7 +31,7 @@ contract ClawbackEscrowLogic {
     }
 
     /// @notice Data privately emitted to an account that will use the escrow
-    /// @notice We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
+    /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
     /// @param escrow The address of the escrow
     /// @param nsk_m The escrow nullifier secret key
     /// @param ivsk_m The escrow incoming viewing key
