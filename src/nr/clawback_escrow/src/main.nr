@@ -182,7 +182,7 @@ contract ClawbackEscrowLogic {
     #[public]
     fn check_deadline_has_not_passed_internal(deadline: u64) {
         let current_timestamp = context.timestamp();
-        assert(current_timestamp <= deadline, "");
+        assert(current_timestamp <= deadline, "Deadline passed");
     }
 
     /// @notice Checks that the escrow has expired.
@@ -192,7 +192,7 @@ contract ClawbackEscrowLogic {
     #[public]
     fn check_deadline_has_passed_internal(deadline: u64) {
         let current_timestamp = context.timestamp();
-        assert(current_timestamp > deadline, "");
+        assert(current_timestamp > deadline, "Deadline not passed");
     }
 
     /// @notice Derives public keys from secret keys.
