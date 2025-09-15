@@ -13,13 +13,19 @@ contract ClawbackEscrowLogic {
     };
 
     /// @notice Data privately emitted to an account that will use the escrow
-    /// @notice We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
+    /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
     /// @param escrow The address of the escrow
-    /// @param keys The escrow keys [nsk_m, ivsk_m, ovsk_m, tsk_m]
+    /// @param nsk_m The escrow nullifier secret key
+    /// @param ivsk_m The escrow incoming viewing key
+    /// @param ovsk_m The escrow outgoing viewing key
+    /// @param tsk_m The escrow transaction secret key
     #[event]
     struct EscrowDetailsLogContent {
         escrow: AztecAddress,
-        keys: [Field; 4],
+        nsk_m: Field,
+        ivsk_m: Field,
+        ovsk_m: Field,
+        tsk_m: Field,
     }
 
     // @param escrow_class_id The contract class id of the escrow contract
@@ -40,20 +46,47 @@ contract ClawbackEscrowLogic {
     ///         escrow instance data is correct.
     /// @dev Reverts if the data is not correct.
     /// @param escrow The address of the escrow
-    /// @param keys The escrow keys [nsk_m, ivsk_m, ovsk_m, tsk_m]
+    /// @param nsk_m The escrow nullifier secret key
+    /// @param ivsk_m The escrow incoming viewing key
+    /// @param ovsk_m The escrow outgoing viewing key
+    /// @param tsk_m The escrow transaction secret key
     #[private]
-    fn check_escrow(escrow: AztecAddress, keys: [Field; 4]) {
-        _check_escrow(&mut context, escrow, keys, storage.escrow_class_id.read());
+    fn check_escrow(
+        escrow: AztecAddress,
+        nsk_m: Field,
+        ivsk_m: Field,
+        ovsk_m: Field,
+        tsk_m: Field,
+    ) {
+        _check_escrow(
+            &mut context,
+            escrow,
+            nsk_m,
+            ivsk_m,
+            ovsk_m,
+            tsk_m,
+            storage.escrow_class_id.read(),
+        );
     }
 
     /// @notice Shares the escrow details needed to find and use the escrow contract
     /// @dev Emits a private log with the escrow details
     /// @param escrow The address of the escrow
-    /// @param keys The escrow keys [nsk_m, ivsk_m, ovsk_m, tsk_m]
+    /// @param nsk_m The escrow nullifier secret key
+    /// @param ivsk_m The escrow incoming viewing key
+    /// @param ovsk_m The escrow outgoing viewing key
+    /// @param tsk_m The escrow transaction secret key
     /// @param account The address of the account that will use the escrow
     #[private]
-    fn share_escrow(escrow: AztecAddress, keys: [Field; 4], account: AztecAddress) {
-        _share_escrow(&mut context, escrow, keys, account);
+    fn share_escrow(
+        escrow: AztecAddress,
+        nsk_m: Field,
+        ivsk_m: Field,
+        ovsk_m: Field,
+        tsk_m: Field,
+        account: AztecAddress,
+    ) {
+        _share_escrow(&mut context, escrow, nsk_m, ivsk_m, ovsk_m, tsk_m, account);
     }
 
     /// @notice Withdraws an amount of tokens from the provided escrow.

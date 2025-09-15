@@ -29,7 +29,8 @@ pub unconstrained fn deploy_contract(
     owner: AztecAddress,
 ) -> ContractInstance {
     let contract_class_id = 1;
-    let initializer_call_interface = LinearVestingEscrowLogic::interface().constructor(contract_class_id);
+    let initializer_call_interface =
+        LinearVestingEscrowLogic::interface().constructor(contract_class_id);
     let contract_instance = env
         .deploy("./@linear_vesting_escrow", "LinearVestingEscrowLogic")
         .with_public_void_initializer(contract_class_id, initializer_call_interface);
