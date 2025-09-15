@@ -72,21 +72,21 @@ contract LinearVestingEscrowLogic {
     /// @notice Shares the escrow details needed to find and use the escrow contract
     /// @dev Emits a private log with the escrow details
     /// @param escrow The address of the escrow
+    /// @param account The address of the account that will use the escrow
     /// @param nsk_m The escrow nullifier secret key
     /// @param ivsk_m The escrow incoming viewing key
     /// @param ovsk_m The escrow outgoing viewing key
     /// @param tsk_m The escrow transaction secret key
-    /// @param account The address of the account that will use the escrow
     #[private]
     fn share_escrow(
         escrow: AztecAddress,
+        account: AztecAddress,
         nsk_m: Field,
         ivsk_m: Field,
         ovsk_m: Field,
         tsk_m: Field,
-        account: AztecAddress,
     ) {
-        _share_escrow(&mut context, escrow, nsk_m, ivsk_m, ovsk_m, tsk_m, account);
+        _share_escrow(&mut context, escrow, account, nsk_m, ivsk_m, ovsk_m, tsk_m);
     }
 
     /// @notice Withdraws an amount of tokens from the provided escrow.
