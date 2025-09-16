@@ -34,10 +34,10 @@ contract ClawbackEscrowLogic {
     /// @notice Data privately emitted to an account that will use the escrow
     /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
     /// @param escrow The address of the escrow
-    /// @param nsk_m The escrow nullifier secret key
-    /// @param ivsk_m The escrow incoming viewing key
-    /// @param ovsk_m The escrow outgoing viewing key
-    /// @param tsk_m The escrow transaction secret key
+    /// @param nsk_m Master Nullifier Secret Key
+    /// @param ivsk_m Incoming Viewing Key
+    /// @param ovsk_m Outgoing Viewing Key
+    /// @param tsk_m Tagging Secret Key
     #[event]
     struct EscrowDetailsLogContent {
         escrow: AztecAddress,
@@ -62,10 +62,10 @@ contract ClawbackEscrowLogic {
     /// @param recipient The address that can claim tokens before deadline
     /// @param reclaimer The address that can clawback tokens after deadline
     /// @param deadline The timestamp after which owner can clawback
-    /// @param nsk_m The escrow nullifier secret key
-    /// @param ivsk_m The escrow incoming viewing key
-    /// @param ovsk_m The escrow outgoing viewing key
-    /// @param tsk_m The escrow transaction secret key
+    /// @param nsk_m Master Nullifier Secret Key
+    /// @param ivsk_m Incoming Viewing Key
+    /// @param ovsk_m Outgoing Viewing Key
+    /// @param tsk_m Tagging Secret Key
     #[private]
     fn create_clawback_escrow(
         escrow: AztecAddress,
