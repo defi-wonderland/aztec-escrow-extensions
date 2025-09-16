@@ -22,6 +22,7 @@ contract ClawbackEscrowLogic {
     use escrow_standard::library::logic::{
         _check_escrow, _secret_keys_to_public_keys, _share_escrow, _withdraw, _withdraw_nft,
     };
+    use router::utils::privately_check_timestamp;
 
     // @param escrow_class_id The contract class id of the escrow contract
     #[storage]
@@ -104,7 +105,7 @@ contract ClawbackEscrowLogic {
             tsk_m,
         );
 
-        // Create and emit note with gating logic parameters 
+        // Create and emit note with gating logic parameters
         let note = ClawbackEscrowNote::new(escrow, recipient, reclaimer, deadline);
         let note_insertion = storage.escrows.insert(note);
         note_insertion.emit(encode_and_encrypt_note(&mut context, reclaimer, context.msg_sender()));
@@ -125,9 +126,7 @@ contract ClawbackEscrowLogic {
         let note = _find_clawback_note(storage, escrow);
         _withdraw(&mut context, escrow, note.recipient, token, amount);
 
-        ClawbackEscrowLogic::at(context.this_address())
-            .check_deadline_has_not_passed_internal(note.deadline)
-            .enqueue(&mut context);
+        privately_check_timestamp(Comparator.LTE, note.deadline, &mut context);
     }
 
     /// @notice Withdraws an NFT from the provided escrow.
@@ -140,9 +139,7 @@ contract ClawbackEscrowLogic {
         let note = _find_clawback_note(storage, escrow);
         _withdraw_nft(&mut context, escrow, note.recipient, nft, token_id);
 
-        ClawbackEscrowLogic::at(context.this_address())
-            .check_deadline_has_not_passed_internal(note.deadline)
-            .enqueue(&mut context);
+        privately_check_timestamp(Comparator.LTE, note.deadline, &mut context);
     }
 
     /// @notice Withdraws an amount of tokens from the provided escrow.
@@ -155,9 +152,10 @@ contract ClawbackEscrowLogic {
         let note = _find_clawback_note(storage, escrow);
         _withdraw(&mut context, escrow, note.reclaimer, token, amount);
 
-        ClawbackEscrowLogic::at(context.this_address())
-            .check_deadline_has_passed_internal(note.deadline)
-            .enqueue(&mut context);
+        // Alternatively, the clawback method could rely on historical block proofs to check
+        // that the deadline has passed. Pros: more efficient and no public execution. Cons:
+        // caller would have to wait until the deadline block is mined.
+        privately_check_timestamp(Comparator.GT, note.deadline, &mut context);
     }
 
     /// @notice Withdraws an NFT from the provided escrow.
@@ -170,30 +168,15 @@ contract ClawbackEscrowLogic {
         let note = _find_clawback_note(storage, escrow);
         _withdraw_nft(&mut context, escrow, note.reclaimer, nft, token_id);
 
-        ClawbackEscrowLogic::at(context.this_address())
-            .check_deadline_has_passed_internal(note.deadline)
-            .enqueue(&mut context);
+        // Alternatively, the clawback method could rely on historical block proofs to check
+        // that the deadline has passed. Pros: more efficient and no public execution. Cons:
+        // caller would have to wait until the deadline block is mined.
+        privately_check_timestamp(Comparator.GT, note.deadline, &mut context);
     }
 
-    /// @notice Checks that the escrow is still active.
-    /// @dev Reverts if the deadline has passed.
-    /// @param deadline The timestamp after which owner can clawback
-    #[internal]
-    #[public]
-    fn check_deadline_has_not_passed_internal(deadline: u64) {
-        let current_timestamp = context.timestamp();
-        assert(current_timestamp <= deadline, "Deadline passed");
-    }
-
-    /// @notice Checks that the escrow has expired.
-    /// @dev Reverts if the deadline has not passed.
-    /// @param deadline The timestamp after which owner can clawback
-    #[internal]
-    #[public]
-    fn check_deadline_has_passed_internal(deadline: u64) {
-        let current_timestamp = context.timestamp();
-        assert(current_timestamp > deadline, "Deadline not passed");
-    }
+    /** ==========================================================
+     * ======================== UTILITIES ========================
+     * ======================================================== */
 
     /// @notice Derives public keys from secret keys.
     /// @param nsk_m Master Nullifier Secret Key
