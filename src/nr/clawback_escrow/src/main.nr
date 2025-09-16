@@ -154,7 +154,7 @@ contract ClawbackEscrowLogic {
 
         // Alternatively, the clawback method could rely on historical block proofs to check
         // that the deadline has passed. Pros: more efficient and no public execution. Cons:
-        // caller would have to wait until the deadline block is mined.
+        // reclaimer would have to wait until the deadline block is mined.
         privately_check_timestamp(Comparator.GT, note.deadline, &mut context);
     }
 
@@ -170,7 +170,7 @@ contract ClawbackEscrowLogic {
 
         // Alternatively, the clawback method could rely on historical block proofs to check
         // that the deadline has passed. Pros: more efficient and no public execution. Cons:
-        // caller would have to wait until the deadline block is mined.
+        // reclaimer would have to wait until the deadline block is mined.
         privately_check_timestamp(Comparator.GT, note.deadline, &mut context);
     }
 
@@ -182,7 +182,7 @@ contract ClawbackEscrowLogic {
     /// @param nsk_m Master Nullifier Secret Key
     /// @param ivsk_m Incoming Viewing Key
     /// @param ovsk_m Outgoing Viewing Key
-    /// @param tsk_m Transaction Secret Key
+    /// @param tsk_m Tagging Secret Key
     /// @return PublicKeys containing the derived public keys.
     #[utility]
     pub unconstrained fn secret_keys_to_public_keys(
