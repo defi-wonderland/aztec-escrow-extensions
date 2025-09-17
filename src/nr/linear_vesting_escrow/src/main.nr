@@ -1,4 +1,5 @@
 use aztec::macros::aztec;
+mod test;
 mod types;
 
 #[aztec]
@@ -302,12 +303,12 @@ contract LinearVestingEscrowLogic {
 
         if timestamp >= note.start() + note.duration() {
             vested_amount = note.total_amount();
+            releasable_amount = vested_amount - note.released_amount();
         } else if timestamp > note.start() {
             let elapsed = (timestamp - note.start()) as u128;
             vested_amount = (note.total_amount() * elapsed) / note.duration() as u128;
+            releasable_amount = vested_amount - note.released_amount();
         }
-
-        releasable_amount = vested_amount - note.released_amount();
 
         (releasable_amount, vested_amount)
     }
