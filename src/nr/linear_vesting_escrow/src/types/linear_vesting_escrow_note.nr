@@ -58,6 +58,8 @@ impl LinearVestingEscrowNote {
         total_amount: u128,
         released_amount: u128,
     ) -> Self {
+        // Safety: random() is safe to call here as it generates cryptographically secure randomness
+        // for note creation, which is the intended use case
         let randomness = unsafe { random() };
         LinearVestingEscrowNote {
             escrow,
@@ -69,5 +71,33 @@ impl LinearVestingEscrowNote {
             released_amount,
             randomness,
         }
+    }
+
+    pub fn escrow(self) -> AztecAddress {
+        self.escrow
+    }
+
+    pub fn recipient(self) -> AztecAddress {
+        self.recipient
+    }
+
+    pub fn token(self) -> AztecAddress {
+        self.token
+    }
+
+    pub fn start(self) -> u64 {
+        self.start
+    }
+
+    pub fn duration(self) -> u64 {
+        self.duration
+    }
+
+    pub fn total_amount(self) -> u128 {
+        self.total_amount
+    }
+
+    pub fn released_amount(self) -> u128 {
+        self.released_amount
     }
 }
