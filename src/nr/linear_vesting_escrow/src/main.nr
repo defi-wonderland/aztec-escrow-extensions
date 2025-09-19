@@ -259,8 +259,10 @@ contract LinearVestingEscrowLogic {
         if timestamp >= note.start + note.duration {
             vested_amount = note.total_amount;
         } else if timestamp > note.start {
-            let elapsed = (timestamp - note.start) as u128;
-            vested_amount = (note.total_amount * elapsed) / note.duration as u128;
+            let elapsed = timestamp - note.start;
+            // Safety: 'vested_amount' is properly constrained below
+            vested_amount = unsafe { calculate_vested_amount_unconstrained(note.total_amount, elapsed, note.duration) };
+            assert(note.total_amount as Field * elapsed as Field == vested_amount as Field * note.duration as Field);
         }
 
         // Before start time, both released and vested amounts are zero
@@ -268,6 +270,22 @@ contract LinearVestingEscrowLogic {
         releasable_amount = vested_amount - note.released_amount;
 
         (releasable_amount, vested_amount)
+    }
+
+    /// @notice Calculates the vested amount for a linear vesting note
+    /// @param total_amount The total amount of tokens to vest
+    /// @param elapsed The elapsed time
+    /// @param duration The duration of the vesting
+    /// @return The vested amount
+    #[contract_library_method]
+    unconstrained fn calculate_vested_amount_unconstrained(
+        total_amount: u128,
+        elapsed: u64, 
+        duration: u64
+    ) -> u128 {        
+        let vested_amount_field = (total_amount as Field * elapsed as Field) / duration as Field;
+        
+        vested_amount_field as u128
     }
 
     /// @notice Finds a linear vesting note in the storage (unconstrained version for utility functions)
@@ -305,8 +323,10 @@ contract LinearVestingEscrowLogic {
             vested_amount = note.total_amount;
             releasable_amount = vested_amount - note.released_amount;
         } else if timestamp > note.start {
-            let elapsed = (timestamp - note.start) as u128;
-            vested_amount = (note.total_amount * elapsed) / note.duration as u128;
+            let elapsed = timestamp - note.start;
+            // Safety: 'vested_amount' is properly constrained below
+            vested_amount = unsafe { calculate_vested_amount_unconstrained(note.total_amount, elapsed, note.duration) };
+            assert(note.total_amount as Field * elapsed as Field == vested_amount as Field * note.duration as Field);
             releasable_amount = vested_amount - note.released_amount;
         }
 
