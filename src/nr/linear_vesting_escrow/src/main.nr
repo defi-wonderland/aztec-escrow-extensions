@@ -26,6 +26,8 @@ contract LinearVestingEscrowLogic {
     use crate::types::vesting_schedule_note::VestingScheduleNote;
     // released amount note types
     use crate::types::released_amount_note::ReleasedAmountNote;
+    // bignum library
+    use bignum::{U256, BigNum};
 
     /// @notice Data privately emitted to an account that will use the escrow
     /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
@@ -330,13 +332,11 @@ contract LinearVestingEscrowLogic {
             vested_amount = total_amount;
         } else if timestamp > start {
             let elapsed = timestamp - start;
-            // Safety: 'vested_amount' is properly constrained below
-            vested_amount =
-                unsafe { calculate_vested_amount_unconstrained(total_amount, elapsed, duration) };
-            assert(
-                total_amount as Field * elapsed as Field
-                    == vested_amount as Field * duration as Field,
-            );
+
+            // Operate on BigNum to avoid overflow of total_amount * elapsed
+            // vested_amount fits in u128 because elapsed < duration, and total_amount < u128
+            let vested_amount_field = u256_muldiv(total_amount as Field, elapsed as Field, duration as Field);
+            vested_amount = vested_amount_field as u128;
         }
 
         // Before start time, both released and vested amounts are zero
@@ -357,9 +357,9 @@ contract LinearVestingEscrowLogic {
         elapsed: u64,
         duration: u64,
     ) -> u128 {
-        let vested_amount_field = (total_amount as Field * elapsed as Field) / duration as Field;
-
-        vested_amount_field as u128
+        let vested_amount_field = u256_muldiv_unconstrained(total_amount as Field, elapsed as Field, duration as Field);
+        let vested_amount = vested_amount_field as u128;
+        vested_amount
     }
 
     /// @notice Calculates the releasable and vested amounts
@@ -430,5 +430,72 @@ contract LinearVestingEscrowLogic {
 
         // We revert if there is no note in the filter so we can probably unwrap directly
         notes.get_unchecked(0)
+    }
+
+    /// @notice Performs safe multiplication and division: (a * b) / c
+    /// @param a First operand (Field)
+    /// @param b Second operand (Field)
+    /// @param c Divisor (Field)
+    /// @return Result as Field
+    #[contract_library_method]
+    fn u256_muldiv(a: Field, b: Field, c: Field) -> Field {
+        let a_u256 = U256::from(a);
+        let b_u256 = U256::from(b);
+        let c_u256 = U256::from(c);
+        
+        // Perform (a * b) / c using U256 to avoid overflow
+        let result_u256 = a_u256 * b_u256 / c_u256;
+        
+        // Convert back to Field
+        u256_to_field(result_u256)
+    }
+
+    /// @notice Performs safe multiplication and division: (a * b) / c
+    /// @param a First operand (Field)
+    /// @param b Second operand (Field)
+    /// @param c Divisor (Field)
+    /// @return Result as Field
+    #[contract_library_method]
+    unconstrained fn u256_muldiv_unconstrained(a: Field, b: Field, c: Field) -> Field {
+        let a_u256 = U256::from(a);
+        let b_u256 = U256::from(b);
+        let c_u256 = U256::from(c);
+        
+        let result_u256 = a_u256 * b_u256 / c_u256;
+        u256_to_field_unconstrained(result_u256)
+    }
+
+    /// @notice Converts a U256 to a Field
+    /// @param x The U256
+    /// @return The Field
+    #[contract_library_method]
+    fn u256_to_field(x: U256) -> Field {
+        let le: [u8; 33] = x.to_le_bytes();
+        
+        // Convert to 32 bytes by taking the first 32 bytes
+        let mut le_32: [u8; 32] = [0; 32];
+        for i in 0..32 {
+            le_32[i] = le[i];
+        }
+        
+        // Interpret those bytes as a field element (reduced mod p)
+        Field::from_le_bytes::<32>(le_32)
+    }
+
+    /// @notice Converts a U256 to a Field
+    /// @param x The U256
+    /// @return The Field
+    #[contract_library_method]
+    unconstrained fn u256_to_field_unconstrained(x: U256) -> Field {
+        let le: [u8; 33] = x.to_le_bytes();
+        
+        // Convert to 32 bytes by taking the first 32 bytes
+        let mut le_32: [u8; 32] = [0; 32];
+        for i in 0..32 {
+            le_32[i] = le[i];
+        }
+        
+        // Interpret those bytes as a field element (reduced mod p)
+        Field::from_le_bytes::<32>(le_32)
     }
 }
