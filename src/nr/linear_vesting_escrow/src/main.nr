@@ -126,22 +126,22 @@ contract LinearVestingEscrowLogic {
         let (releasable_amount, vested_amount) = _calculate_releasable_and_vested_amounts(&mut context, note);
 
         // We create and emit a new note to the recipient if the vested amount is less than the total amount
-        if vested_amount < note.total_amount() {
+        if vested_amount < note.total_amount {
             _create_linear_vesting_note(
                 &mut context,
                 storage,
                 escrow,
-                note.recipient(),
-                note.token(),
-                note.start(),
-                note.duration(),
-                note.total_amount(),
+                note.recipient,
+                note.token,
+                note.start,
+                note.duration,
+                note.total_amount,
                 vested_amount,
             );
         }
 
         // Withdraw the tokens
-        _withdraw(&mut context, escrow, note.recipient(), note.token(), releasable_amount);
+        _withdraw(&mut context, escrow, note.recipient, note.token, releasable_amount);
     }
 
     /// @notice Derives public keys from secret keys.
@@ -256,16 +256,16 @@ contract LinearVestingEscrowLogic {
         let timestamp = block_header.global_variables.timestamp;
 
         // We only calculate the amounts if the last timestamp is greater than the start time, otherwise both amounts are zero
-        if timestamp >= note.start() + note.duration() {
-            vested_amount = note.total_amount();
-        } else if timestamp > note.start() {
-            let elapsed = (timestamp - note.start()) as u128;
-            vested_amount = (note.total_amount() * elapsed) / note.duration() as u128;
+        if timestamp >= note.start + note.duration {
+            vested_amount = note.total_amount;
+        } else if timestamp > note.start {
+            let elapsed = (timestamp - note.start) as u128;
+            vested_amount = (note.total_amount * elapsed) / note.duration as u128;
         }
 
         // Before start time, both released and vested amounts are zero
         // During and after the vesting period, vested is always greater than or equal to released
-        releasable_amount = vested_amount - note.released_amount();
+        releasable_amount = vested_amount - note.released_amount;
 
         (releasable_amount, vested_amount)
     }
@@ -301,13 +301,13 @@ contract LinearVestingEscrowLogic {
         let mut releasable_amount = 0;
         let mut vested_amount = 0;
 
-        if timestamp >= note.start() + note.duration() {
-            vested_amount = note.total_amount();
-            releasable_amount = vested_amount - note.released_amount();
-        } else if timestamp > note.start() {
-            let elapsed = (timestamp - note.start()) as u128;
-            vested_amount = (note.total_amount() * elapsed) / note.duration() as u128;
-            releasable_amount = vested_amount - note.released_amount();
+        if timestamp >= note.start + note.duration {
+            vested_amount = note.total_amount;
+            releasable_amount = vested_amount - note.released_amount;
+        } else if timestamp > note.start {
+            let elapsed = (timestamp - note.start) as u128;
+            vested_amount = (note.total_amount * elapsed) / note.duration as u128;
+            releasable_amount = vested_amount - note.released_amount;
         }
 
         (releasable_amount, vested_amount)

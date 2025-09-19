@@ -15,13 +15,13 @@ use aztec::{
 #[custom_note]
 #[derive(Serialize, Eq)]
 pub struct LinearVestingEscrowNote {
-    escrow: AztecAddress,
-    recipient: AztecAddress,
-    token: AztecAddress,
-    start: u64,
-    duration: u64,
-    total_amount: u128,
-    released_amount: u128,
+    pub escrow: AztecAddress,
+    pub recipient: AztecAddress,
+    pub token: AztecAddress,
+    pub start: u64,
+    pub duration: u64,
+    pub total_amount: u128,
+    pub released_amount: u128,
     randomness: Field,
 }
 
@@ -71,33 +71,5 @@ impl LinearVestingEscrowNote {
             released_amount,
             randomness,
         }
-    }
-
-    pub fn escrow(self) -> AztecAddress {
-        self.escrow
-    }
-
-    pub fn recipient(self) -> AztecAddress {
-        self.recipient
-    }
-
-    pub fn token(self) -> AztecAddress {
-        self.token
-    }
-
-    pub fn start(self) -> u64 {
-        self.start
-    }
-
-    pub fn duration(self) -> u64 {
-        self.duration
-    }
-
-    pub fn total_amount(self) -> u128 {
-        self.total_amount
-    }
-
-    pub fn released_amount(self) -> u128 {
-        self.released_amount
     }
 }
