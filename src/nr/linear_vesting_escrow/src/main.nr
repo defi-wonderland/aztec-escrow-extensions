@@ -444,7 +444,7 @@ contract LinearVestingEscrowLogic {
         let c_u256 = U256::from(c);
         
         // Perform (a * b) / c using U256 to avoid overflow
-        let result_u256 = a_u256 * b_u256 / c_u256;
+        let result_u256 = (a_u256 * b_u256).udiv(c_u256);
         
         // Convert back to Field
         u256_to_field(result_u256)
@@ -461,7 +461,7 @@ contract LinearVestingEscrowLogic {
         let b_u256 = U256::from(b);
         let c_u256 = U256::from(c);
         
-        let result_u256 = a_u256 * b_u256 / c_u256;
+        let result_u256 = (a_u256 * b_u256).udiv(c_u256);
         u256_to_field_unconstrained(result_u256)
     }
 
