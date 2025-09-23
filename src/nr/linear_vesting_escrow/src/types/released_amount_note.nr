@@ -15,7 +15,7 @@ use aztec::{
 #[custom_note]
 #[derive(Serialize, Eq)]
 pub struct ReleasedAmountNote {
-    pub escrow: AztecAddress,
+    escrow: AztecAddress,
     pub released_amount: u128,
     randomness: Field,
 }
