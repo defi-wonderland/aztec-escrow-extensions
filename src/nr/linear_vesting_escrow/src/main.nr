@@ -27,7 +27,7 @@ contract LinearVestingEscrowLogic {
     // released amount note types
     use crate::types::released_amount_note::ReleasedAmountNote;
     // bignum library
-    use bignum::{U256, BigNum};
+    use bignum::{U256, BigNum, bignum::to_field};
 
     /// @notice Data privately emitted to an account that will use the escrow
     /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
@@ -439,15 +439,13 @@ contract LinearVestingEscrowLogic {
     /// @return Result as Field
     #[contract_library_method]
     fn u256_muldiv(a: Field, b: Field, c: Field) -> Field {
-        let a_u256 = U256::from(a);
-        let b_u256 = U256::from(b);
         let c_u256 = U256::from(c);
         
         // Perform (a * b) / c using U256 to avoid overflow
-        let result_u256 = (a_u256 * b_u256).udiv(c_u256);
+        let result_u256: U256 = U256::from(a * b).udiv(c_u256);
         
         // Convert back to Field
-        u256_to_field(result_u256)
+        to_field(result_u256)
     }
 
     /// @notice Performs safe multiplication and division: (a * b) / c
@@ -457,45 +455,12 @@ contract LinearVestingEscrowLogic {
     /// @return Result as Field
     #[contract_library_method]
     unconstrained fn u256_muldiv_unconstrained(a: Field, b: Field, c: Field) -> Field {
-        let a_u256 = U256::from(a);
-        let b_u256 = U256::from(b);
         let c_u256 = U256::from(c);
         
-        let result_u256 = (a_u256 * b_u256).udiv(c_u256);
-        u256_to_field_unconstrained(result_u256)
-    }
-
-    /// @notice Converts a U256 to a Field
-    /// @param x The U256
-    /// @return The Field
-    #[contract_library_method]
-    fn u256_to_field(x: U256) -> Field {
-        let le: [u8; 33] = x.to_le_bytes();
+        // Perform (a * b) / c using U256 to avoid overflow
+        let result_u256: U256 = U256::from(a * b).udiv(c_u256);
         
-        // Convert to 32 bytes by taking the first 32 bytes
-        let mut le_32: [u8; 32] = [0; 32];
-        for i in 0..32 {
-            le_32[i] = le[i];
-        }
-        
-        // Interpret those bytes as a field element (reduced mod p)
-        Field::from_le_bytes::<32>(le_32)
-    }
-
-    /// @notice Converts a U256 to a Field
-    /// @param x The U256
-    /// @return The Field
-    #[contract_library_method]
-    unconstrained fn u256_to_field_unconstrained(x: U256) -> Field {
-        let le: [u8; 33] = x.to_le_bytes();
-        
-        // Convert to 32 bytes by taking the first 32 bytes
-        let mut le_32: [u8; 32] = [0; 32];
-        for i in 0..32 {
-            le_32[i] = le[i];
-        }
-        
-        // Interpret those bytes as a field element (reduced mod p)
-        Field::from_le_bytes::<32>(le_32)
+        // Convert back to Field
+        to_field(result_u256)
     }
 }

@@ -15,7 +15,7 @@ use aztec::{
 #[custom_note]
 #[derive(Serialize, Eq)]
 pub struct VestingScheduleNote {
-    pub escrow: AztecAddress,
+    escrow: AztecAddress,
     pub recipient: AztecAddress,
     pub token: AztecAddress,
     pub start: u64,
