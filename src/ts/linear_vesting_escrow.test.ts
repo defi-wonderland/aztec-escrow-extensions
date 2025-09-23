@@ -279,13 +279,13 @@ describe("Linear Vesting Escrow - Single PXE", () => {
   });
 
   describe("create_linear_vesting_escrow", () => {
-    beforeEach(async () => {
-      await store.delete();
-      await setup();
-    });
-
     // Split in 2 parts due to memory limit of the store
     describe("part 1", () => {
+      beforeAll(async () => {
+        await store.delete();
+        await setup();
+      });
+
       it("creates linear vesting escrow shares escrow with bob correctly", async () => {
         const tx = await linearVestingEscrow.methods
           .create_linear_vesting_escrow(
@@ -475,6 +475,11 @@ describe("Linear Vesting Escrow - Single PXE", () => {
     });
 
     describe("part 2", () => {
+      beforeAll(async () => {
+        await store.delete();
+        await setup();
+      });
+
       it("sharing an escrow with with incorrect secret keys should fail", async () => {
         let secretKeysPlusOne = secretKeys.map((sk) => sk.add(Fr.ONE));
 
@@ -528,10 +533,6 @@ describe("Linear Vesting Escrow - Single PXE", () => {
       });
 
       it("sharing an escrow with incorrect class id should fail", async () => {
-        // Reset the setup to avoid array error
-        await store.delete();
-        await setup();
-
         // Re-deploy the logic contract with an incorrect class id
         linearVestingEscrow = (await deployLinearVestingEscrow(
           alice,
@@ -1200,6 +1201,170 @@ describe("Linear Vesting Escrow - Single PXE", () => {
       };
 
       await expect(shouldThrow()).rejects.toThrow(/Cannot satisfy constraint/);
+    });
+  });
+
+  describe('releasable and vested amount', () => {
+    beforeAll(async () => {
+      await store.delete();
+      await setup();
+    });
+    
+    it("releasable and vested amount should be correct with multiple claims", async () => {
+      // We set the duration to 200 to make the tokens partially claimable (claims every 36 units of time)
+      duration = 200n;
+      const bobPXE = pxe;
+  
+      const tx = await linearVestingEscrow
+        .withWallet(alice)
+        .methods.create_linear_vesting_escrow(
+          escrow.instance.address,
+          bob.getAddress(),
+          token.instance.address,
+          start,
+          duration,
+          AMOUNT,
+          secretKeys[0],
+          secretKeys[1],
+          secretKeys[2],
+          secretKeys[3],
+        )
+        .send()
+        .wait();
+  
+      // Sync to get linear vesting escrow note
+      await linearVestingEscrow
+        .withWallet(bob)
+        .methods.sync_private_state()
+        .simulate({});
+  
+      // Assert initial balances
+      await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
+      await expectTokenBalances(token, escrow.instance.address, wad(0), AMOUNT);
+  
+      let totalClaimed = 0n;
+      let previousTx = tx;
+      let claimCount = 0;
+  
+      while (totalClaimed < AMOUNT) {
+        claimCount++;
+  
+        // Get timestamp from the previous transaction for calculation
+        const previousBlock = await pxe.getBlock(previousTx.blockNumber!);
+        const claimTimestamp = previousBlock!.header.globalVariables.timestamp;
+  
+        // Utility functions
+        const utilityReleasable = await linearVestingEscrow
+          .withWallet(bob)
+          .methods.releasable(escrow.instance.address, claimTimestamp)
+          .simulate();
+        
+        const utilityVested = await linearVestingEscrow
+          .withWallet(bob)
+          .methods.vested_amount(escrow.instance.address, claimTimestamp)
+          .simulate();
+  
+        // Calculate expected values
+        const totalVestedAmount =
+          claimTimestamp > start
+            ? ((BigInt(claimTimestamp) - BigInt(start)) * AMOUNT) /
+              BigInt(duration)
+            : 0n;
+  
+        const cappedVestedAmount =
+          totalVestedAmount > AMOUNT ? AMOUNT : totalVestedAmount;
+  
+        const receivedAmount = cappedVestedAmount - totalClaimed;
+        totalClaimed += receivedAmount;
+  
+        // Verify utility functions match
+        expect(utilityVested).toBe(cappedVestedAmount);
+        expect(utilityReleasable).toBe(receivedAmount);
+  
+        // Now make the claim
+        const claimTx = await linearVestingEscrow
+          .withWallet(bob)
+          .methods.claim(escrow.address)
+          .send()
+          .wait();
+        await token.withWallet(bob).methods.sync_private_state().simulate({});
+        await linearVestingEscrow
+          .withWallet(bob)
+          .methods.sync_private_state()
+          .simulate({});
+  
+        // Check if vesting is complete
+        const isVestingComplete = claimTimestamp >= start + duration;
+  
+        // We expect different number of notes based on vesting completion
+        const notes = await bobPXE.getNotes({ txHash: claimTx.txHash });
+  
+        if (isVestingComplete) {
+          // Final claim: 1 note (tokens to Bob)
+          expect(notes.length).toBe(1);
+  
+          const bobTokenNote = await bobPXE.getNotes({
+            txHash: claimTx.txHash,
+            contractAddress: token.instance.address,
+            recipient: bob.getAddress(),
+          });
+          expectUintNote(bobTokenNote[0], utilityReleasable, bob.getAddress());
+        } else {
+          // Partial claim: 3 notes (escrow tokens, linear vesting note, bob tokens)
+          expect(notes.length).toBe(3);
+  
+          const slotReleasedAmountNotes =
+            LinearVestingEscrowLogicContract.storage.released_notes.slot;
+  
+          const releasedAmountNote = await bobPXE.getNotes({
+            txHash: claimTx.txHash,
+            contractAddress: linearVestingEscrow.address,
+            recipient: bob.getAddress(),
+            storageSlot: slotReleasedAmountNotes,
+          });
+          expect(releasedAmountNote[0].note.items[1].toBigInt()).toBe(
+            utilityVested,
+          );
+  
+          const escrowTokenNote = await bobPXE.getNotes({
+            txHash: claimTx.txHash,
+            contractAddress: token.instance.address,
+            recipient: escrow.instance.address,
+          });
+          expectUintNote(
+            escrowTokenNote[0],
+            AMOUNT - totalClaimed,
+            escrow.instance.address,
+          );
+  
+          const bobTokenNote = await bobPXE.getNotes({
+            txHash: claimTx.txHash,
+            contractAddress: token.instance.address,
+            recipient: bob.getAddress(),
+          });
+          expectUintNote(bobTokenNote[0], utilityReleasable, bob.getAddress());
+        }
+  
+        // Update previousTx to current claim for next iteration
+        previousTx = claimTx;
+  
+        // Final balance checks
+        await expectTokenBalances(
+          token,
+          bob.getAddress(),
+          wad(0),
+          totalClaimed,
+        );
+        await expectTokenBalances(
+          token,
+          escrow.instance.address,
+          wad(0),
+          AMOUNT - totalClaimed,
+        );
+      }
+  
+      // Be sure we had multiple claims
+      expect(claimCount).toBeGreaterThan(1);
     });
   });
 });
