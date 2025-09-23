@@ -16,7 +16,7 @@
     "build": "yarn compile && yarn codegen -f",
     "prepare": "husky",
     "ccc": "yarn clean && yarn compile && yarn codegen",
-    "postinstall": "npx tsx scripts/build-aztec-standards.ts"
+    "build-standards": "npx tsx scripts/build-aztec-standards.ts"
   },
   "lint-staged": {
     "*.ts": "prettier --write -u"

@@ -78,8 +78,8 @@ function extractRepoInfo(): { repo: string; ref: string } {
     const ref = rest.join('#'); // In case ref contains # characters
     const repo = `https://github.com/${repoWithRef}.git`;
     
-    console.log(`�� Extracted repo: ${repo}`);
-    console.log(`�� Extracted ref: ${ref}`);
+    console.log(`🔍 Extracted repo: ${repo}`);
+    console.log(`🔍 Extracted ref: ${ref}`);
     
     return { repo, ref };
   }
@@ -92,7 +92,7 @@ function extractRepoInfo(): { repo: string; ref: string } {
  */
 async function checkExistingSandbox(): Promise<boolean> {
   try {
-    console.log('�� Checking for existing sandbox...');
+    console.log('🔍 Checking for existing sandbox...');
     const pxe = createPXEClient('http://localhost:8080');
     await waitForPXE(pxe, 5000); // 5 second timeout
     console.log('✅ Found existing responsive sandbox');
@@ -165,11 +165,11 @@ function detectPackageManager(repoDir: string): string {
   
   // Check for lockfiles
   if (fs.existsSync(path.join(repoDir, 'yarn.lock'))) {
-    console.log('�� Detected package manager from lockfile: yarn');
+    console.log('📦 Detected package manager from lockfile: yarn');
     return 'yarn';
   }
   if (fs.existsSync(path.join(repoDir, 'pnpm-lock.yaml'))) {
-    console.log('�� Detected package manager from lockfile: pnpm');
+    console.log('📦 Detected package manager from lockfile: pnpm');
     return 'pnpm';
   }
   if (fs.existsSync(path.join(repoDir, 'package-lock.json'))) {
@@ -178,7 +178,7 @@ function detectPackageManager(repoDir: string): string {
   }
   
   // Default to npm
-  console.log('�� No package manager detected, defaulting to npm');
+  console.log('📦 No package manager detected, defaulting to npm');
   return 'npm';
 }
 
@@ -245,18 +245,21 @@ function installDependencies(repoDir: string): boolean {
  * Run aztec codegen with proper sandbox configuration
  */
 function runCodegen(repoDir: string): boolean {
-  console.log('�� Running aztec codegen...');
+  console.log('🔧 Running aztec codegen...');
   
-  // Try different approaches for codegen
+  // Use the correct syntax without invalid options
   const approaches = [
-    // Approach 1: Direct codegen
+    // Approach 1: Basic codegen (this should work)
     `cd "${repoDir}" && aztec codegen target --outdir artifacts`,
     
-    // Approach 2: Codegen with explicit PXE URL
-    `cd "${repoDir}" && aztec codegen target --outdir artifacts --pxe-url http://localhost:8080`,
+    // Approach 2: Codegen with force flag
+    `cd "${repoDir}" && aztec codegen target --outdir artifacts --force`,
     
-    // Approach 3: Codegen with different port
-    `cd "${repoDir}" && aztec codegen target --outdir artifacts --pxe-port 8080`,
+    // Approach 3: Try with src/artifacts (like in GitHub workflows)
+    `cd "${repoDir}" && aztec codegen target --outdir src/artifacts`,
+    
+    // Approach 4: Try with src/artifacts and force flag
+    `cd "${repoDir}" && aztec codegen target --outdir src/artifacts --force`,
   ];
   
   for (const approach of approaches) {
@@ -297,14 +300,30 @@ async function main() {
       return;
     }
 
+    // 1.5) Check if build artifacts already exist
+    const artifactsPath = path.join(installedPath, 'current', 'artifacts');
+    const distPath = path.join(installedPath, 'dist');
+    const targetPath = path.join(installedPath, 'current', 'target');
+    
+    const hasArtifacts = fs.existsSync(artifactsPath) && fs.readdirSync(artifactsPath).length > 0;
+    const hasDist = fs.existsSync(distPath) && fs.readdirSync(distPath).length > 0;
+    const hasTarget = fs.existsSync(targetPath) && fs.readdirSync(targetPath).length > 0;
+    
+    if (hasArtifacts && hasDist && hasTarget) {
+      console.log(`✅ ${PKG} build artifacts already exist, skipping build`);
+      return;
+    }
+    
+    console.log(`🔧 ${PKG} build artifacts missing or incomplete, proceeding with build...`);
+
     // 2) Temp clone and install dev deps - ensure temp dir is within user home
     const userHome = os.homedir();
     const tmp = fs.mkdtempSync(path.join(userHome, '.aztec-build-'));
     const repoDir = path.join(tmp, 'repo');
 
     try {
-      console.log(`\n�� Building ${PKG} from ${REPO} @ ${REF}`);
-      console.log(`�� Using temp directory: ${tmp}`);
+      console.log(`\n🔨 Building ${PKG} from ${REPO} @ ${REF}`);
+      console.log(`📁 Using temp directory: ${tmp}`);
       run(`git clone ${REPO} "${repoDir}" --quiet`);
       run(`git -C "${repoDir}" checkout ${REF} --quiet`);
 
@@ -337,7 +356,7 @@ async function main() {
       }
       
       if (aztecVersion) {
-        console.log(`�� Setting Aztec version to ${aztecVersion}`);
+        console.log(`🔧 Setting Aztec version to ${aztecVersion}`);
         tryRun(`bash -lc "VERSION=${aztecVersion} aztec-up"`);
       }
 
