@@ -18,6 +18,8 @@ contract LinearVestingEscrowLogic {
         protocol_types::{public_keys::PublicKeys, traits::ToField},
         utils::comparison::Comparator,
     };
+    // std library
+    use std::field::bn254::assert_lt;
     // escrow standard library
     use escrow_standard::library::logic::{
         _check_escrow, _secret_keys_to_public_keys, _share_escrow, _withdraw,
@@ -335,7 +337,7 @@ contract LinearVestingEscrowLogic {
 
             // Operate on BigNum to avoid overflow of total_amount * elapsed
             // vested_amount fits in u128 because elapsed < duration, and total_amount < u128
-            let vested_amount_field = u256_muldiv(total_amount as Field, elapsed as Field, duration as Field);
+            let vested_amount_field = u256_muldiv(total_amount, elapsed, duration);
             vested_amount = vested_amount_field as u128;
         }
 
@@ -357,7 +359,7 @@ contract LinearVestingEscrowLogic {
         elapsed: u64,
         duration: u64,
     ) -> u128 {
-        let vested_amount_field = u256_muldiv_unconstrained(total_amount as Field, elapsed as Field, duration as Field);
+        let vested_amount_field = u256_muldiv_unconstrained(total_amount, elapsed, duration);
         let vested_amount = vested_amount_field as u128;
         vested_amount
     }
@@ -438,14 +440,25 @@ contract LinearVestingEscrowLogic {
     /// @param c Divisor (Field)
     /// @return Result as Field
     #[contract_library_method]
-    fn u256_muldiv(a: Field, b: Field, c: Field) -> Field {
-        let c_u256 = U256::from(c);
+    fn u256_muldiv(a: u128, b: u64, divisor: u64) -> Field {
+        let divisor_field = divisor as Field;
+        let numerator = (a as Field) * (b as Field);
+        let numerator_u256 = U256::from(numerator);
+        let divisor_u256 = U256::from(divisor as Field);
         
-        // Perform (a * b) / c using U256 to avoid overflow
-        let result_u256: U256 = U256::from(a * b).udiv(c_u256);
+        // Safety: We then constrain the quotient and remainder to be less than a and divisor, respectively
+        let (quotient, remainder) = unsafe { numerator_u256.__udiv_mod(divisor_u256) };
+
+        let quotient_field = to_field(quotient);
+        let remainder_field = to_field(remainder);
+
+        assert_lt(remainder_field, divisor_field);
+        // b < divisor always, then quotient < a
+        assert_lt(quotient_field, a as Field);
+
+        assert(quotient_field * divisor_field + remainder_field == numerator);
         
-        // Convert back to Field
-        to_field(result_u256)
+        quotient_field
     }
 
     /// @notice Performs safe multiplication and division: (a * b) / c
@@ -454,13 +467,24 @@ contract LinearVestingEscrowLogic {
     /// @param c Divisor (Field)
     /// @return Result as Field
     #[contract_library_method]
-    unconstrained fn u256_muldiv_unconstrained(a: Field, b: Field, c: Field) -> Field {
-        let c_u256 = U256::from(c);
+    unconstrained fn u256_muldiv_unconstrained(a: u128, b: u64, divisor: u64) -> Field {
+        let divisor_field = divisor as Field;
+        let numerator = (a as Field) * (b as Field);
+        let numerator_u256 = U256::from(numerator);
+        let divisor_u256 = U256::from(divisor as Field);
         
-        // Perform (a * b) / c using U256 to avoid overflow
-        let result_u256: U256 = U256::from(a * b).udiv(c_u256);
+        // Safety: We then constrain the quotient and remainder to be less than a and divisor, respectively
+        let (quotient, remainder) = unsafe { numerator_u256.__udiv_mod(divisor_u256) };
+
+        let quotient_field = to_field(quotient);
+        let remainder_field = to_field(remainder);
+
+        assert_lt(remainder_field, divisor_field);
+        // b < divisor always, then quotient < a
+        assert_lt(quotient_field, a as Field);
+
+        assert(quotient_field * divisor_field + remainder_field == numerator);
         
-        // Convert back to Field
-        to_field(result_u256)
+        quotient_field
     }
 }
