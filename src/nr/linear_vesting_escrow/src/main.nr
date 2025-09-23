@@ -473,8 +473,8 @@ contract LinearVestingEscrowLogic {
         let numerator_u256 = U256::from(numerator);
         let divisor_u256 = U256::from(divisor as Field);
         
-        // Safety: We then constrain the quotient and remainder to be less than a and divisor, respectively
-        let (quotient, remainder) = unsafe { numerator_u256.__udiv_mod(divisor_u256) };
+        // __udiv_mod is unconstrained, we then constrain the quotient and remainder to be less than a and divisor, respectively
+        let (quotient, remainder) = numerator_u256.__udiv_mod(divisor_u256);
 
         let quotient_field = to_field(quotient);
         let remainder_field = to_field(remainder);
