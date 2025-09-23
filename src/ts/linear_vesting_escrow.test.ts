@@ -988,6 +988,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           AMOUNT - totalClaimed,
         );
       }
+
+      // Be sure we had multiple claims
+      expect(claimCount).toBeGreaterThan(1);
     });
 
     it("claim with amount equal to u128 max value should work", async () => {
@@ -1010,7 +1013,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         .send()
         .wait();
 
-      duration = 100n;
+      duration = 200n;
       const bobPXE = pxe;
 
       const tx = await linearVestingEscrow
@@ -1154,6 +1157,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           U128_MAX - totalClaimed,
         );
       }
+
+      // Be sure we had multiple claims
+      expect(claimCount).toBeGreaterThan(1);
     });
 
     it("claim with amount over u128 max should not generate the transaction", async () => {
@@ -1172,8 +1178,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         .send()
         .wait();
 
-      // We set the duration to 200 to make the tokens partially claimable (claims every 36 units of time)
-      duration = 100n;
+      duration = 200n;
 
       // We set the vesting amount to U128_MAX + 1 to be sure we were on the max value the previous test
       const shouldThrow = async () => {
