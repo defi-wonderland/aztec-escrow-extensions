@@ -29,7 +29,7 @@ contract LinearVestingEscrowLogic {
     // released amount note types
     use crate::types::released_amount_note::ReleasedAmountNote;
     // bignum library
-    use bignum::{U256, BigNum, bignum::to_field};
+    use bignum::{BigNum, bignum::to_field, U256};
 
     /// @notice Data privately emitted to an account that will use the escrow
     /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
@@ -39,6 +39,7 @@ contract LinearVestingEscrowLogic {
     /// @param ovsk_m Outgoing Viewing Key
     /// @param tsk_m Tagging Secret Key
     #[event]
+    #[allow(dead_code)]
     struct EscrowDetailsLogContent {
         escrow: AztecAddress,
         nsk_m: Field,
@@ -132,18 +133,22 @@ contract LinearVestingEscrowLogic {
     #[private]
     fn claim(escrow: AztecAddress) {
         // Fetch a linear vesting schedule note
-        let vesting_schedule_note = _find_vesting_schedule_note(storage, escrow);
+        let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
 
         // Fetch and remove a released amount note
         let released_amount_note = _pop_released_amount_note(storage, escrow);
 
+        // Get the current timestamp
+        let block_header = context.get_block_header();
+        let timestamp = block_header.global_variables.timestamp;
+
         // Get releasable amount and vested amount
         let (releasable_amount, vested_amount) = _calculate_releasable_and_vested_amounts(
-            &mut context,
             vesting_schedule_note.start,
             vesting_schedule_note.duration,
             vesting_schedule_note.total_amount,
             released_amount_note.released_amount,
+            timestamp,
         );
 
         // We create and emit a new released amount note if the vested amount is less than the total amount
@@ -193,9 +198,9 @@ contract LinearVestingEscrowLogic {
     /// @return The releasable amount
     #[utility]
     pub unconstrained fn releasable(escrow: AztecAddress, timestamp: u64) -> u128 {
-        let vesting_schedule_note = _find_vesting_schedule_note_unconstrained(storage, escrow);
-        let released_amount_note = _find_released_amount_note_unconstrained(storage, escrow);
-        let (releasable_amount, _) = _calculate_releasable_and_vested_amounts_unconstrained(
+        let vesting_schedule_note = _view_vesting_schedule_note(storage, escrow);
+        let released_amount_note = _view_released_amount_note(storage, escrow);
+        let (releasable_amount, _) = _calculate_releasable_and_vested_amounts(
             vesting_schedule_note.start,
             vesting_schedule_note.duration,
             vesting_schedule_note.total_amount,
@@ -211,9 +216,9 @@ contract LinearVestingEscrowLogic {
     /// @return The vested amount
     #[utility]
     pub unconstrained fn vested_amount(escrow: AztecAddress, timestamp: u64) -> u128 {
-        let vesting_schedule_note = _find_vesting_schedule_note_unconstrained(storage, escrow);
-        let released_amount_note = _find_released_amount_note_unconstrained(storage, escrow);
-        let (_, vested_amount) = _calculate_releasable_and_vested_amounts_unconstrained(
+        let vesting_schedule_note = _view_vesting_schedule_note(storage, escrow);
+        let released_amount_note = _view_released_amount_note(storage, escrow);
+        let (_, vested_amount) = _calculate_releasable_and_vested_amounts(
             vesting_schedule_note.start,
             vesting_schedule_note.duration,
             vesting_schedule_note.total_amount,
@@ -277,7 +282,7 @@ contract LinearVestingEscrowLogic {
     /// @param escrow The address of the escrow
     /// @return The vesting schedule note
     #[contract_library_method]
-    fn _find_vesting_schedule_note(
+    fn _get_vesting_schedule_note(
         storage: Storage<&mut PrivateContext>,
         escrow: AztecAddress,
     ) -> VestingScheduleNote {
@@ -317,17 +322,14 @@ contract LinearVestingEscrowLogic {
     /// @return The releasable and vested amounts
     #[contract_library_method]
     fn _calculate_releasable_and_vested_amounts(
-        context: &mut PrivateContext,
         start: u64,
         duration: u64,
         total_amount: u128,
         released_amount: u128,
+        timestamp: u64,
     ) -> (u128, u128) {
         let mut releasable_amount = 0;
         let mut vested_amount = 0;
-
-        let block_header = context.get_block_header();
-        let timestamp = block_header.global_variables.timestamp;
 
         // We only calculate the amounts if the last timestamp is greater than the start time, otherwise both amounts are zero
         if timestamp >= start + duration {
@@ -348,52 +350,31 @@ contract LinearVestingEscrowLogic {
         (releasable_amount, vested_amount)
     }
 
-    /// @notice Calculates the vested amount for a linear vesting note
-    /// @param total_amount The total amount of tokens to vest
-    /// @param elapsed The elapsed time
-    /// @param duration The duration of the vesting
-    /// @return The vested amount
+    /// @notice Performs safe multiplication and division: (a * b) / c
+    /// @param a First operand (u128)
+    /// @param b Second operand (u64)
+    /// @param c Divisor (u64)
+    /// @return Result as Field
     #[contract_library_method]
-    unconstrained fn calculate_vested_amount_unconstrained(
-        total_amount: u128,
-        elapsed: u64,
-        duration: u64,
-    ) -> u128 {
-        let vested_amount_field = u256_muldiv_unconstrained(total_amount, elapsed, duration);
-        let vested_amount = vested_amount_field as u128;
-        vested_amount
-    }
+    fn u256_muldiv(a: u128, b: u64, divisor: u64) -> Field {
+        let divisor_field = divisor as Field;
+        let numerator = (a as Field) * (b as Field);
+        let numerator_u256 = U256::from(numerator);
+        let divisor_u256 = U256::from(divisor as Field);
 
-    /// @notice Calculates the releasable and vested amounts
-    /// @param note The linear vesting note
-    /// @param timestamp The timestamp
-    /// @return The releasable and vested amounts
-    #[contract_library_method]
-    unconstrained fn _calculate_releasable_and_vested_amounts_unconstrained(
-        start: u64,
-        duration: u64,
-        total_amount: u128,
-        released_amount: u128,
-        timestamp: u64,
-    ) -> (u128, u128) {
-        let mut releasable_amount = 0;
-        let mut vested_amount = 0;
+        // Safety: __udiv_mod is unconstrained, we then constrain the quotient and remainder to be less than a and divisor, respectively
+        let (quotient, remainder) = unsafe { numerator_u256.__udiv_mod(divisor_u256) };
 
-        if timestamp >= start + duration {
-            vested_amount = total_amount;
-            releasable_amount = vested_amount - released_amount;
-        } else if timestamp > start {
-            let elapsed = timestamp - start;
-            // Safety: 'vested_amount' is properly constrained below
-            vested_amount = calculate_vested_amount_unconstrained(total_amount, elapsed, duration);
-            assert(
-                total_amount as Field * elapsed as Field
-                    == vested_amount as Field * duration as Field,
-            );
-            releasable_amount = vested_amount - released_amount;
-        }
+        let quotient_field = to_field(quotient);
+        let remainder_field = to_field(remainder);
 
-        (releasable_amount, vested_amount)
+        assert_lt(remainder_field, divisor_field);
+        // b < divisor always, then quotient < a
+        assert_lt(quotient_field, a as Field);
+
+        assert(quotient_field * divisor_field + remainder_field == numerator);
+
+        quotient_field
     }
 
     /// @notice Finds a vesting schedule note in the storage (unconstrained version for utility functions)
@@ -401,7 +382,7 @@ contract LinearVestingEscrowLogic {
     /// @param escrow The address of the escrow
     /// @return The vesting schedule note
     #[contract_library_method]
-    unconstrained fn _find_vesting_schedule_note_unconstrained(
+    unconstrained fn _view_vesting_schedule_note(
         storage: Storage<UtilityContext>,
         escrow: AztecAddress,
     ) -> VestingScheduleNote {
@@ -420,7 +401,7 @@ contract LinearVestingEscrowLogic {
     /// @param escrow The address of the escrow
     /// @return The released amount note
     #[contract_library_method]
-    unconstrained fn _find_released_amount_note_unconstrained(
+    unconstrained fn _view_released_amount_note(
         storage: Storage<UtilityContext>,
         escrow: AztecAddress,
     ) -> ReleasedAmountNote {
@@ -432,59 +413,5 @@ contract LinearVestingEscrowLogic {
 
         // We revert if there is no note in the filter so we can probably unwrap directly
         notes.get_unchecked(0)
-    }
-
-    /// @notice Performs safe multiplication and division: (a * b) / c
-    /// @param a First operand (Field)
-    /// @param b Second operand (Field)
-    /// @param c Divisor (Field)
-    /// @return Result as Field
-    #[contract_library_method]
-    fn u256_muldiv(a: u128, b: u64, divisor: u64) -> Field {
-        let divisor_field = divisor as Field;
-        let numerator = (a as Field) * (b as Field);
-        let numerator_u256 = U256::from(numerator);
-        let divisor_u256 = U256::from(divisor as Field);
-        
-        // Safety: We then constrain the quotient and remainder to be less than a and divisor, respectively
-        let (quotient, remainder) = unsafe { numerator_u256.__udiv_mod(divisor_u256) };
-
-        let quotient_field = to_field(quotient);
-        let remainder_field = to_field(remainder);
-
-        assert_lt(remainder_field, divisor_field);
-        // b < divisor always, then quotient < a
-        assert_lt(quotient_field, a as Field);
-
-        assert(quotient_field * divisor_field + remainder_field == numerator);
-        
-        quotient_field
-    }
-
-    /// @notice Performs safe multiplication and division: (a * b) / c
-    /// @param a First operand (Field)
-    /// @param b Second operand (Field)
-    /// @param c Divisor (Field)
-    /// @return Result as Field
-    #[contract_library_method]
-    unconstrained fn u256_muldiv_unconstrained(a: u128, b: u64, divisor: u64) -> Field {
-        let divisor_field = divisor as Field;
-        let numerator = (a as Field) * (b as Field);
-        let numerator_u256 = U256::from(numerator);
-        let divisor_u256 = U256::from(divisor as Field);
-        
-        // __udiv_mod is unconstrained, we then constrain the quotient and remainder to be less than a and divisor, respectively
-        let (quotient, remainder) = numerator_u256.__udiv_mod(divisor_u256);
-
-        let quotient_field = to_field(quotient);
-        let remainder_field = to_field(remainder);
-
-        assert_lt(remainder_field, divisor_field);
-        // b < divisor always, then quotient < a
-        assert_lt(quotient_field, a as Field);
-
-        assert(quotient_field * divisor_field + remainder_field == numerator);
-        
-        quotient_field
     }
 }
