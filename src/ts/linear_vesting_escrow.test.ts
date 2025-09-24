@@ -8,9 +8,9 @@ import {
   AccountWallet,
   PublicKeys,
   AztecAddress,
-  GrumpkinScalar,
   getContractClassFromArtifact,
   DeployOptions,
+  GrumpkinScalar,
 } from "@aztec/aztec.js";
 import {
   computeInitializationHash,
@@ -30,6 +30,7 @@ import {
   expectUintNote,
   deployLinearVestingEscrow,
   deployEscrowWithPublicKeysAndSalt,
+  grumpkinScalarToFr,
 } from "./utils.js";
 import { siloNullifier } from "@aztec/stdlib/hash";
 import { pedersenHash } from "@aztec/foundation/crypto";
@@ -88,10 +89,6 @@ export async function deriveContractAddress(
   });
 
   return { address, initializationHash, saltedInitializationHash };
-}
-
-export function grumpkinScalarToFr(scalar: GrumpkinScalar) {
-  return new Fr(scalar.toBigInt());
 }
 
 const setupTestSuite = async () => {

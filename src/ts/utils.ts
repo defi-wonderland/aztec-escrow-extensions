@@ -13,6 +13,7 @@ import {
   AuthWitness,
   ContractFunctionInteraction,
   PublicKeys,
+  GrumpkinScalar,
 } from "@aztec/aztec.js";
 import { getPXEServiceConfig } from "@aztec/pxe/config";
 import { createPXEService } from "@aztec/pxe/server";
@@ -255,4 +256,8 @@ export async function deployEscrowWithPublicKeysAndSalt(
     .send({ contractAddressSalt: salt, universalDeploy: true })
     .deployed();
   return contract as EscrowContract;
+}
+
+export function grumpkinScalarToFr(scalar: GrumpkinScalar) {
+    return new Fr(scalar.toBigInt());
 }

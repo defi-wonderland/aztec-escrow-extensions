@@ -3,3 +3,6 @@ members = [
     "src/nr/linear_vesting_escrow",
     "src/nr/clawback_escrow",
 ]
+
+[benchmark]
+linear_vesting_escrow = "benchmarks/linear_vesting_escrow.benchmark.ts"

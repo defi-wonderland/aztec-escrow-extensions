@@ -6,4 +6,6 @@ log/
 .DS_Store
 codegenCache.json
 .env
+benchmarks/*.json
+store
 .cursor
