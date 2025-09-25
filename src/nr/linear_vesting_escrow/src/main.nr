@@ -192,40 +192,22 @@ contract LinearVestingEscrowLogic {
         _secret_keys_to_public_keys(nsk_m, ivsk_m, ovsk_m, tsk_m)
     }
 
-    /// @notice Calculates the releasable amount for a linear vesting note
-    /// @param storage The storage
+    /// @notice Calculates the releasable and vested amounts for a linear vesting note
     /// @param escrow The address of the escrow
-    /// @return The releasable amount
+    /// @param timestamp The timestamp
+    /// @return The releasable and vested amounts
     #[utility]
-    pub unconstrained fn releasable(escrow: AztecAddress, timestamp: u64) -> u128 {
+    pub unconstrained fn releasable_and_vested_amounts(escrow: AztecAddress, timestamp: u64) -> (u128, u128) {
         let vesting_schedule_note = _view_vesting_schedule_note(storage, escrow);
         let released_amount_note = _view_released_amount_note(storage, escrow);
-        let (releasable_amount, _) = _calculate_releasable_and_vested_amounts(
+        let (releasable_amount, vested_amount) = _calculate_releasable_and_vested_amounts(
             vesting_schedule_note.start,
             vesting_schedule_note.duration,
             vesting_schedule_note.total_amount,
             released_amount_note.released_amount,
             timestamp,
         );
-        releasable_amount
-    }
-
-    /// @notice Calculates the vested amount for a linear vesting note
-    /// @param storage The storage
-    /// @param escrow The address of the escrow
-    /// @return The vested amount
-    #[utility]
-    pub unconstrained fn vested_amount(escrow: AztecAddress, timestamp: u64) -> u128 {
-        let vesting_schedule_note = _view_vesting_schedule_note(storage, escrow);
-        let released_amount_note = _view_released_amount_note(storage, escrow);
-        let (_, vested_amount) = _calculate_releasable_and_vested_amounts(
-            vesting_schedule_note.start,
-            vesting_schedule_note.duration,
-            vesting_schedule_note.total_amount,
-            released_amount_note.released_amount,
-            timestamp,
-        );
-        vested_amount
+        (releasable_amount, vested_amount)
     }
 
     /** ==========================================================
@@ -317,8 +299,11 @@ contract LinearVestingEscrowLogic {
     }
 
     /// @notice Calculates the releasable and vested amounts
-    /// @param context The private context
-    /// @param note The linear vesting note
+    /// @param start The start time of the vesting
+    /// @param duration The duration of the vesting
+    /// @param total_amount The total amount of tokens to vest
+    /// @param released_amount The released amount of tokens
+    /// @param timestamp The timestamp
     /// @return The releasable and vested amounts
     #[contract_library_method]
     fn _calculate_releasable_and_vested_amounts(
