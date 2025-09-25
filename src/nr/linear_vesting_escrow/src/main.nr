@@ -338,7 +338,7 @@ contract LinearVestingEscrowLogic {
     /// @notice Performs safe multiplication and division: (a * b) / c
     /// @param a First operand (u128)
     /// @param b Second operand (u64)
-    /// @param c Divisor (u64)
+    /// @param divisor Divisor (u64)
     /// @return Result as Field
     #[contract_library_method]
     fn u256_muldiv(a: u128, b: u64, divisor: u64) -> Field {
