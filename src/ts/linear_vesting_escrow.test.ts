@@ -1254,14 +1254,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         const claimTimestamp = previousBlock!.header.globalVariables.timestamp;
   
         // Utility functions
-        const utilityReleasable = await linearVestingEscrow
+        const [utilityReleasable, utilityVested] = await linearVestingEscrow
           .withWallet(bob)
-          .methods.releasable(escrow.instance.address, claimTimestamp)
-          .simulate();
-        
-        const utilityVested = await linearVestingEscrow
-          .withWallet(bob)
-          .methods.vested_amount(escrow.instance.address, claimTimestamp)
+          .methods.releasable_and_vested_amounts(escrow.instance.address, claimTimestamp)
           .simulate();
   
         // Calculate expected values
