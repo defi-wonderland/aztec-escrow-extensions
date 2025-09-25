@@ -16,7 +16,8 @@
     "build": "yarn compile && yarn codegen -f",
     "prepare": "husky",
     "ccc": "yarn clean && yarn compile && yarn codegen",
-    "build-standards": "npx tsx scripts/build-aztec-standards.ts"
+    "build-aztec-standards": "npx tsx scripts/build-aztec-standards.ts def36c35968ebbab6f59faf7bbf4a890e4b023d0",
+    "postinstall": "yarn build-aztec-standards"
   },
   "lint-staged": {
     "*.ts": "prettier --write -u"
@@ -26,8 +27,7 @@
     "@aztec/aztec.js": "1.2.1",
     "@aztec/noir-contracts.js": "1.2.1",
     "@aztec/pxe": "v1.2.1",
-    "@defi-wonderland/aztec-benchmark": "1.0.1",
-    "@defi-wonderland/aztec-standards": "github:defi-wonderland/aztec-standards#def36c35968ebbab6f59faf7bbf4a890e4b023d0"
+    "@defi-wonderland/aztec-benchmark": "1.0.1"
   },
   "devDependencies": {
     "@commitlint/cli": "19.8.1",
@@ -47,10 +47,5 @@
   "engines": {
     "node": ">=22.0.0",
     "yarn": ">=1.22.0"
-  },
-  "dependenciesMeta": {
-    "@defi-wonderland/aztec-standards": {
-      "built": false
-    }
   }
 }

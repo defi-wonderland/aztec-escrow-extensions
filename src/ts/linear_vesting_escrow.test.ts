@@ -45,8 +45,8 @@ import {
 import {
   EscrowContractArtifact,
   EscrowContract,
-} from "@defi-wonderland/aztec-standards/current/artifacts/Escrow.js";
-import { TokenContract } from "@defi-wonderland/aztec-standards/current/artifacts/Token.js";
+} from "../aztec_standards_artifacts/Escrow.js";
+import { TokenContract } from "../aztec_standards_artifacts/Token.js";
 
 /**
  * Predicts the contract address for a given artifact and constructor arguments.
@@ -88,10 +88,6 @@ export async function deriveContractAddress(
   });
 
   return { address, initializationHash, saltedInitializationHash };
-}
-
-export function grumpkinScalarToFr(scalar: GrumpkinScalar) {
-  return new Fr(scalar.toBigInt());
 }
 
 const setupTestSuite = async () => {
@@ -1204,17 +1200,17 @@ describe("Linear Vesting Escrow - Single PXE", () => {
     });
   });
 
-  describe('releasable and vested amount', () => {
+  describe("releasable and vested amount", () => {
     beforeAll(async () => {
       await store.delete();
       await setup();
     });
-    
+
     it("releasable and vested amount should be correct with multiple claims", async () => {
       // We set the duration to 200 to make the tokens partially claimable (claims every 36 units of time)
       duration = 200n;
       const bobPXE = pxe;
-  
+
       const tx = await linearVestingEscrow
         .withWallet(alice)
         .methods.create_linear_vesting_escrow(
@@ -1231,51 +1227,54 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         )
         .send()
         .wait();
-  
+
       // Sync to get linear vesting escrow note
       await linearVestingEscrow
         .withWallet(bob)
         .methods.sync_private_state()
         .simulate({});
-  
+
       // Assert initial balances
       await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
       await expectTokenBalances(token, escrow.instance.address, wad(0), AMOUNT);
-  
+
       let totalClaimed = 0n;
       let previousTx = tx;
       let claimCount = 0;
-  
+
       while (totalClaimed < AMOUNT) {
         claimCount++;
-  
+
         // Get timestamp from the previous transaction for calculation
         const previousBlock = await pxe.getBlock(previousTx.blockNumber!);
         const claimTimestamp = previousBlock!.header.globalVariables.timestamp;
-  
+
         // Utility functions
         const [utilityReleasable, utilityVested] = await linearVestingEscrow
           .withWallet(bob)
-          .methods.releasable_and_vested_amounts(escrow.instance.address, claimTimestamp)
+          .methods.releasable_and_vested_amounts(
+            escrow.instance.address,
+            claimTimestamp,
+          )
           .simulate();
-  
+
         // Calculate expected values
         const totalVestedAmount =
           claimTimestamp > start
             ? ((BigInt(claimTimestamp) - BigInt(start)) * AMOUNT) /
               BigInt(duration)
             : 0n;
-  
+
         const cappedVestedAmount =
           totalVestedAmount > AMOUNT ? AMOUNT : totalVestedAmount;
-  
+
         const receivedAmount = cappedVestedAmount - totalClaimed;
         totalClaimed += receivedAmount;
-  
+
         // Verify utility functions match
         expect(utilityVested).toBe(cappedVestedAmount);
         expect(utilityReleasable).toBe(receivedAmount);
-  
+
         // Now make the claim
         const claimTx = await linearVestingEscrow
           .withWallet(bob)
@@ -1287,17 +1286,17 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           .withWallet(bob)
           .methods.sync_private_state()
           .simulate({});
-  
+
         // Check if vesting is complete
         const isVestingComplete = claimTimestamp >= start + duration;
-  
+
         // We expect different number of notes based on vesting completion
         const notes = await bobPXE.getNotes({ txHash: claimTx.txHash });
-  
+
         if (isVestingComplete) {
           // Final claim: 1 note (tokens to Bob)
           expect(notes.length).toBe(1);
-  
+
           const bobTokenNote = await bobPXE.getNotes({
             txHash: claimTx.txHash,
             contractAddress: token.instance.address,
@@ -1307,10 +1306,10 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         } else {
           // Partial claim: 3 notes (escrow tokens, linear vesting note, bob tokens)
           expect(notes.length).toBe(3);
-  
+
           const slotReleasedAmountNotes =
             LinearVestingEscrowLogicContract.storage.released_notes.slot;
-  
+
           const releasedAmountNote = await bobPXE.getNotes({
             txHash: claimTx.txHash,
             contractAddress: linearVestingEscrow.address,
@@ -1320,7 +1319,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           expect(releasedAmountNote[0].note.items[1].toBigInt()).toBe(
             utilityVested,
           );
-  
+
           const escrowTokenNote = await bobPXE.getNotes({
             txHash: claimTx.txHash,
             contractAddress: token.instance.address,
@@ -1331,7 +1330,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
             AMOUNT - totalClaimed,
             escrow.instance.address,
           );
-  
+
           const bobTokenNote = await bobPXE.getNotes({
             txHash: claimTx.txHash,
             contractAddress: token.instance.address,
@@ -1339,10 +1338,10 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           });
           expectUintNote(bobTokenNote[0], utilityReleasable, bob.getAddress());
         }
-  
+
         // Update previousTx to current claim for next iteration
         previousTx = claimTx;
-  
+
         // Final balance checks
         await expectTokenBalances(
           token,
@@ -1357,7 +1356,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           AMOUNT - totalClaimed,
         );
       }
-  
+
       // Be sure we had multiple claims
       expect(claimCount).toBeGreaterThan(1);
     });

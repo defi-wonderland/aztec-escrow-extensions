@@ -1,34 +1,35 @@
 /* eslint-disable no-console */
-// Run with: tsx scripts/build-aztec-standards.ts
-// This script builds @defi-wonderland/aztec-standards from the repository and reference
-// specified in package.json dependencies
+// Run with: tsx scripts/build-aztec-standards.ts [commit-or-tag]
+// This script builds @defi-wonderland/aztec-standards from the specified commit/tag
+// and stores artifacts in src/aztec_standards_artifacts
 
-import { execSync, spawnSync } from 'node:child_process';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { createRequire } from 'node:module';
-import { createPXEClient, waitForPXE } from '@aztec/aztec.js';
-import { startSandbox, SandboxManager } from './start-sandbox.js';
+import { execSync, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { createPXEClient, waitForPXE } from "@aztec/aztec.js";
+import { startSandbox, SandboxManager } from "./start-sandbox.js";
 
-const require = createRequire(import.meta.url);
-
-const PKG = '@defi-wonderland/aztec-standards';
+const REPO = "https://github.com/defi-wonderland/aztec-standards.git";
 
 function run(cmd: string, opts: Record<string, any> = {}) {
   console.log(`\n$ ${cmd}`);
-  execSync(cmd, { stdio: 'inherit', ...opts });
+  execSync(cmd, { stdio: "inherit", ...opts });
 }
 function tryRun(cmd: string, opts: Record<string, any> = {}) {
   try {
-    execSync(cmd, { stdio: 'inherit', ...opts });
+    execSync(cmd, { stdio: "inherit", ...opts });
     return true;
   } catch {
     return false;
   }
 }
 function which(bin: string) {
-  const res = spawnSync(process.platform === 'win32' ? 'where' : 'which', [bin], { stdio: 'pipe' });
+  const res = spawnSync(
+    process.platform === "win32" ? "where" : "which",
+    [bin],
+    { stdio: "pipe" },
+  );
   return res.status === 0;
 }
 function ensureDir(p: string) {
@@ -39,52 +40,52 @@ function cp(src: string, dst: string) {
   ensureDir(path.dirname(dst));
   fs.cpSync(src, dst, { recursive: true });
 }
-function pkgDir(pkgName: string) {
-  const pkgJson = require.resolve(`${pkgName}/package.json`);
-  return path.dirname(pkgJson);
-}
 
 function readJSON<T = any>(file: string): T | null {
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8')) as T;
+    return JSON.parse(fs.readFileSync(file, "utf8")) as T;
   } catch {
     return null;
   }
 }
 
 /**
- * Extract repository URL and reference from package.json dependency
+ * Check if artifacts are already built and up to date
  */
-function extractRepoInfo(): { repo: string; ref: string } {
-  const packageJsonPath = path.join(process.cwd(), 'package.json');
-  const packageJson = readJSON<{ dependencies?: Record<string, string> }>(packageJsonPath);
-  
-  if (!packageJson?.dependencies?.[PKG]) {
-    throw new Error(`Could not find ${PKG} in package.json dependencies`);
+function checkExistingArtifacts(targetDir: string): boolean {
+  if (!fs.existsSync(targetDir)) {
+    console.log("ℹ️ No existing artifacts directory found");
+    return false;
   }
-  
-  const dependencySpec = packageJson.dependencies[PKG];
-  console.log(`🔍 Found dependency spec: ${dependencySpec}`);
-  
-  // Parse github:owner/repo#ref format
-  if (dependencySpec.startsWith('github:')) {
-    const withoutGithub = dependencySpec.substring(7); // Remove 'github:'
-    const [repoWithRef, ...rest] = withoutGithub.split('#');
-    
-    if (rest.length === 0) {
-      throw new Error(`Invalid github dependency format: ${dependencySpec}. Expected github:owner/repo#ref`);
-    }
-    
-    const ref = rest.join('#'); // In case ref contains # characters
-    const repo = `https://github.com/${repoWithRef}.git`;
-    
-    console.log(`🔍 Extracted repo: ${repo}`);
-    console.log(`🔍 Extracted ref: ${ref}`);
-    
-    return { repo, ref };
+
+  const files = fs.readdirSync(targetDir);
+  if (files.length === 0) {
+    console.log("ℹ️ Artifacts directory exists but is empty");
+    return false;
   }
-  
-  throw new Error(`Unsupported dependency format: ${dependencySpec}. Only github:owner/repo#ref is supported.`);
+
+  // Check for common artifact files that indicate a successful build
+  const hasArtifactFiles = files.some((file) => {
+    const ext = path.extname(file);
+    return (
+      ext === ".ts" ||
+      ext === ".js" ||
+      ext === ".json" ||
+      fs.statSync(path.join(targetDir, file)).isDirectory()
+    );
+  });
+
+  if (hasArtifactFiles) {
+    console.log(
+      `✅ Found existing artifacts in ${targetDir} (${files.length} items)`,
+    );
+    return true;
+  }
+
+  console.log(
+    "ℹ️ Artifacts directory exists but contains no recognizable artifact files",
+  );
+  return false;
 }
 
 /**
@@ -92,13 +93,13 @@ function extractRepoInfo(): { repo: string; ref: string } {
  */
 async function checkExistingSandbox(): Promise<boolean> {
   try {
-    console.log('🔍 Checking for existing sandbox...');
-    const pxe = createPXEClient('http://localhost:8080');
+    console.log(" Checking for existing sandbox...");
+    const pxe = createPXEClient("http://localhost:8080");
     await waitForPXE(pxe, 5000); // 5 second timeout
-    console.log('✅ Found existing responsive sandbox');
+    console.log("✅ Found existing responsive sandbox");
     return true;
   } catch {
-    console.log('ℹ️ No existing sandbox found or not responsive');
+    console.log("ℹ️ No existing sandbox found or not responsive");
     return false;
   }
 }
@@ -110,76 +111,78 @@ async function ensureSandboxForCodegen(): Promise<SandboxManager | null> {
   // Check if sandbox is already running
   const hasExistingSandbox = await checkExistingSandbox();
   if (hasExistingSandbox) {
-    console.log('✅ Using existing sandbox');
+    console.log("✅ Using existing sandbox");
     return null; // No manager to clean up
   }
 
   // Start our own sandbox
-  console.log('🚀 Starting sandbox for build process...');
+  console.log("🚀 Starting sandbox for build process...");
   const sandboxManager = await startSandbox({ verbose: false });
-  console.log('✅ Sandbox started for build process');
+  console.log("✅ Sandbox started for build process");
   return sandboxManager;
 }
 
 /**
  * Detect the actual Yarn version being used by the system
  */
-function detectSystemYarnVersion(): 'v1' | 'v4' {
+function detectSystemYarnVersion(): "v1" | "v4" {
   try {
-    const result = spawnSync('yarn', ['--version'], { stdio: 'pipe' });
+    const result = spawnSync("yarn", ["--version"], { stdio: "pipe" });
     if (result.status === 0) {
       const version = result.stdout.toString().trim();
       console.log(`🔍 System Yarn version: ${version}`);
-      
+
       // Check if it's v4+ (4.0.0 or higher)
-      const versionParts = version.split('.');
+      const versionParts = version.split(".");
       const major = parseInt(versionParts[0], 10);
-      
+
       if (major >= 4) {
-        console.log('📦 System is using Yarn v4+');
-        return 'v4';
+        console.log("📦 System is using Yarn v4+");
+        return "v4";
       } else {
-        console.log('📦 System is using Yarn v1');
-        return 'v1';
+        console.log("📦 System is using Yarn v1");
+        return "v1";
       }
     }
   } catch (error) {
-    console.log('⚠️ Could not detect Yarn version, defaulting to v1');
+    console.log("⚠️ Could not detect Yarn version, defaulting to v1");
   }
-  
-  return 'v1';
+
+  return "v1";
 }
 
 /**
  * Detect the preferred package manager for a repository
  */
 function detectPackageManager(repoDir: string): string {
-  const pkgJson = readJSON<{ packageManager?: string }>(path.join(repoDir, 'package.json'));
-  
+  const pkgJson = readJSON<{ packageManager?: string }>(
+    path.join(repoDir, "package.json"),
+  );
+
   if (pkgJson?.packageManager) {
     // Extract package manager from packageManager field (e.g., "yarn@1.22.22" -> "yarn")
-    const pm = pkgJson.packageManager.split('@')[0];
+    const pm = pkgJson.packageManager.split("@")[0];
     console.log(`📦 Detected package manager from package.json: ${pm}`);
     return pm;
   }
-  
+
   // Check for lockfiles
-  if (fs.existsSync(path.join(repoDir, 'yarn.lock'))) {
-    console.log('📦 Detected package manager from lockfile: yarn');
-    return 'yarn';
+  if (fs.existsSync(path.join(repoDir, "yarn.lock"))) {
+    console.log(" Detected package manager from lockfile: yarn");
+    return "yarn";
   }
-  if (fs.existsSync(path.join(repoDir, 'pnpm-lock.yaml'))) {
-    console.log('📦 Detected package manager from lockfile: pnpm');
-    return 'pnpm';
+  if (fs.existsSync(path.join(repoDir, "pnpm-lock.yaml"))) {
+    console.log(" Detected package manager from lockfile: pnpm");
+    return "pnpm";
   }
-  if (fs.existsSync(path.join(repoDir, 'package-lock.json'))) {
-    console.log('📦 Detected package manager from lockfile: npm');
-    return 'npm';
+  if (fs.existsSync(path.join(repoDir, "package-lock.json"))) {
+    console.log("📦 Detected package manager from lockfile: npm");
+    return "npm";
   }
-  
+
   // Default to npm
-  console.log('📦 No package manager detected, defaulting to npm');
-  return 'npm';
+  console.log(" No package manager detected, defaulting to npm");
+  return "npm";
 }
 
 /**
@@ -187,29 +190,35 @@ function detectPackageManager(repoDir: string): string {
  */
 function runWithPackageManager(repoDir: string, command: string): boolean {
   const pm = detectPackageManager(repoDir);
-  
+
   switch (pm) {
-    case 'yarn':
+    case "yarn":
       const systemYarnVersion = detectSystemYarnVersion();
-      console.log(`🔧 Running yarn command with system version: ${systemYarnVersion}`);
-      
-      if (systemYarnVersion === 'v4') {
+      console.log(
+        `🔧 Running yarn command with system version: ${systemYarnVersion}`,
+      );
+
+      if (systemYarnVersion === "v4") {
         // For Yarn v4, we need to be more careful about workspace context
         // Try running the command directly first
         if (tryRun(`cd "${repoDir}" && yarn ${command}`)) {
           return true;
         }
-        
+
         // If that fails, try with --ignore-workspace-root-check
-        console.log('⚠️ Direct yarn command failed, trying with workspace flags');
-        return tryRun(`cd "${repoDir}" && yarn ${command} --ignore-workspace-root-check`);
+        console.log(
+          "⚠️ Direct yarn command failed, trying with workspace flags",
+        );
+        return tryRun(
+          `cd "${repoDir}" && yarn ${command} --ignore-workspace-root-check`,
+        );
       } else {
         // Yarn v1
         return tryRun(`cd "${repoDir}" && yarn ${command}`);
       }
-    case 'pnpm':
+    case "pnpm":
       return tryRun(`cd "${repoDir}" && pnpm ${command}`);
-    case 'npm':
+    case "npm":
     default:
       return tryRun(`cd "${repoDir}" && npm run ${command}`);
   }
@@ -220,22 +229,22 @@ function runWithPackageManager(repoDir: string, command: string): boolean {
  */
 function installDependencies(repoDir: string): boolean {
   const pm = detectPackageManager(repoDir);
-  
+
   switch (pm) {
-    case 'yarn':
+    case "yarn":
       const systemYarnVersion = detectSystemYarnVersion();
       console.log(`📦 Installing with system Yarn ${systemYarnVersion}`);
-      
-      if (systemYarnVersion === 'v4') {
+
+      if (systemYarnVersion === "v4") {
         // Yarn v4+ doesn't support --no-audit, --no-fund
         return tryRun(`cd "${repoDir}" && yarn install`);
       } else {
         // Yarn v1
         return tryRun(`cd "${repoDir}" && yarn install --no-audit --no-fund`);
       }
-    case 'pnpm':
+    case "pnpm":
       return tryRun(`cd "${repoDir}" && pnpm install --no-audit --no-fund`);
-    case 'npm':
+    case "npm":
     default:
       return tryRun(`cd "${repoDir}" && npm install --no-audit --no-fund`);
   }
@@ -245,207 +254,214 @@ function installDependencies(repoDir: string): boolean {
  * Run aztec codegen with proper sandbox configuration
  */
 function runCodegen(repoDir: string): boolean {
-  console.log('🔧 Running aztec codegen...');
-  
+  console.log("🔧 Running aztec codegen...");
+
   // Use the correct syntax without invalid options
   const approaches = [
     // Approach 1: Basic codegen (this should work)
     `cd "${repoDir}" && aztec codegen target --outdir artifacts`,
-    
+
     // Approach 2: Codegen with force flag
     `cd "${repoDir}" && aztec codegen target --outdir artifacts --force`,
-    
+
     // Approach 3: Try with src/artifacts (like in GitHub workflows)
     `cd "${repoDir}" && aztec codegen target --outdir src/artifacts`,
-    
+
     // Approach 4: Try with src/artifacts and force flag
     `cd "${repoDir}" && aztec codegen target --outdir src/artifacts --force`,
   ];
-  
+
   for (const approach of approaches) {
     console.log(`🔧 Trying: ${approach}`);
     if (tryRun(approach)) {
-      console.log('✅ Codegen completed successfully');
+      console.log("✅ Codegen completed successfully");
       return true;
     }
-    console.log('⚠️ Approach failed, trying next...');
+    console.log("⚠️ Approach failed, trying next...");
   }
-  
-  console.error('❌ All codegen approaches failed');
+
+  console.error("❌ All codegen approaches failed");
   return false;
 }
 
 async function main() {
-  // Check if the package exists in dependencies - if not, exit gracefully
-  const packageJsonPath = path.join(process.cwd(), 'package.json');
-  const packageJson = readJSON<{ dependencies?: Record<string, string> }>(packageJsonPath);
-  
-  if (!packageJson?.dependencies?.[PKG]) {
-    console.log(`ℹ️ ${PKG} not found in dependencies, skipping build`);
-    return;
+  // Get commit/tag from command line argument
+  const commitOrTag = process.argv[2];
+
+  if (!commitOrTag) {
+    console.error("❌ Please provide a commit or tag as the first argument");
+    console.error(
+      "Usage: tsx scripts/build-aztec-standards.ts <commit-or-tag>",
+    );
+    process.exit(1);
   }
 
   try {
-    // Extract repo info from package.json
-    const { repo: REPO, ref: REF } = extractRepoInfo();
-    
-    let installedPath: string;
+    // Check if artifacts are already built
+    const targetArtifactsDir = path.join(
+      process.cwd(),
+      "src",
+      "aztec_standards_artifacts",
+    );
+
+    if (checkExistingArtifacts(targetArtifactsDir)) {
+      console.log("✅ Artifacts already exist, skipping build");
+      return;
+    }
+
     let sandboxManager: SandboxManager | null = null;
 
-    // 1) Locate the installed (unbuilt) package in node_modules
-    try {
-      installedPath = pkgDir(PKG);
-    } catch {
-      console.error(`❌ Could not resolve ${PKG}. Is it listed in "dependencies"?`);
-      return;
-    }
-
-    // 1.5) Check if build artifacts already exist
-    const artifactsPath = path.join(installedPath, 'current', 'artifacts');
-    const distPath = path.join(installedPath, 'dist');
-    const targetPath = path.join(installedPath, 'current', 'target');
-    
-    const hasArtifacts = fs.existsSync(artifactsPath) && fs.readdirSync(artifactsPath).length > 0;
-    const hasDist = fs.existsSync(distPath) && fs.readdirSync(distPath).length > 0;
-    const hasTarget = fs.existsSync(targetPath) && fs.readdirSync(targetPath).length > 0;
-    
-    if (hasArtifacts && hasDist && hasTarget) {
-      console.log(`✅ ${PKG} build artifacts already exist, skipping build`);
-      return;
-    }
-    
-    console.log(`🔧 ${PKG} build artifacts missing or incomplete, proceeding with build...`);
-
-    // 2) Temp clone and install dev deps - ensure temp dir is within user home
+    // 1) Temp clone and install dev deps - ensure temp dir is within user home
     const userHome = os.homedir();
-    const tmp = fs.mkdtempSync(path.join(userHome, '.aztec-build-'));
-    const repoDir = path.join(tmp, 'repo');
+    const tmp = fs.mkdtempSync(path.join(userHome, ".aztec-build-"));
+    const repoDir = path.join(tmp, "repo");
 
     try {
-      console.log(`\n🔨 Building ${PKG} from ${REPO} @ ${REF}`);
-      console.log(`📁 Using temp directory: ${tmp}`);
+      console.log(
+        `\n🔨 Building aztec-standards from ${REPO} @ ${commitOrTag}`,
+      );
+      console.log(` Using temp directory: ${tmp}`);
       run(`git clone ${REPO} "${repoDir}" --quiet`);
-      run(`git -C "${repoDir}" checkout ${REF} --quiet`);
+      run(`git -C "${repoDir}" checkout ${commitOrTag} --quiet`);
 
       // Install dependencies using detected package manager
       if (!installDependencies(repoDir)) {
-        console.warn('⚠️ Primary package manager install failed, trying npm as fallback');
+        console.warn(
+          "⚠️ Primary package manager install failed, trying npm as fallback",
+        );
         run(`cd "${repoDir}" && npm install --no-audit --no-fund`);
       }
 
-      // 3) Determine Aztec version (if present) and whether to run codegen
-      const pkgJson = readJSON<{ scripts?: Record<string,string>; config?: any }>(path.join(repoDir, 'package.json'));
-      const aztecVersion: string = pkgJson?.config?.aztecVersion || '';
+      // 2) Determine Aztec version (if present) and whether to run codegen
+      const pkgJson = readJSON<{
+        scripts?: Record<string, string>;
+        config?: any;
+      }>(path.join(repoDir, "package.json"));
+      const aztecVersion: string = pkgJson?.config?.aztecVersion || "";
 
       // Check if aztec CLI is available
-      let hasAztec = which('aztec');
+      let hasAztec = which("aztec");
       if (!hasAztec) {
-        console.log('🔧 Installing Aztec CLI...');
-        const azScript = path.join(tmp, 'install-aztec.sh');
-        fs.writeFileSync(azScript, 'curl -s https://install.aztec.network > /tmp/az.sh && bash /tmp/az.sh <<< yes "yes"\n');
+        console.log("🔧 Installing Aztec CLI...");
+        const azScript = path.join(tmp, "install-aztec.sh");
+        fs.writeFileSync(
+          azScript,
+          'curl -s https://install.aztec.network > /tmp/az.sh && bash /tmp/az.sh <<< yes "yes"\n',
+        );
         run(`bash -lc "bash ${azScript}"`);
         // ensure PATH includes aztec bin
-        const homeBin = path.join(os.homedir(), '.aztec', 'bin');
+        const homeBin = path.join(os.homedir(), ".aztec", "bin");
         process.env.PATH = `${homeBin}${path.delimiter}${process.env.PATH}`;
-        hasAztec = which('aztec');
+        hasAztec = which("aztec");
       }
-      
+
       if (!hasAztec) {
-        console.warn('⚠️ aztec CLI not found and could not install it, skipping codegen');
+        console.warn(
+          "⚠️ aztec CLI not found and could not install it, skipping codegen",
+        );
         return;
       }
-      
+
       if (aztecVersion) {
-        console.log(`🔧 Setting Aztec version to ${aztecVersion}`);
+        console.log(` Setting Aztec version to ${aztecVersion}`);
         tryRun(`bash -lc "VERSION=${aztecVersion} aztec-up"`);
       }
 
-      // 4) Compile sources if repo exposes a compile script
+      // 3) Compile sources if repo exposes a compile script
       if (pkgJson?.scripts?.compile) {
-        if (!runWithPackageManager(repoDir, 'compile')) {
-          throw new Error(`Failed to compile with detected package manager: ${detectPackageManager(repoDir)}`);
+        if (!runWithPackageManager(repoDir, "compile")) {
+          throw new Error(
+            `Failed to compile with detected package manager: ${detectPackageManager(repoDir)}`,
+          );
         }
       }
 
-      // 5) Codegen - now with sandbox support
-      ensureDir(path.join(repoDir, 'artifacts'));
-      
+      // 4) Codegen - now with sandbox support
+      ensureDir(path.join(repoDir, "artifacts"));
+
       // Ensure sandbox is running for codegen
       sandboxManager = await ensureSandboxForCodegen();
-      
+
       try {
         if (!runCodegen(repoDir)) {
-          throw new Error('All codegen approaches failed');
+          throw new Error("All codegen approaches failed");
         }
       } catch (error) {
-        console.error('❌ Codegen failed:', error);
+        console.error("❌ Codegen failed:", error);
         throw error;
       }
 
-      // 6) Compile TS artifacts → dist (if any TS in artifacts/)
-      ensureDir(path.join(repoDir, 'dist'));
-      const artifactsDir = path.join(repoDir, 'artifacts');
+      // 5) Compile TS artifacts → dist (if any TS in artifacts/)
+      ensureDir(path.join(repoDir, "dist"));
+      const artifactsDir = path.join(repoDir, "artifacts");
       const hasTsArtifacts =
         fs.existsSync(artifactsDir) &&
-        fs.readdirSync(artifactsDir).some(f => f.endsWith('.ts'));
+        fs.readdirSync(artifactsDir).some((f) => f.endsWith(".ts"));
 
       if (hasTsArtifacts) {
         // prefer local tsc if present; otherwise use npx typescript
-        const tscCmd = which('tsc') ? 'tsc' : 'npx -y typescript tsc';
+        const tscCmd = which("tsc") ? "tsc" : "npx -y typescript tsc";
         run(
-          `cd "${repoDir}" && ${tscCmd} artifacts/*.ts --outDir dist/ --skipLibCheck --target es2020 --module nodenext --moduleResolution nodenext --resolveJsonModule --declaration`
+          `cd "${repoDir}" && ${tscCmd} artifacts/*.ts --outDir dist/ --skipLibCheck --target es2020 --module nodenext --moduleResolution nodenext --resolveJsonModule --declaration`,
         );
       } else {
-        console.log('ℹ️ No TS artifacts found under artifacts/ (skipping tsc on artifacts/*.ts).');
+        console.log(
+          "ℹ️ No TS artifacts found under artifacts/ (skipping tsc on artifacts/*.ts).",
+        );
       }
 
-      // 7) Copy outputs into the installed package
-      console.log(`\n📁 Copying outputs into installed package:\n   ${installedPath}`);
+      // 6) Copy only artifacts to src/aztec_standards_artifacts (preserving existing content)
+      console.log(`\n📁 Copying artifacts to: ${targetArtifactsDir}`);
 
-      // dist/
-      cp(path.join(repoDir, 'dist'), path.join(installedPath, 'dist'));
+      // Ensure target directory exists (don't clean existing content)
+      ensureDir(targetArtifactsDir);
 
-      // target/ (if codegen produced it)
-      cp(path.join(repoDir, 'target'), path.join(installedPath, 'current', 'target'));
+      // Copy only artifacts/ (compiled + sources from codegen)
+      if (fs.existsSync(path.join(repoDir, "artifacts"))) {
+        const sourceArtifactsDir = path.join(repoDir, "artifacts");
+        const files = fs.readdirSync(sourceArtifactsDir);
 
-      // artifacts/ (compiled + sources from codegen)
-      if (fs.existsSync(path.join(repoDir, 'artifacts'))) {
-        cp(path.join(repoDir, 'artifacts'), path.join(installedPath, 'current', 'artifacts'));
-      }
+        for (const file of files) {
+          const srcPath = path.join(sourceArtifactsDir, file);
+          const dstPath = path.join(targetArtifactsDir, file);
 
-      // deployments.json if present
-      if (fs.existsSync(path.join(repoDir, 'src', 'deployments.json'))) {
-        cp(path.join(repoDir, 'src', 'deployments.json'), path.join(installedPath, 'current', 'deployments.json'));
-      }
-
-      // Nice-to-haves
-      for (const f of ['README.md', 'LICENSE']) {
-        if (fs.existsSync(path.join(repoDir, f))) {
-          cp(path.join(repoDir, f), path.join(installedPath, f));
+          if (fs.statSync(srcPath).isDirectory()) {
+            cp(srcPath, dstPath);
+          } else {
+            fs.copyFileSync(srcPath, dstPath);
+          }
         }
+
+        console.log(`✅ Copied ${files.length} items from artifacts/`);
+      } else {
+        console.log("⚠️ No artifacts directory found in the built repository");
       }
 
-      console.log('\n✅ @defi-wonderland/aztec-standards built and patched into node_modules successfully.');
+      console.log(
+        "\n✅ aztec-standards artifacts built and stored in src/aztec_standards_artifacts successfully.",
+      );
     } catch (err: any) {
-      console.error('\n❌ Build script failed:', err?.message || err);
+      console.error("\n❌ Build script failed:", err?.message || err);
       process.exit(1);
     } finally {
       // Clean up sandbox if we started it
       if (sandboxManager) {
         try {
-          console.log('🛑 Stopping sandbox...');
+          console.log("🛑 Stopping sandbox...");
           await sandboxManager.stop();
-          console.log('✅ Sandbox stopped');
+          console.log("✅ Sandbox stopped");
         } catch (error) {
-          console.warn('⚠️ Error stopping sandbox:', error);
+          console.warn("⚠️ Error stopping sandbox:", error);
         }
       }
-      
+
       // cleanup temp directory
-      try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
+      try {
+        fs.rmSync(tmp, { recursive: true, force: true });
+      } catch {}
     }
   } catch (err: any) {
-    console.error('\n❌ Build script failed:', err?.message || err);
+    console.error("\n❌ Build script failed:", err?.message || err);
     process.exit(1);
   }
 }
