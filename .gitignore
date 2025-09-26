@@ -1,10 +1,10 @@
 node_modules
 target/
 src/artifacts/
-src/aztec_standards_artifacts/
 log/
 .vscode
 .DS_Store
 codegenCache.json
 .env
 .cursor
+store

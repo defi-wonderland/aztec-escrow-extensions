@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 // Run with: tsx scripts/build-aztec-standards.ts [commit-or-tag]
 // This script builds @defi-wonderland/aztec-standards from the specified commit/tag
-// and stores artifacts in src/aztec_standards_artifacts
+// and stores artifacts in src/artifacts and target in ./target
 
 import { execSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -50,55 +50,37 @@ function readJSON<T = any>(file: string): T | null {
 }
 
 /**
- * Check if artifacts are already built and up to date
- */
-function checkExistingArtifacts(targetDir: string): boolean {
-  if (!fs.existsSync(targetDir)) {
-    console.log("ℹ️ No existing artifacts directory found");
-    return false;
-  }
-
-  const files = fs.readdirSync(targetDir);
-  if (files.length === 0) {
-    console.log("ℹ️ Artifacts directory exists but is empty");
-    return false;
-  }
-
-  // Check for common artifact files that indicate a successful build
-  const hasArtifactFiles = files.some((file) => {
-    const ext = path.extname(file);
-    return (
-      ext === ".ts" ||
-      ext === ".js" ||
-      ext === ".json" ||
-      fs.statSync(path.join(targetDir, file)).isDirectory()
-    );
-  });
-
-  if (hasArtifactFiles) {
-    console.log(
-      `✅ Found existing artifacts in ${targetDir} (${files.length} items)`,
-    );
-    return true;
-  }
-
-  console.log(
-    "ℹ️ Artifacts directory exists but contains no recognizable artifact files",
-  );
-  return false;
-}
-
-/**
  * Check if a sandbox is already running and responsive
  */
 async function checkExistingSandbox(): Promise<boolean> {
   try {
-    console.log(" Checking for existing sandbox...");
-    const pxe = createPXEClient("http://localhost:8080");
-    await waitForPXE(pxe, 5000); // 5 second timeout
-    console.log("✅ Found existing responsive sandbox");
-    return true;
-  } catch {
+    console.log("🔍 Checking for existing sandbox on http://localhost:8080...");
+
+    // Use a simple fetch request with timeout instead of waitForPXE
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const response = await fetch("http://localhost:8080", {
+      method: "GET",
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      console.log("✅ Found existing responsive sandbox");
+      return true;
+    } else {
+      console.log(
+        "ℹ️ Sandbox responded but not ready, checking with waitForPXE...",
+      );
+      // Use waitForPXE to double-check if sandbox is actually ready
+      const pxe = createPXEClient("http://localhost:8080");
+      await waitForPXE(pxe);
+      console.log("✅ Sandbox is ready after waitForPXE check");
+      return true;
+    }
+  } catch (error) {
     console.log("ℹ️ No existing sandbox found or not responsive");
     return false;
   }
@@ -108,17 +90,10 @@ async function checkExistingSandbox(): Promise<boolean> {
  * Ensure sandbox is running for codegen
  */
 async function ensureSandboxForCodegen(): Promise<SandboxManager | null> {
-  // Check if sandbox is already running
-  const hasExistingSandbox = await checkExistingSandbox();
-  if (hasExistingSandbox) {
-    console.log("✅ Using existing sandbox");
-    return null; // No manager to clean up
-  }
-
-  // Start our own sandbox
-  console.log("🚀 Starting sandbox for build process...");
+  // Always start a fresh sandbox for codegen to ensure reliability
+  console.log("🚀 Starting fresh sandbox for codegen...");
   const sandboxManager = await startSandbox({ verbose: false });
-  console.log("✅ Sandbox started for build process");
+  console.log("✅ Fresh sandbox started for codegen");
   return sandboxManager;
 }
 
@@ -130,7 +105,7 @@ function detectSystemYarnVersion(): "v1" | "v4" {
     const result = spawnSync("yarn", ["--version"], { stdio: "pipe" });
     if (result.status === 0) {
       const version = result.stdout.toString().trim();
-      console.log(`🔍 System Yarn version: ${version}`);
+      console.log(` System Yarn version: ${version}`);
 
       // Check if it's v4+ (4.0.0 or higher)
       const versionParts = version.split(".");
@@ -258,16 +233,10 @@ function runCodegen(repoDir: string): boolean {
 
   // Use the correct syntax without invalid options
   const approaches = [
-    // Approach 1: Basic codegen (this should work)
-    `cd "${repoDir}" && aztec codegen target --outdir artifacts`,
-
-    // Approach 2: Codegen with force flag
-    `cd "${repoDir}" && aztec codegen target --outdir artifacts --force`,
-
-    // Approach 3: Try with src/artifacts (like in GitHub workflows)
+    // Approach 1: Try with src/artifacts (like in GitHub workflows)
     `cd "${repoDir}" && aztec codegen target --outdir src/artifacts`,
 
-    // Approach 4: Try with src/artifacts and force flag
+    // Approach 2: Try with src/artifacts and force flag
     `cd "${repoDir}" && aztec codegen target --outdir src/artifacts --force`,
   ];
 
@@ -284,6 +253,47 @@ function runCodegen(repoDir: string): boolean {
   return false;
 }
 
+/**
+ * Copy files without overwriting existing ones
+ */
+function copyFilesWithoutOverwrite(
+  sourceDir: string,
+  targetDir: string,
+): number {
+  if (!fs.existsSync(sourceDir)) {
+    console.log(`⚠️ Source directory ${sourceDir} does not exist`);
+    return 0;
+  }
+
+  ensureDir(targetDir);
+  const files = fs.readdirSync(sourceDir);
+  let copiedCount = 0;
+  let skippedCount = 0;
+
+  for (const file of files) {
+    const srcPath = path.join(sourceDir, file);
+    const dstPath = path.join(targetDir, file);
+
+    if (fs.existsSync(dstPath)) {
+      console.log(`⏭️ Skipping ${file} (already exists)`);
+      skippedCount++;
+      continue;
+    }
+
+    if (fs.statSync(srcPath).isDirectory()) {
+      cp(srcPath, dstPath);
+    } else {
+      fs.copyFileSync(srcPath, dstPath);
+    }
+    copiedCount++;
+  }
+
+  console.log(
+    `✅ Copied ${copiedCount} items, skipped ${skippedCount} existing items`,
+  );
+  return copiedCount;
+}
+
 async function main() {
   // Get commit/tag from command line argument
   const commitOrTag = process.argv[2];
@@ -297,18 +307,6 @@ async function main() {
   }
 
   try {
-    // Check if artifacts are already built
-    const targetArtifactsDir = path.join(
-      process.cwd(),
-      "src",
-      "aztec_standards_artifacts",
-    );
-
-    if (checkExistingArtifacts(targetArtifactsDir)) {
-      console.log("✅ Artifacts already exist, skipping build");
-      return;
-    }
-
     let sandboxManager: SandboxManager | null = null;
 
     // 1) Temp clone and install dev deps - ensure temp dir is within user home
@@ -378,6 +376,7 @@ async function main() {
 
       // 4) Codegen - now with sandbox support
       ensureDir(path.join(repoDir, "artifacts"));
+      ensureDir(path.join(repoDir, "src", "artifacts"));
 
       // Ensure sandbox is running for codegen
       sandboxManager = await ensureSandboxForCodegen();
@@ -410,35 +409,21 @@ async function main() {
         );
       }
 
-      // 6) Copy only artifacts to src/aztec_standards_artifacts (preserving existing content)
+      // 6) Copy artifacts to src/artifacts (without overwriting)
+      const targetArtifactsDir = path.join(process.cwd(), "src", "artifacts");
       console.log(`\n📁 Copying artifacts to: ${targetArtifactsDir}`);
+      copyFilesWithoutOverwrite(
+        path.join(repoDir, "src", "artifacts"),
+        targetArtifactsDir,
+      );
 
-      // Ensure target directory exists (don't clean existing content)
-      ensureDir(targetArtifactsDir);
-
-      // Copy only artifacts/ (compiled + sources from codegen)
-      if (fs.existsSync(path.join(repoDir, "artifacts"))) {
-        const sourceArtifactsDir = path.join(repoDir, "artifacts");
-        const files = fs.readdirSync(sourceArtifactsDir);
-
-        for (const file of files) {
-          const srcPath = path.join(sourceArtifactsDir, file);
-          const dstPath = path.join(targetArtifactsDir, file);
-
-          if (fs.statSync(srcPath).isDirectory()) {
-            cp(srcPath, dstPath);
-          } else {
-            fs.copyFileSync(srcPath, dstPath);
-          }
-        }
-
-        console.log(`✅ Copied ${files.length} items from artifacts/`);
-      } else {
-        console.log("⚠️ No artifacts directory found in the built repository");
-      }
+      // 7) Copy target to ./target (without overwriting)
+      const targetTargetDir = path.join(process.cwd(), "target");
+      console.log(`\n📁 Copying target to: ${targetTargetDir}`);
+      copyFilesWithoutOverwrite(path.join(repoDir, "target"), targetTargetDir);
 
       console.log(
-        "\n✅ aztec-standards artifacts built and stored in src/aztec_standards_artifacts successfully.",
+        "\n✅ aztec-standards artifacts and target built and stored successfully.",
       );
     } catch (err: any) {
       console.error("\n❌ Build script failed:", err?.message || err);
@@ -467,3 +452,4 @@ async function main() {
 }
 
 main();
+// checkExistingSandbox()

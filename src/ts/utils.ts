@@ -22,15 +22,9 @@ import {
   LinearVestingEscrowLogicContract,
   LinearVestingEscrowLogicContractArtifact,
 } from "../artifacts/LinearVestingEscrowLogic.js";
-import {
-  EscrowContract,
-  EscrowContractArtifact,
-} from "@defi-wonderland/aztec-standards/current/artifacts/Escrow.js";
-import {
-  TokenContract,
-  TokenContractArtifact,
-} from "@defi-wonderland/aztec-standards/current/artifacts/Token.js";
-import { NFTContractArtifact } from "@defi-wonderland/aztec-standards/current/artifacts/NFT.js";
+import { EscrowContract, EscrowContractArtifact } from "../artifacts/Escrow.js";
+import { TokenContract, TokenContractArtifact } from "../artifacts/Token.js";
+import { NFTContractArtifact } from "../artifacts/NFT.js";
 
 export const logger = createLogger("aztec:aztec-standards");
 
@@ -255,4 +249,13 @@ export async function deployEscrowWithPublicKeysAndSalt(
     .send({ contractAddressSalt: salt, universalDeploy: true })
     .deployed();
   return contract as EscrowContract;
+}
+
+/**
+ * Converts a GrumpkinScalar to an Fr.
+ * @param scalar - The GrumpkinScalar to convert.
+ * @returns The converted Fr.
+ */
+export function grumpkinScalarToFr(scalar: GrumpkinScalar) {
+  return new Fr(scalar.toBigInt());
 }

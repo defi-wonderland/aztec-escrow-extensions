@@ -30,6 +30,7 @@ import {
   expectUintNote,
   deployLinearVestingEscrow,
   deployEscrowWithPublicKeysAndSalt,
+  grumpkinScalarToFr,
 } from "./utils.js";
 import { siloNullifier } from "@aztec/stdlib/hash";
 import { pedersenHash } from "@aztec/foundation/crypto";
@@ -42,11 +43,8 @@ import {
   LinearVestingEscrowLogicContractArtifact,
   EscrowDetailsLogContent,
 } from "../artifacts/LinearVestingEscrowLogic.js";
-import {
-  EscrowContractArtifact,
-  EscrowContract,
-} from "../aztec_standards_artifacts/Escrow.js";
-import { TokenContract } from "../aztec_standards_artifacts/Token.js";
+import { EscrowContractArtifact, EscrowContract } from "../artifacts/Escrow.js";
+import { TokenContract } from "../artifacts/Token.js";
 
 /**
  * Predicts the contract address for a given artifact and constructor arguments.
