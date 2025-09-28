@@ -1,19 +1,30 @@
 use crate::ClawbackEscrowLogic;
+use crate::types::clawback_escrow_note::ClawbackEscrowNote;
 use aztec::{
-    note::{constants::MAX_NOTES_PER_PAGE, note_getter::view_notes},
+    note::{constants::MAX_NOTES_PER_PAGE, note_getter::view_notes, note_interface::NoteProperties},
     oracle::{
         execution::{get_block_number, get_contract_address},
         random::random,
         storage::storage_read,
     },
     prelude::{AztecAddress, NoteViewerOptions},
-    protocol_types::{storage::map::derive_storage_slot_in_map, contract_instance::ContractInstance},
+    protocol_types::{
+        contract_instance::ContractInstance,
+        public_keys::{IvpkM, NpkM, OvpkM, Point, PublicKeys, TpkM},
+        storage::map::derive_storage_slot_in_map,
+        traits::ToField,
+    },
     test::helpers::{cheatcodes, test_environment::TestEnvironment},
+    utils::comparison::Comparator,
 };
+use nft::NFT;
+use nft::test::utils as nft_utils;
+use token::test::utils as token_utils;
+use token::Token;
 
-pub unconstrained fn setup_contract(
+pub unconstrained fn setup(
     with_account_contracts: bool,
-) -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress) {
+) -> (&mut TestEnvironment, AztecAddress, AztecAddress) {
     // Setup env, generate keys
     let mut env = TestEnvironment::new();
     let (owner, user) = if with_account_contracts {
@@ -26,38 +37,89 @@ pub unconstrained fn setup_contract(
         (owner, user)
     };
 
-    let logic_contract = deploy_contract(&mut env, owner);
-
-    (&mut env, logic_contract.to_address(), owner, user)
+    (&mut env, owner, user)
 }
 
-pub unconstrained fn deploy_contract(
+pub unconstrained fn deploy_clawback_logic(
     env: &mut TestEnvironment,
     owner: AztecAddress,
-) -> ContractInstance {
-    let contract_class_id = 1;
+    contract_class_id: Field,
+) -> AztecAddress {
     let initializer_call_interface =
         ClawbackEscrowLogic::interface().constructor(contract_class_id);
-    let contract_instance = env
+    let logic_instance = env
         .deploy("./@clawback_escrow", "ClawbackEscrowLogic")
         .with_public_void_initializer(owner, initializer_call_interface);
     env.advance_block_by(1);
 
-    contract_instance
+    logic_instance.to_address()
 }
 
 pub unconstrained fn deploy_escrow_with_secret(
     env: &mut TestEnvironment,
     escrow_secret: Field,
-) -> AztecAddress {
+) -> (AztecAddress, Field) {
     let escrow_contract_account = cheatcodes::add_account(escrow_secret);
 
-    let escrow_contract = env
+    let escrow_instance = env
         .deploy_with_public_keys("./@escrow_contract", "Escrow", escrow_secret)
         .without_initializer();
     env.advance_block_by(1);
 
-    escrow_contract.to_address()
+    (escrow_instance.to_address(), escrow_instance.contract_class_id.to_field())
+}
+
+pub unconstrained fn deploy_and_create_escrow(
+    with_account_contracts: bool,
+    amount: u128,
+    timeout: u64,
+    ) -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
+    let (env, owner, recipient) = setup(with_account_contracts);
+
+    let (escrow_contract_address, contract_class_id) = deploy_escrow_with_secret(env, 1);
+    let logic_contract_address = deploy_clawback_logic(env, owner, contract_class_id);
+
+    let (vector_public_keys_1, vector_secret_keys_1, vector_public_keys_2, vector_secret_keys_2) =
+        get_test_vector();
+
+    env.impersonate(owner);
+    ClawbackEscrowLogic::at(logic_contract_address)
+        .create_clawback_escrow(
+            escrow_contract_address,
+            recipient,
+            owner,
+            env.committed_timestamp() + timeout,
+            vector_secret_keys_1[0],
+            vector_secret_keys_1[1],
+            vector_secret_keys_1[2],
+            vector_secret_keys_1[3],
+        )
+        .call(&mut env.private());
+    env.advance_block_by(1);
+
+    // Deploy and mint tokens
+    let token_contract_address =
+        token_utils::deploy_token_with_initial_supply(env, owner, amount, owner);
+
+    env.impersonate(owner);
+    Token::at(token_contract_address)
+        .transfer_public_to_private(owner, escrow_contract_address, amount, 0)
+        .call(&mut env.private());
+    env.advance_block_by(1);
+
+    // deploy and mint NFT with ID 1
+    let nft_contract_address = nft_utils::deploy_nft_with_minter(env, owner, owner);
+
+    env.impersonate(owner);
+    NFT::at(nft_contract_address).mint_to_private(escrow_contract_address, 1).call(
+        &mut env.private(),
+    );
+    env.advance_block_by(1);
+
+    (
+        env, owner, recipient, logic_contract_address, escrow_contract_address,
+        token_contract_address, nft_contract_address,
+    )
 }
 
 // TODO: import from aztec-standards logic library utils
@@ -113,18 +175,19 @@ pub unconstrained fn get_test_vector() -> (PublicKeys, [Field; 4], PublicKeys, [
 }
 
 pub unconstrained fn get_escrow_note(
-    token_contract_address: AztecAddress,
+    logic_contract_address: AztecAddress,
     escrow: AztecAddress,
-    offset: u32,
-) -> BoundedVec<UintNote, MAX_NOTES_PER_PAGE> {
+) -> ClawbackEscrowNote {
     let current_contract_address = get_contract_address();
-    cheatcodes::set_contract_address(token_contract_address);
-        let options = NoteViewerOptions::new()
-            .select(ClawbackEscrowNote::properties().escrow, Comparator.EQ, escrow)
-            .set_limit(1);
+    cheatcodes::set_contract_address(logic_contract_address);
+    let options = NoteViewerOptions::new()
+        .select(ClawbackEscrowNote::properties().escrow, Comparator.EQ, escrow)
+        .set_limit(1);
     let escrows_slot = ClawbackEscrowLogic::storage_layout().escrows.slot;
-    let notes: BoundedVec<UintNote, MAX_NOTES_PER_PAGE> =
-        view_notes(escrows_slot, options.set_offset(offset));
+    let notes: BoundedVec<ClawbackEscrowNote, MAX_NOTES_PER_PAGE> =
+        view_notes(escrows_slot, options);
     cheatcodes::set_contract_address(current_contract_address);
-    notes
+    // We revert if there is no note in the filter so we can probably unwrap directly
+    let unwrapped_note = notes.get_unchecked(0);
+    unwrapped_note
 }
