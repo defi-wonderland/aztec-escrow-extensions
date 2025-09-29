@@ -77,7 +77,7 @@ contract LinearVestingEscrowLogic {
     /// @param ovsk_m Outgoing Viewing Key
     /// @param tsk_m Tagging Secret Key
     #[private]
-    fn create_linear_vesting_escrow(
+    fn setup_linear_vesting_escrow(
         escrow: AztecAddress,
         recipient: AztecAddress,
         token: AztecAddress,
