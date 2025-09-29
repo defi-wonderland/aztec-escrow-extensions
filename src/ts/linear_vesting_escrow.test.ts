@@ -272,7 +272,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
     });
   });
 
-  describe("create_linear_vesting_escrow", () => {
+  describe("setup_linear_vesting_escrow", () => {
     // Split in 2 parts due to memory limit of the store
     describe("part 1", () => {
       beforeAll(async () => {
@@ -282,7 +282,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
       it("creates linear vesting escrow shares escrow with bob correctly", async () => {
         const tx = await linearVestingEscrow.methods
-          .create_linear_vesting_escrow(
+          .setup_linear_vesting_escrow(
             escrow.instance.address,
             bob.getAddress(),
             token.instance.address,
@@ -331,7 +331,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         const bobPXE = pxe;
 
         const tx = await linearVestingEscrow.methods
-          .create_linear_vesting_escrow(
+          .setup_linear_vesting_escrow(
             escrow.instance.address,
             bob.getAddress(),
             token.instance.address,
@@ -395,7 +395,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
       it("creates linear vesting escrow should emit a nullifier for the escrow", async () => {
         const tx = await linearVestingEscrow.methods
-          .create_linear_vesting_escrow(
+          .setup_linear_vesting_escrow(
             escrow.instance.address,
             bob.getAddress(),
             token.instance.address,
@@ -432,7 +432,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
       it("creates linear vesting escrow should nullify and not allow to create another one", async () => {
         // Create a linear vesting escrow for bob
         await linearVestingEscrow.methods
-          .create_linear_vesting_escrow(
+          .setup_linear_vesting_escrow(
             escrow.instance.address,
             bob.getAddress(),
             token.instance.address,
@@ -450,7 +450,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         // Try to create a linear vesting escrow for carl
         await expect(
           linearVestingEscrow.methods
-            .create_linear_vesting_escrow(
+            .setup_linear_vesting_escrow(
               escrow.instance.address,
               carl.getAddress(),
               token.instance.address,
@@ -479,7 +479,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         await expect(
           linearVestingEscrow.methods
-            .create_linear_vesting_escrow(
+            .setup_linear_vesting_escrow(
               escrow.instance.address,
               bob.getAddress(),
               token.instance.address,
@@ -509,7 +509,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         await expect(
           linearVestingEscrow.methods
-            .create_linear_vesting_escrow(
+            .setup_linear_vesting_escrow(
               escrow.instance.address,
               bob.getAddress(),
               token.instance.address,
@@ -535,7 +535,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         await expect(
           linearVestingEscrow.methods
-            .create_linear_vesting_escrow(
+            .setup_linear_vesting_escrow(
               escrow.instance.address,
               bob.getAddress(),
               token.instance.address,
@@ -562,7 +562,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         await expect(
           linearVestingEscrow.methods
-            .create_linear_vesting_escrow(
+            .setup_linear_vesting_escrow(
               escrow.instance.address,
               bob.getAddress(),
               token.instance.address,
@@ -596,7 +596,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         await linearVestingEscrow
           .withWallet(alice)
-          .methods.create_linear_vesting_escrow(
+          .methods.setup_linear_vesting_escrow(
             escrow.instance.address,
             bob.getAddress(),
             token.instance.address,
@@ -650,7 +650,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         const tx = await linearVestingEscrow
           .withWallet(alice)
-          .methods.create_linear_vesting_escrow(
+          .methods.setup_linear_vesting_escrow(
             escrow.instance.address,
             bob.getAddress(),
             token.instance.address,
@@ -755,7 +755,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         const tx = await linearVestingEscrow
           .withWallet(alice)
-          .methods.create_linear_vesting_escrow(
+          .methods.setup_linear_vesting_escrow(
             escrow.instance.address,
             bob.getAddress(),
             token.instance.address,
@@ -883,7 +883,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         const tx = await linearVestingEscrow
           .withWallet(alice)
-          .methods.create_linear_vesting_escrow(
+          .methods.setup_linear_vesting_escrow(
             escrow.instance.address,
             bob.getAddress(),
             token.instance.address,
@@ -1050,7 +1050,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         const tx = await linearVestingEscrow
           .withWallet(alice)
-          .methods.create_linear_vesting_escrow(
+          .methods.setup_linear_vesting_escrow(
             escrow.instance.address,
             bob.getAddress(),
             newToken.instance.address,
@@ -1217,7 +1217,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         const shouldThrow = async () => {
           await linearVestingEscrow
             .withWallet(alice)
-            .methods.create_linear_vesting_escrow(
+            .methods.setup_linear_vesting_escrow(
               escrow.instance.address,
               bob.getAddress(),
               newToken.instance.address,
@@ -1249,7 +1249,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         await linearVestingEscrow
           .withWallet(alice)
-          .methods.create_linear_vesting_escrow(
+          .methods.setup_linear_vesting_escrow(
             escrow.instance.address,
             bob.getAddress(),
             newToken.instance.address,
@@ -1306,7 +1306,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
       const tx = await linearVestingEscrow
         .withWallet(alice)
-        .methods.create_linear_vesting_escrow(
+        .methods.setup_linear_vesting_escrow(
           escrow.instance.address,
           bob.getAddress(),
           token.instance.address,
