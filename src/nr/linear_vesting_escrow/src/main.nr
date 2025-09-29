@@ -77,7 +77,7 @@ contract LinearVestingEscrowLogic {
     /// @param ovsk_m Outgoing Viewing Key
     /// @param tsk_m Tagging Secret Key
     #[private]
-    fn create_linear_vesting_escrow(
+    fn setup_linear_vesting_escrow(
         escrow: AztecAddress,
         recipient: AztecAddress,
         token: AztecAddress,
@@ -138,7 +138,7 @@ contract LinearVestingEscrowLogic {
         // Fetch and remove a released amount note
         let released_amount_note = _pop_released_amount_note(storage, escrow);
 
-        // Get the current timestamp
+        // Get the anchor block's timestamp (historical reference point for private execution)
         let block_header = context.get_block_header();
         let timestamp = block_header.global_variables.timestamp;
 
@@ -197,7 +197,10 @@ contract LinearVestingEscrowLogic {
     /// @param timestamp The timestamp
     /// @return The releasable and vested amounts
     #[utility]
-    pub unconstrained fn releasable_and_vested_amounts(escrow: AztecAddress, timestamp: u64) -> (u128, u128) {
+    pub unconstrained fn releasable_and_vested_amounts(
+        escrow: AztecAddress,
+        timestamp: u64,
+    ) -> (u128, u128) {
         let vesting_schedule_note = _view_vesting_schedule_note(storage, escrow);
         let released_amount_note = _view_released_amount_note(storage, escrow);
         let (releasable_amount, vested_amount) = _calculate_releasable_and_vested_amounts(
@@ -313,7 +316,9 @@ contract LinearVestingEscrowLogic {
         released_amount: u128,
         timestamp: u64,
     ) -> (u128, u128) {
+        // Amount of tokens that can be released (vested amount - released amount)
         let mut releasable_amount = 0;
+        // Amount of tokens that have vested linearly since the start time (total_amount * elapsed / duration)
         let mut vested_amount = 0;
 
         // We only calculate the amounts if the last timestamp is greater than the start time, otherwise both amounts are zero
@@ -343,9 +348,10 @@ contract LinearVestingEscrowLogic {
     #[contract_library_method]
     fn u256_muldiv(a: u128, b: u64, divisor: u64) -> Field {
         let divisor_field = divisor as Field;
-        let numerator = (a as Field) * (b as Field);
+        let a_field = a as Field;
+        let numerator = a_field * (b as Field);
         let numerator_u256 = U256::from(numerator);
-        let divisor_u256 = U256::from(divisor as Field);
+        let divisor_u256 = U256::from(divisor_field);
 
         // Safety: __udiv_mod is unconstrained, we then constrain the quotient and remainder to be less than a and divisor, respectively
         let (quotient, remainder) = unsafe { numerator_u256.__udiv_mod(divisor_u256) };
@@ -355,7 +361,7 @@ contract LinearVestingEscrowLogic {
 
         assert_lt(remainder_field, divisor_field);
         // b < divisor always, then quotient < a
-        assert_lt(quotient_field, a as Field);
+        assert_lt(quotient_field, a_field);
 
         assert(quotient_field * divisor_field + remainder_field == numerator);
 
