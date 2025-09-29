@@ -138,7 +138,7 @@ contract LinearVestingEscrowLogic {
         // Fetch and remove a released amount note
         let released_amount_note = _pop_released_amount_note(storage, escrow);
 
-        // Get the current timestamp
+        // Get the anchor block's timestamp (historical reference point for private execution)
         let block_header = context.get_block_header();
         let timestamp = block_header.global_variables.timestamp;
 
@@ -316,7 +316,9 @@ contract LinearVestingEscrowLogic {
         released_amount: u128,
         timestamp: u64,
     ) -> (u128, u128) {
+        // Amount of tokens that can be released (vested amount - released amount)
         let mut releasable_amount = 0;
+        // Amount of tokens that have vested linearly since the start time (total_amount * elapsed / duration)
         let mut vested_amount = 0;
 
         // We only calculate the amounts if the last timestamp is greater than the start time, otherwise both amounts are zero
