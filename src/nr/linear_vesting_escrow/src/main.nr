@@ -77,7 +77,7 @@ contract LinearVestingEscrowLogic {
     /// @param ovsk_m Outgoing Viewing Key
     /// @param tsk_m Tagging Secret Key
     #[private]
-    fn create_linear_vesting_escrow(
+    fn setup_linear_vesting_escrow(
         escrow: AztecAddress,
         recipient: AztecAddress,
         token: AztecAddress,
@@ -138,7 +138,7 @@ contract LinearVestingEscrowLogic {
         // Fetch and remove a released amount note
         let released_amount_note = _pop_released_amount_note(storage, escrow);
 
-        // Get the current timestamp
+        // Get the anchor block's timestamp (historical reference point for private execution)
         let block_header = context.get_block_header();
         let timestamp = block_header.global_variables.timestamp;
 
@@ -192,40 +192,25 @@ contract LinearVestingEscrowLogic {
         _secret_keys_to_public_keys(nsk_m, ivsk_m, ovsk_m, tsk_m)
     }
 
-    /// @notice Calculates the releasable amount for a linear vesting note
-    /// @param storage The storage
+    /// @notice Calculates the releasable and vested amounts for a linear vesting note
     /// @param escrow The address of the escrow
-    /// @return The releasable amount
+    /// @param timestamp The timestamp
+    /// @return The releasable and vested amounts
     #[utility]
-    pub unconstrained fn releasable(escrow: AztecAddress, timestamp: u64) -> u128 {
+    pub unconstrained fn releasable_and_vested_amounts(
+        escrow: AztecAddress,
+        timestamp: u64,
+    ) -> (u128, u128) {
         let vesting_schedule_note = _view_vesting_schedule_note(storage, escrow);
         let released_amount_note = _view_released_amount_note(storage, escrow);
-        let (releasable_amount, _) = _calculate_releasable_and_vested_amounts(
+        let (releasable_amount, vested_amount) = _calculate_releasable_and_vested_amounts(
             vesting_schedule_note.start,
             vesting_schedule_note.duration,
             vesting_schedule_note.total_amount,
             released_amount_note.released_amount,
             timestamp,
         );
-        releasable_amount
-    }
-
-    /// @notice Calculates the vested amount for a linear vesting note
-    /// @param storage The storage
-    /// @param escrow The address of the escrow
-    /// @return The vested amount
-    #[utility]
-    pub unconstrained fn vested_amount(escrow: AztecAddress, timestamp: u64) -> u128 {
-        let vesting_schedule_note = _view_vesting_schedule_note(storage, escrow);
-        let released_amount_note = _view_released_amount_note(storage, escrow);
-        let (_, vested_amount) = _calculate_releasable_and_vested_amounts(
-            vesting_schedule_note.start,
-            vesting_schedule_note.duration,
-            vesting_schedule_note.total_amount,
-            released_amount_note.released_amount,
-            timestamp,
-        );
-        vested_amount
+        (releasable_amount, vested_amount)
     }
 
     /** ==========================================================
@@ -317,8 +302,11 @@ contract LinearVestingEscrowLogic {
     }
 
     /// @notice Calculates the releasable and vested amounts
-    /// @param context The private context
-    /// @param note The linear vesting note
+    /// @param start The start time of the vesting
+    /// @param duration The duration of the vesting
+    /// @param total_amount The total amount of tokens to vest
+    /// @param released_amount The released amount of tokens
+    /// @param timestamp The timestamp
     /// @return The releasable and vested amounts
     #[contract_library_method]
     fn _calculate_releasable_and_vested_amounts(
@@ -328,7 +316,9 @@ contract LinearVestingEscrowLogic {
         released_amount: u128,
         timestamp: u64,
     ) -> (u128, u128) {
+        // Amount of tokens that can be released (vested amount - released amount)
         let mut releasable_amount = 0;
+        // Amount of tokens that have vested linearly since the start time (total_amount * elapsed / duration)
         let mut vested_amount = 0;
 
         // We only calculate the amounts if the last timestamp is greater than the start time, otherwise both amounts are zero
@@ -353,14 +343,15 @@ contract LinearVestingEscrowLogic {
     /// @notice Performs safe multiplication and division: (a * b) / c
     /// @param a First operand (u128)
     /// @param b Second operand (u64)
-    /// @param c Divisor (u64)
+    /// @param divisor Divisor (u64)
     /// @return Result as Field
     #[contract_library_method]
     fn u256_muldiv(a: u128, b: u64, divisor: u64) -> Field {
         let divisor_field = divisor as Field;
-        let numerator = (a as Field) * (b as Field);
+        let a_field = a as Field;
+        let numerator = a_field * (b as Field);
         let numerator_u256 = U256::from(numerator);
-        let divisor_u256 = U256::from(divisor as Field);
+        let divisor_u256 = U256::from(divisor_field);
 
         // Safety: __udiv_mod is unconstrained, we then constrain the quotient and remainder to be less than a and divisor, respectively
         let (quotient, remainder) = unsafe { numerator_u256.__udiv_mod(divisor_u256) };
@@ -370,7 +361,7 @@ contract LinearVestingEscrowLogic {
 
         assert_lt(remainder_field, divisor_field);
         // b < divisor always, then quotient < a
-        assert_lt(quotient_field, a as Field);
+        assert_lt(quotient_field, a_field);
 
         assert(quotient_field * divisor_field + remainder_field == numerator);
 

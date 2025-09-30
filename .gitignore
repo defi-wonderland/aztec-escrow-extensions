@@ -9,3 +9,4 @@ codegenCache.json
 benchmarks/*.json
 store
 .cursor
+store

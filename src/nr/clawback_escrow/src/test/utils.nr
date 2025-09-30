@@ -33,7 +33,7 @@ pub unconstrained fn deploy_contract(
         ClawbackEscrowLogic::interface().constructor(contract_class_id);
     let contract_instance = env
         .deploy("./@clawback_escrow", "ClawbackEscrowLogic")
-        .with_public_void_initializer(contract_class_id, initializer_call_interface);
+        .with_public_void_initializer(owner, initializer_call_interface);
     env.advance_block_by(1);
 
     contract_instance
