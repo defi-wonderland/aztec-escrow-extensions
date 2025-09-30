@@ -148,7 +148,7 @@ export default class TokenContractBenchmark extends Benchmark {
       // Create linear vesting escrow
       linearVestingEscrowContract
         .withWallet(alice)
-        .methods.create_linear_vesting_escrow(
+        .methods.setup_linear_vesting_escrow(
           escrowContract.instance.address,
           bob.getAddress(),
           tokenContract.instance.address,
