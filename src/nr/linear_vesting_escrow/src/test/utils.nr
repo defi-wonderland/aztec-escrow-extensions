@@ -1,16 +1,11 @@
 use crate::LinearVestingEscrowLogic;
-use crate::types::vesting_schedule_note::VestingScheduleNote;
 use crate::types::released_amount_note::ReleasedAmountNote;
+use crate::types::vesting_schedule_note::VestingScheduleNote;
 use aztec::{
     note::{constants::MAX_NOTES_PER_PAGE, note_getter::view_notes, note_interface::NoteProperties},
-    oracle::{
-        execution::{get_contract_address},
-    },
+    oracle::execution::get_contract_address,
     prelude::{AztecAddress, NoteViewerOptions},
-    protocol_types::{
-        public_keys::{IvpkM, NpkM, OvpkM, Point, PublicKeys, TpkM},
-        traits::ToField,
-    },
+    protocol_types::{public_keys::{IvpkM, NpkM, OvpkM, Point, PublicKeys, TpkM}, traits::ToField},
     test::helpers::{cheatcodes, test_environment::TestEnvironment},
     utils::comparison::Comparator,
 };
@@ -66,14 +61,13 @@ pub unconstrained fn deploy_and_create_escrow(
     with_account_contracts: bool,
     amount: u128,
     duration: u64,
-    ) -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
+) -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
     let (env, owner, recipient) = setup(with_account_contracts);
 
     let (escrow_contract_address, contract_class_id) = deploy_escrow_with_secret(env, 1);
     let logic_contract_address = deploy_linear_vesting_escrow_logic(env, owner, contract_class_id);
 
-    let (_, vector_secret_keys_1, _, _) =
-        get_test_vector();
+    let (_, vector_secret_keys_1, _, _) = get_test_vector();
 
     // Deploy and mint tokens
     let token_contract_address =
@@ -102,10 +96,7 @@ pub unconstrained fn deploy_and_create_escrow(
         .call(&mut env.private());
     env.advance_block_by(1);
 
-    (
-        env, owner, recipient, logic_contract_address, escrow_contract_address,
-        token_contract_address,
-    )
+    (env, owner, recipient, logic_contract_address, escrow_contract_address, token_contract_address)
 }
 
 pub unconstrained fn get_vesting_schedule_note(
