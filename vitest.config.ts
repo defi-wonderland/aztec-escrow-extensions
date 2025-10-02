@@ -7,5 +7,6 @@ export default defineConfig({
     testTimeout: 200000,
     globalSetup: "./vitest.setup.ts",
     fileParallelism: false,
+    globals: true,
   },
 });

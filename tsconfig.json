@@ -10,7 +10,8 @@
     "resolveJsonModule": true,
     "allowJs": true,
     "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "types": ["vitest/globals"]
   },
   "include": ["src/**/*", "scripts/**/*.ts", "jest.setup.ts", "jest.teardown.ts"],
   "exclude": ["node_modules"]
