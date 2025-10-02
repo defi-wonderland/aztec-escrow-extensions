@@ -19,8 +19,10 @@ const TARGET_OUTPUT_DIR = "target";
  * Run a command
  */
 function run(cmd: string, opts: Record<string, any> = {}) {
-  console.log(`\n$ ${cmd}`);
-  spawnSync(cmd, { stdio: "inherit", ...opts });
+  const res = spawnSync(cmd, { stdio: "inherit", shell: true, ...opts });
+  if (res.status !== 0) {
+    throw new Error(`Command failed (${res.status}): ${cmd}`);
+  }
 }
 
 /**
@@ -28,8 +30,8 @@ function run(cmd: string, opts: Record<string, any> = {}) {
  */
 function tryRun(cmd: string, opts: Record<string, any> = {}) {
   try {
-    spawnSync(cmd, { stdio: "inherit", ...opts });
-    return true;
+    const res = spawnSync(cmd, { stdio: "inherit", shell: true, ...opts });
+    return res.status === 0;
   } catch {
     return false;
   }
@@ -201,7 +203,7 @@ async function main() {
 
   try {
     // 1) Temp clone and install dev deps - ensure temp dir is within user home
-    const userHome = os.tmpdir();
+    const userHome = os.homedir();
     const tmp = fs.mkdtempSync(path.join(userHome, ".aztec-standards-build-"));
     const repoDir = path.join(tmp, "repo");
 
