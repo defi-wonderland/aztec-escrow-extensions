@@ -3,7 +3,7 @@
 // This script builds @defi-wonderland/aztec-standards from the specified commit/tag
 // and stores artifacts in ARTIFACTS_OUTPUT_DIR and target in TARGET_OUTPUT_DIR
 
-import { execSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -20,7 +20,7 @@ const TARGET_OUTPUT_DIR = "target";
  */
 function run(cmd: string, opts: Record<string, any> = {}) {
   console.log(`\n$ ${cmd}`);
-  execSync(cmd, { stdio: "inherit", ...opts });
+  spawnSync(cmd, { stdio: "inherit", ...opts });
 }
 
 /**
@@ -28,7 +28,7 @@ function run(cmd: string, opts: Record<string, any> = {}) {
  */
 function tryRun(cmd: string, opts: Record<string, any> = {}) {
   try {
-    execSync(cmd, { stdio: "inherit", ...opts });
+    spawnSync(cmd, { stdio: "inherit", ...opts });
     return true;
   } catch {
     return false;
