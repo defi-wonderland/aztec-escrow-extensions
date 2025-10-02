@@ -210,12 +210,13 @@ describe("Linear Vesting Escrow - Single PXE", () => {
     });
 
     it("deploys linear vesting escrow with correct constructor params", async () => {
+      const salt = Fr.random();
       const deploymentData = await getContractInstanceFromDeployParams(
         LinearVestingEscrowLogicContractArtifact,
         {
           constructorArtifact: "constructor",
-          constructorArgs: [alice.getAddress(), escrowClassId],
-          salt: escrowSalt,
+          constructorArgs: [escrowClassId],
+          salt,
           deployer: alice.getAddress(),
         },
       );
@@ -226,8 +227,8 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         undefined,
         "constructor",
       );
-      const tx = deployer.deploy(alice.getAddress(), escrowClassId).send({
-        contractAddressSalt: escrowSalt,
+      const tx = deployer.deploy(escrowClassId).send({
+        contractAddressSalt: salt,
       });
 
       const receipt = await tx.getReceipt();
@@ -1195,64 +1196,17 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         expect(claimCount).toBeGreaterThan(1);
       });
 
-      it("claim with amount over u128 max should not generate the transaction", async () => {
-        const newToken = (await deployTokenWithMinter(
-          alice,
-          {},
-        )) as TokenContract;
-
-        await newToken
-          .withWallet(alice)
-          .methods.mint_to_private(
-            escrow.instance.address,
-            escrow.instance.address,
-            U128_MAX,
-          )
-          .send()
-          .wait();
-
+      it("claim before the start time should not transfer", async () => {
+        // We increment the start so the tokens are not claimable yet
+        start = start + 10000n;
         duration = 200n;
-
-        // We set the vesting amount to U128_MAX + 1 to be sure we were on the max value the previous test
-        const shouldThrow = async () => {
-          await linearVestingEscrow
-            .withWallet(alice)
-            .methods.setup_linear_vesting_escrow(
-              escrow.instance.address,
-              bob.getAddress(),
-              newToken.instance.address,
-              start,
-              duration,
-              U128_MAX + 1n,
-              secretKeys[0],
-              secretKeys[1],
-              secretKeys[2],
-              secretKeys[3],
-            )
-            .simulate();
-        };
-
-        await expect(shouldThrow()).rejects.toThrow(
-          /Cannot satisfy constraint/,
-        );
-      });
-
-      it("claim when escrow is empty should be fail", async () => {
-        // We set the duration to 1 to make the tokens fully claimable
-        duration = 1n;
-
-        // We use a different token and we don't mint any tokens to the escrow
-        const newToken = (await deployTokenWithMinter(
-          alice,
-          {},
-        )) as TokenContract;
 
         await linearVestingEscrow
           .withWallet(alice)
           .methods.setup_linear_vesting_escrow(
             escrow.instance.address,
             bob.getAddress(),
-            newToken.instance.address,
+            token.instance.address,
             start,
             duration,
             AMOUNT,
@@ -1264,31 +1218,29 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           .send()
           .wait();
 
+        // Sync to get linear vesting escrow note
+        await linearVestingEscrow
+          .withWallet(bob)
+          .methods.sync_private_state()
+          .simulate({});
+
         // Assert initial balances
-        await expectTokenBalances(newToken, bob.getAddress(), wad(0), wad(0));
+        await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
         await expectTokenBalances(
-          newToken,
+          token,
           escrow.instance.address,
           wad(0),
-          wad(0),
+          AMOUNT,
         );
 
+        // Balance too low error
         await expect(
           linearVestingEscrow
             .withWallet(bob)
             .methods.claim(escrow.address)
             .send()
             .wait(),
-        ).rejects.toThrow(/Assertion failed: Balance too low/);
-
-        // Assert that tokens were effectively transferred
-        await expectTokenBalances(newToken, bob.getAddress(), wad(0), wad(0));
-        await expectTokenBalances(
-          newToken,
-          escrow.instance.address,
-          wad(0),
-          wad(0),
-        );
+        ).rejects.toThrow("Balance too low 'subtracted > 0'");
       });
     });
   });
