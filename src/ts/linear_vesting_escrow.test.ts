@@ -210,12 +210,13 @@ describe("Linear Vesting Escrow - Single PXE", () => {
     });
 
     it("deploys linear vesting escrow with correct constructor params", async () => {
+      const salt = Fr.random();
       const deploymentData = await getContractInstanceFromDeployParams(
         LinearVestingEscrowLogicContractArtifact,
         {
           constructorArtifact: "constructor",
-          constructorArgs: [alice.getAddress(), escrowClassId],
-          salt: escrowSalt,
+          constructorArgs: [escrowClassId],
+          salt,
           deployer: alice.getAddress(),
         },
       );
@@ -226,8 +227,8 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         undefined,
         "constructor",
       );
-      const tx = deployer.deploy(alice.getAddress(), escrowClassId).send({
-        contractAddressSalt: escrowSalt,
+      const tx = deployer.deploy(escrowClassId).send({
+        contractAddressSalt: salt,
       });
 
       const receipt = await tx.getReceipt();
