@@ -134,18 +134,12 @@ function installDependencies(repoDir: string): boolean {
 function runCodegen(repoDir: string): boolean {
   console.log("🔧 Running aztec codegen...");
 
-  const approaches = [
-    // Try with src/artifacts and force flag
-    `cd "${repoDir}" && aztec codegen target --outdir ${ARTIFACTS_OUTPUT_DIR} --force`,
-  ];
+  const command = `cd "${repoDir}" && aztec codegen target --outdir ${ARTIFACTS_OUTPUT_DIR} --force`;
+  console.log(`🔧 Running: ${command}`);
 
-  for (const approach of approaches) {
-    console.log(`🔧 Trying: ${approach}`);
-    if (tryRun(approach)) {
-      console.log("✅ Codegen completed successfully");
-      return true;
-    }
-    console.log("⚠️ Approach failed, trying next...");
+  if (tryRun(command)) {
+    console.log("✅ Codegen completed successfully");
+    return true;
   }
 
   console.error("❌ All codegen approaches failed");
@@ -207,7 +201,7 @@ async function main() {
 
   try {
     // 1) Temp clone and install dev deps - ensure temp dir is within user home
-    const userHome = os.homedir();
+    const userHome = os.tmpdir();
     const tmp = fs.mkdtempSync(path.join(userHome, ".aztec-standards-build-"));
     const repoDir = path.join(tmp, "repo");
 
@@ -227,17 +221,11 @@ async function main() {
         run(`cd "${repoDir}" && npm install --no-audit --no-fund`);
       }
 
-      // 2) Determine Aztec version (if present) and whether to run codegen
+      // 2) Load the package.json
       const pkgJson = readJSON<{
         scripts?: Record<string, string>;
         config?: any;
       }>(path.join(repoDir, "package.json"));
-      const aztecVersion: string = pkgJson?.config?.aztecVersion || "";
-
-      if (aztecVersion) {
-        console.log(` Setting Aztec version to ${aztecVersion}`);
-        tryRun(`bash -lc "VERSION=${aztecVersion} aztec-up"`);
-      }
 
       // 3) Compile sources if repo exposes a compile script
       if (pkgJson?.scripts?.compile) {
