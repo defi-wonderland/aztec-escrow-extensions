@@ -4,12 +4,9 @@ import {
   type PXE,
   getContractClassFromArtifact,
   Fr,
-  GrumpkinScalar,
 } from "@aztec/aztec.js";
 import { getInitialTestAccountsManagers } from "@aztec/accounts/testing";
-import { deriveKeys, PublicKeys } from "@aztec/stdlib/keys";
-
-import { parseUnits } from "viem";
+import { deriveKeys } from "@aztec/stdlib/keys";
 
 // Import the new Benchmark base class and context
 import { Benchmark, BenchmarkContext } from "@defi-wonderland/aztec-benchmark";
@@ -41,13 +38,6 @@ interface LinearVestingEscrowBenchmarkContext extends BenchmarkContext {
   secretKeys: Fr[];
   start: bigint;
   duration: bigint;
-}
-
-// --- Helper Functions ---
-
-function amt(x: bigint | number | string) {
-  // Using 18 decimals as standard for Token examples
-  return parseUnits(x.toString(), 18);
 }
 
 // Use export default class extending Benchmark
@@ -143,9 +133,11 @@ export default class TokenContractBenchmark extends Benchmark {
       start,
       duration,
     } = context;
+
     const [alice, bob] = accounts;
+
     const methods: ContractFunctionInteraction[] = [
-      // Create linear vesting escrow
+      // Setup linear vesting escrow
       linearVestingEscrowContract
         .withWallet(alice)
         .methods.setup_linear_vesting_escrow(
@@ -160,7 +152,7 @@ export default class TokenContractBenchmark extends Benchmark {
           secretKeys[2],
           secretKeys[3],
         ),
-      // Claim linear vesting escrow
+      // Full claim linear vesting escrow
       linearVestingEscrowContract
         .withWallet(bob)
         .methods.claim(escrowContract.instance.address),
