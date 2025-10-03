@@ -105,7 +105,8 @@ export default class TokenContractBenchmark extends Benchmark {
     const block = await pxe.getBlock(blockNumber);
     const start = block!.header.globalVariables.timestamp;
     const AZTEC_SLOT_TIME = 36n;
-    // We set the duration so that the first claim is partially claimable and the second claim is fully claimable
+    // We set the duration so that the first claim is one AZTEC_SLOT_TIME after the start, hence partially claimable
+    // The second claim is fully claimable because is exactly two AZTEC_SLOT_TIME after the start, it claims the remaining amount
     const duration = AZTEC_SLOT_TIME * 2n;
 
     return {
@@ -157,14 +158,14 @@ export default class TokenContractBenchmark extends Benchmark {
           secretKeys[2],
           secretKeys[3],
         ),
-      // Partial claim
+      // Partial claim (emits released amount note)
       {
         interaction: linearVestingEscrowContract
           .withWallet(bob)
           .methods.claim(escrowContract.instance.address),
         name: "(partial) claim",
       },
-      // Claim the remaining amount
+      // Claim the remaining amount (does not emit released amount note)
       {
         interaction: linearVestingEscrowContract
           .withWallet(bob)
