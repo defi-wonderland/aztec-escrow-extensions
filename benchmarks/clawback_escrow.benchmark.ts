@@ -28,17 +28,48 @@ import {
 import { TokenContract } from "../src/artifacts/Token.js";
 import { NFTContract } from "../src/artifacts/NFT.js";
 
+// Escrow key counter starting at 2, incremented on each deployment
+let escrowKeyCounter = 2n;
+
+async function deployEscrow(
+  pxe: PXE,
+  deployer: AccountWallet,
+  clawbackEscrowContract: ClawbackEscrowLogicContract,
+) {
+  const escrowSk = new Fr(escrowKeyCounter);
+  escrowKeyCounter += 1n;
+  const escrowKeys = await deriveKeys(escrowSk);
+  const escrowSalt = new Fr(clawbackEscrowContract.address.toBigInt());
+
+  const escrowContract = (await deployEscrowWithPublicKeysAndSalt(
+    escrowKeys.publicKeys,
+    deployer,
+    escrowSalt,
+  )) as EscrowContract;
+
+  const partialAddressEscrow = await escrowContract.partialAddress;
+  await pxe.registerAccount(escrowSk, partialAddressEscrow);
+
+  const secretKeys = [
+    grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
+    grumpkinScalarToFr(escrowKeys.masterIncomingViewingSecretKey),
+    grumpkinScalarToFr(escrowKeys.masterOutgoingViewingSecretKey),
+    grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
+  ];
+
+  return { escrowContract, secretKeys };
+}
+
 // Extend the BenchmarkContext from the new package
-interface EscrowEscrowBenchmarkContext extends BenchmarkContext {
+interface ClawbackEscrowBenchmarkContext extends BenchmarkContext {
   pxe: PXE;
   deployer: AccountWallet;
   accounts: AccountWallet[];
   clawbackEscrowContract: ClawbackEscrowLogicContract;
-  escrowContract: EscrowContract;
+  escrows: { contract: EscrowContract; secretKeys: Fr[] }[];
   tokenContract: TokenContract;
   nftContract: NFTContract;
-  secretKeys: Fr[];
-  deadline: bigint;
+  timestamp: bigint;
 }
 
 // Use export default class extending Benchmark
@@ -48,7 +79,7 @@ export default class TokenContractBenchmark extends Benchmark {
    * Creates PXE client, gets accounts, and deploys the contract.
    */
 
-  async setup(): Promise<EscrowEscrowBenchmarkContext> {
+  async setup(): Promise<ClawbackEscrowBenchmarkContext> {
     const { pxe, store } = await setupPXE();
     const managers = await getInitialTestAccountsManagers(pxe);
     const accounts = await Promise.all(managers.map((acc) => acc.register()));
@@ -57,25 +88,24 @@ export default class TokenContractBenchmark extends Benchmark {
     const escrowClassId = (
       await getContractClassFromArtifact(EscrowContractArtifact)
     ).id;
-    const deployedEscrowEscrow = await deployClawbackEscrow(
+    const deployedClawbackEscrow = await deployClawbackEscrow(
       deployer,
       escrowClassId,
     );
     const clawbackEscrowContract = await ClawbackEscrowLogicContract.at(
-      deployedEscrowEscrow.address,
+      deployedClawbackEscrow.address,
       deployer,
     );
 
-    const escrowSk = Fr.ONE.add(Fr.ONE);
-    const escrowKeys = await deriveKeys(escrowSk);
-    const escrowSalt = new Fr(clawbackEscrowContract.address.toBigInt());
-    const escrowContract = (await deployEscrowWithPublicKeysAndSalt(
-      escrowKeys.publicKeys,
-      deployer,
-      escrowSalt,
-    )) as EscrowContract;
-    const partialAddressEscrow = await escrowContract.partialAddress;
-    await pxe.registerAccount(escrowSk, partialAddressEscrow);
+    const { escrowContract: escrowContract_1, secretKeys: secretKeys_1 } =
+      await deployEscrow(pxe, deployer, clawbackEscrowContract);
+    const { escrowContract: escrowContract_2, secretKeys: secretKeys_2 } =
+      await deployEscrow(pxe, deployer, clawbackEscrowContract);
+
+    const escrows = [
+      { contract: escrowContract_1, secretKeys: secretKeys_1 },
+      { contract: escrowContract_2, secretKeys: secretKeys_2 },
+    ];
 
     // Deploy a token contract
     const tokenContract = (await deployTokenWithMinter(
@@ -85,8 +115,17 @@ export default class TokenContractBenchmark extends Benchmark {
     await tokenContract
       .withWallet(deployer)
       .methods.mint_to_private(
-        escrowContract.address,
-        escrowContract.address,
+        escrows[0].contract.address,
+        escrows[0].contract.address,
+        AMOUNT,
+      )
+      .send()
+      .wait();
+    await tokenContract
+      .withWallet(deployer)
+      .methods.mint_to_private(
+        escrows[1].contract.address,
+        escrows[1].contract.address,
         AMOUNT,
       )
       .send()
@@ -99,39 +138,45 @@ export default class TokenContractBenchmark extends Benchmark {
     )) as NFTContract;
     await nftContract
       .withWallet(deployer)
-      .methods.mint_to_private(escrowContract.address, 1) // token ID: 1
+      .methods.mint_to_private(escrows[0].contract.address, 1) // token ID: 1
       .send()
       .wait();
     await nftContract
       .withWallet(deployer)
-      .methods.mint_to_private(escrowContract.address, 2) // token ID: 2
+      .methods.mint_to_private(escrows[1].contract.address, 2) // token ID: 2
       .send()
       .wait();
 
-    const secretKeys = [
-      grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
-      grumpkinScalarToFr(escrowKeys.masterIncomingViewingSecretKey),
-      grumpkinScalarToFr(escrowKeys.masterOutgoingViewingSecretKey),
-      grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
-    ];
-
-    const AZTEC_SLOT_TIME = 36n; // seconds
     const blockNumber = await pxe.getBlockNumber();
     const block = await pxe.getBlock(blockNumber);
-    // Accept 3 tx (creation, claim and claim_nft) before deadline
-    const deadline =
-      block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 4n - 1n;
+    const timestamp = block!.header.globalVariables.timestamp;
+    const pastDeadline = timestamp;
+
+    const [alice, bob] = accounts;
+    await clawbackEscrowContract
+      .withWallet(deployer)
+      .methods.create_clawback_escrow(
+        escrows[0].contract.address,
+        bob.getAddress(),
+        alice.getAddress(),
+        pastDeadline,
+        escrows[0].secretKeys[0],
+        escrows[0].secretKeys[1],
+        escrows[0].secretKeys[2],
+        escrows[0].secretKeys[3],
+      )
+      .send()
+      .wait();
 
     return {
       pxe,
       deployer,
       accounts,
       clawbackEscrowContract,
-      escrowContract,
+      escrows,
       tokenContract,
       nftContract,
-      secretKeys,
-      deadline,
+      timestamp,
     };
   }
 
@@ -139,59 +184,62 @@ export default class TokenContractBenchmark extends Benchmark {
    * Returns the list of ClawbackEscrowLogic methods to be benchmarked.
    */
   getMethods(
-    context: EscrowEscrowBenchmarkContext,
+    context: ClawbackEscrowBenchmarkContext,
   ): ContractFunctionInteraction[] {
     const {
       clawbackEscrowContract,
       accounts,
-      escrowContract,
+      escrows,
       tokenContract,
       nftContract,
-      secretKeys,
-      deadline,
+      timestamp,
     } = context;
 
     const [alice, bob] = accounts;
-    const halfAmount = AMOUNT / 2n;
+    const futureDeadline = timestamp + 10000n;
 
     const methods: ContractFunctionInteraction[] = [
       // Setup clawback escrow
       clawbackEscrowContract
         .withWallet(alice)
         .methods.create_clawback_escrow(
-          escrowContract.address,
+          escrows[1].contract.address,
           bob.getAddress(),
           alice.getAddress(),
-          deadline,
-          secretKeys[0],
-          secretKeys[1],
-          secretKeys[2],
-          secretKeys[3],
+          futureDeadline,
+          escrows[1].secretKeys[0],
+          escrows[1].secretKeys[1],
+          escrows[1].secretKeys[2],
+          escrows[1].secretKeys[3],
         ),
       // Partial token claim escrow
       clawbackEscrowContract
         .withWallet(bob)
         .methods.claim(
-          escrowContract.address,
+          escrows[1].contract.address,
           tokenContract.address,
-          halfAmount,
+          AMOUNT,
         ),
       // NFT claim escrow
       clawbackEscrowContract
         .withWallet(bob)
-        .methods.claim_nft(escrowContract.address, nftContract.address, 1),
+        .methods.claim_nft(escrows[1].contract.address, nftContract.address, 2),
       // Full token clawback escrow
       clawbackEscrowContract
         .withWallet(alice)
         .methods.clawback(
-          escrowContract.address,
+          escrows[0].contract.address,
           tokenContract.address,
-          halfAmount,
+          AMOUNT,
         ),
       // NFT clawback escrow
       clawbackEscrowContract
         .withWallet(alice)
-        .methods.clawback_nft(escrowContract.address, nftContract.address, 2),
+        .methods.clawback_nft(
+          escrows[0].contract.address,
+          nftContract.address,
+          1,
+        ),
     ];
 
     return methods.filter(Boolean);
