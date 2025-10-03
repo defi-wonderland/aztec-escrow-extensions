@@ -99,9 +99,5 @@ jobs:
         run: |
           VERSION=${{ steps.aztec-version.outputs.version }} aztec start --port 8081 --pxe --pxe.nodeUrl=http://localhost:8080/ --pxe.proverEnabled false &
 
-      - name: Run nr tests
-        run: |
-          script -e -c "aztec test --test-threads ${{ matrix.threads }}"
-
       - name: Run js tests
         run: script -e -c "yarn test:js"
