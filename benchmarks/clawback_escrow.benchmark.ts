@@ -11,33 +11,34 @@ import { deriveKeys } from "@aztec/stdlib/keys";
 // Import the new Benchmark base class and context
 import { Benchmark, BenchmarkContext } from "@defi-wonderland/aztec-benchmark";
 
-import { TokenContract } from "../src/artifacts/Token.js";
 import {
   AMOUNT,
   deployEscrowWithPublicKeysAndSalt,
-  deployLinearVestingEscrow,
+  deployClawbackEscrow,
   deployTokenWithMinter,
+  deployNFTWithMinter,
   setupPXE,
   grumpkinScalarToFr,
 } from "../src/ts/utils.js";
-
-import { LinearVestingEscrowLogicContract } from "../src/artifacts/LinearVestingEscrowLogic.js";
+import { ClawbackEscrowLogicContract } from "../src/artifacts/ClawbackEscrowLogic.js";
 import {
   EscrowContractArtifact,
   EscrowContract,
 } from "../src/artifacts/Escrow.js";
+import { TokenContract } from "../src/artifacts/Token.js";
+import { NFTContract } from "../src/artifacts/NFT.js";
 
 // Extend the BenchmarkContext from the new package
-interface LinearVestingEscrowBenchmarkContext extends BenchmarkContext {
+interface EscrowEscrowBenchmarkContext extends BenchmarkContext {
   pxe: PXE;
   deployer: AccountWallet;
   accounts: AccountWallet[];
-  linearVestingEscrowContract: LinearVestingEscrowLogicContract;
+  clawbackEscrowContract: ClawbackEscrowLogicContract;
   escrowContract: EscrowContract;
   tokenContract: TokenContract;
+  nftContract: NFTContract;
   secretKeys: Fr[];
-  start: bigint;
-  duration: bigint;
+  deadline: bigint;
 }
 
 // Use export default class extending Benchmark
@@ -47,7 +48,7 @@ export default class TokenContractBenchmark extends Benchmark {
    * Creates PXE client, gets accounts, and deploys the contract.
    */
 
-  async setup(): Promise<LinearVestingEscrowBenchmarkContext> {
+  async setup(): Promise<EscrowEscrowBenchmarkContext> {
     const { pxe, store } = await setupPXE();
     const managers = await getInitialTestAccountsManagers(pxe);
     const accounts = await Promise.all(managers.map((acc) => acc.register()));
@@ -56,21 +57,18 @@ export default class TokenContractBenchmark extends Benchmark {
     const escrowClassId = (
       await getContractClassFromArtifact(EscrowContractArtifact)
     ).id;
-    const deployedLinearVestingEscrow = await deployLinearVestingEscrow(
+    const deployedEscrowEscrow = await deployClawbackEscrow(
       deployer,
       escrowClassId,
     );
-    const linearVestingEscrowContract =
-      await LinearVestingEscrowLogicContract.at(
-        deployedLinearVestingEscrow.address,
-        deployer,
-      );
+    const clawbackEscrowContract = await ClawbackEscrowLogicContract.at(
+      deployedEscrowEscrow.address,
+      deployer,
+    );
 
     const escrowSk = Fr.ONE.add(Fr.ONE);
     const escrowKeys = await deriveKeys(escrowSk);
-    const escrowSalt = new Fr(
-      linearVestingEscrowContract.instance.address.toBigInt(),
-    );
+    const escrowSalt = new Fr(clawbackEscrowContract.address.toBigInt());
     const escrowContract = (await deployEscrowWithPublicKeysAndSalt(
       escrowKeys.publicKeys,
       deployer,
@@ -79,6 +77,7 @@ export default class TokenContractBenchmark extends Benchmark {
     const partialAddressEscrow = await escrowContract.partialAddress;
     await pxe.registerAccount(escrowSk, partialAddressEscrow);
 
+    // Deploy a token contract
     const tokenContract = (await deployTokenWithMinter(
       deployer,
       {},
@@ -86,10 +85,26 @@ export default class TokenContractBenchmark extends Benchmark {
     await tokenContract
       .withWallet(deployer)
       .methods.mint_to_private(
-        escrowContract.instance.address,
-        escrowContract.instance.address,
+        escrowContract.address,
+        escrowContract.address,
         AMOUNT,
       )
+      .send()
+      .wait();
+
+    // Deploy a nft contract
+    const nftContract = (await deployNFTWithMinter(
+      deployer,
+      {},
+    )) as NFTContract;
+    await nftContract
+      .withWallet(deployer)
+      .methods.mint_to_private(escrowContract.address, 1) // token ID: 1
+      .send()
+      .wait();
+    await nftContract
+      .withWallet(deployer)
+      .methods.mint_to_private(escrowContract.address, 2) // token ID: 2
       .send()
       .wait();
 
@@ -100,62 +115,83 @@ export default class TokenContractBenchmark extends Benchmark {
       grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
     ];
 
+    const AZTEC_SLOT_TIME = 36n; // seconds
     const blockNumber = await pxe.getBlockNumber();
     const block = await pxe.getBlock(blockNumber);
-    const start = block!.header.globalVariables.timestamp;
-    const duration = 1n;
+    // Accept 3 tx (creation, claim and claim_nft) before deadline
+    const deadline =
+      block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 4n - 1n;
 
     return {
       pxe,
       deployer,
       accounts,
-      linearVestingEscrowContract,
+      clawbackEscrowContract,
       escrowContract,
       tokenContract,
+      nftContract,
       secretKeys,
-      start,
-      duration,
+      deadline,
     };
   }
 
   /**
-   * Returns the list of TokenContract methods to be benchmarked.
+   * Returns the list of ClawbackEscrowLogic methods to be benchmarked.
    */
   getMethods(
-    context: LinearVestingEscrowBenchmarkContext,
+    context: EscrowEscrowBenchmarkContext,
   ): ContractFunctionInteraction[] {
     const {
-      linearVestingEscrowContract,
+      clawbackEscrowContract,
       accounts,
       escrowContract,
       tokenContract,
+      nftContract,
       secretKeys,
-      start,
-      duration,
+      deadline,
     } = context;
 
     const [alice, bob] = accounts;
+    const halfAmount = AMOUNT / 2n;
 
     const methods: ContractFunctionInteraction[] = [
-      // Setup linear vesting escrow
-      linearVestingEscrowContract
+      // Setup clawback escrow
+      clawbackEscrowContract
         .withWallet(alice)
-        .methods.setup_linear_vesting_escrow(
-          escrowContract.instance.address,
+        .methods.create_clawback_escrow(
+          escrowContract.address,
           bob.getAddress(),
-          tokenContract.instance.address,
-          start,
-          duration,
-          AMOUNT,
+          alice.getAddress(),
+          deadline,
           secretKeys[0],
           secretKeys[1],
           secretKeys[2],
           secretKeys[3],
         ),
-      // Full claim linear vesting escrow
-      linearVestingEscrowContract
+      // Partial token claim escrow
+      clawbackEscrowContract
         .withWallet(bob)
-        .methods.claim(escrowContract.instance.address),
+        .methods.claim(
+          escrowContract.address,
+          tokenContract.address,
+          halfAmount,
+        ),
+      // NFT claim escrow
+      clawbackEscrowContract
+        .withWallet(bob)
+        .methods.claim_nft(escrowContract.address, nftContract.address, 1),
+      // Full token clawback escrow
+      clawbackEscrowContract
+        .withWallet(alice)
+        .methods.clawback(
+          escrowContract.address,
+          tokenContract.address,
+          halfAmount,
+        ),
+      // NFT clawback escrow
+      clawbackEscrowContract
+        .withWallet(alice)
+        .methods.clawback_nft(escrowContract.address, nftContract.address, 2),
     ];
 
     return methods.filter(Boolean);
