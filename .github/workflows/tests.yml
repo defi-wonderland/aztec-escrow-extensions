@@ -74,25 +74,13 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Cache Noir compilation artifacts
-        id: cache-noir
-        uses: actions/cache@v4
-        with:
-          path: |
-            target/
-            src/artifacts/
-          key: ${{ runner.os }}-noir-${{ steps.aztec-version.outputs.version }}-${{ hashFiles('src/nr/**/*', 'Nargo.toml') }}
-
       - name: Compile contracts
-        if: steps.cache-noir.outputs.cache-hit != 'true'
-        run: script -e -c "${AZTEC_NARGO:-aztec-nargo} compile"
+        run: yarn compile
 
       - name: Generate artifacts
-        if: steps.cache-noir.outputs.cache-hit != 'true'
-        run: script -e -c "aztec codegen target --outdir src/artifacts"
+        run: yarn codegen
 
       - name: Build aztec-standards artifacts
-        if: steps.cache-noir.outputs.cache-hit != 'true'
         run: yarn build-aztec-standards
 
       - name: Start PXE
