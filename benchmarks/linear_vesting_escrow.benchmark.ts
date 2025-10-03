@@ -10,6 +10,7 @@ import { deriveKeys } from "@aztec/stdlib/keys";
 
 // Import the new Benchmark base class and context
 import { Benchmark, BenchmarkContext } from "@defi-wonderland/aztec-benchmark";
+import type { NamedBenchmarkedInteraction } from "@defi-wonderland/aztec-benchmark/dist/types.js";
 
 import { TokenContract } from "../src/artifacts/Token.js";
 import {
@@ -66,7 +67,7 @@ export default class TokenContractBenchmark extends Benchmark {
         deployer,
       );
 
-    const escrowSk = Fr.ONE.add(Fr.ONE);
+    const escrowSk = Fr.ONE;
     const escrowKeys = await deriveKeys(escrowSk);
     const escrowSalt = new Fr(
       linearVestingEscrowContract.instance.address.toBigInt(),
@@ -103,7 +104,10 @@ export default class TokenContractBenchmark extends Benchmark {
     const blockNumber = await pxe.getBlockNumber();
     const block = await pxe.getBlock(blockNumber);
     const start = block!.header.globalVariables.timestamp;
-    const duration = 1n;
+    const AZTEC_SLOT_TIME = 36n;
+    // We set the duration so that the first claim is one AZTEC_SLOT_TIME after the start, hence partially claimable
+    // The second claim is fully claimable because is exactly two AZTEC_SLOT_TIME after the start, it claims the remaining amount
+    const duration = AZTEC_SLOT_TIME * 2n;
 
     return {
       pxe,
@@ -123,7 +127,7 @@ export default class TokenContractBenchmark extends Benchmark {
    */
   getMethods(
     context: LinearVestingEscrowBenchmarkContext,
-  ): ContractFunctionInteraction[] {
+  ): Array<NamedBenchmarkedInteraction | ContractFunctionInteraction> {
     const {
       linearVestingEscrowContract,
       accounts,
@@ -136,7 +140,9 @@ export default class TokenContractBenchmark extends Benchmark {
 
     const [alice, bob] = accounts;
 
-    const methods: ContractFunctionInteraction[] = [
+    const methods: Array<
+      NamedBenchmarkedInteraction | ContractFunctionInteraction
+    > = [
       // Setup linear vesting escrow
       linearVestingEscrowContract
         .withWallet(alice)
@@ -152,10 +158,20 @@ export default class TokenContractBenchmark extends Benchmark {
           secretKeys[2],
           secretKeys[3],
         ),
-      // Full claim linear vesting escrow
-      linearVestingEscrowContract
-        .withWallet(bob)
-        .methods.claim(escrowContract.instance.address),
+      // Partial claim (emits released amount note)
+      {
+        interaction: linearVestingEscrowContract
+          .withWallet(bob)
+          .methods.claim(escrowContract.instance.address),
+        name: "(partial) claim",
+      },
+      // Claim the remaining amount (does not emit released amount note)
+      {
+        interaction: linearVestingEscrowContract
+          .withWallet(bob)
+          .methods.claim(escrowContract.instance.address),
+        name: "(full) claim",
+      },
     ];
 
     return methods.filter(Boolean);

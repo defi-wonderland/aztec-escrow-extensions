@@ -23,9 +23,13 @@ import {
   LinearVestingEscrowLogicContract,
   LinearVestingEscrowLogicContractArtifact,
 } from "../artifacts/LinearVestingEscrowLogic.js";
+import {
+  ClawbackEscrowLogicContract,
+  ClawbackEscrowLogicContractArtifact,
+} from "../artifacts/ClawbackEscrowLogic.js";
 import { EscrowContract, EscrowContractArtifact } from "../artifacts/Escrow.js";
 import { TokenContract, TokenContractArtifact } from "../artifacts/Token.js";
-import { NFTContractArtifact } from "../artifacts/NFT.js";
+import { NFTContract, NFTContractArtifact } from "../artifacts/NFT.js";
 
 export const logger = createLogger("aztec:aztec-standards");
 
@@ -204,7 +208,7 @@ export async function setPublicAuthWit(
 }
 
 /**
- * Deploys the Logic contract.
+ * Deploys the Linear Vesting Logic contract.
  * @param deployer - The wallet to deploy the contract with.
  * @param escrowClassId - The class id of the escrow contract.
  * @param options - The options to deploy the contract with.
@@ -224,6 +228,29 @@ export async function deployLinearVestingEscrow(
     .send(options)
     .deployed();
   return contract as LinearVestingEscrowLogicContract;
+}
+
+/**
+ * Deploys the Clawback Logic contract.
+ * @param deployer - The wallet to deploy the contract with.
+ * @param escrowClassId - The class id of the escrow contract.
+ * @param options - The options to deploy the contract with.
+ * @returns A deployed contract instance.
+ */
+export async function deployClawbackEscrow(
+  deployer: AccountWallet,
+  escrowClassId: Fr,
+  options?: DeployOptions,
+) {
+  const contract = await Contract.deploy(
+    deployer,
+    ClawbackEscrowLogicContractArtifact,
+    [escrowClassId],
+    "constructor",
+  )
+    .send(options)
+    .deployed();
+  return contract as ClawbackEscrowLogicContract;
 }
 
 /**
@@ -260,3 +287,25 @@ export async function deployEscrowWithPublicKeysAndSalt(
 export function grumpkinScalarToFr(scalar: GrumpkinScalar) {
   return new Fr(scalar.toBigInt());
 }
+
+// Check if an address owns a specific NFT in private state
+export async function assertOwnsPrivateNFT(
+  nft: NFTContract,
+  tokenId: bigint,
+  owner: AztecAddress,
+  caller?: AccountWallet,
+) {
+  const n = caller ? nft.withWallet(caller) : nft;
+  const [nfts, _] = await n.methods.get_private_nfts(owner, 0).simulate();
+  const hasNFT = nfts.some((id: bigint) => id === tokenId);
+  expect(hasNFT).toBe(true);
+}
+
+export const expectNFTNote = (
+  note: UniqueNote,
+  tokenId: bigint,
+  owner: AztecAddress,
+) => {
+  expect(note.note.items[0]).toEqual(new Fr(owner.toBigInt()));
+  expect(note.note.items[2]).toEqual(new Fr(tokenId));
+};
