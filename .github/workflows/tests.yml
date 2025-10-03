@@ -67,10 +67,6 @@ jobs:
         run: |
           VERSION=${{ steps.aztec-version.outputs.version }} aztec-up
 
-      - name: Start sandbox
-        run: |
-          aztec start --sandbox &
-
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
