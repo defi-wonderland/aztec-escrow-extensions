@@ -3,18 +3,11 @@ import {
   TxStatus,
   AccountWalletWithSecretKey,
   PublicKeys,
-  AztecAddress,
   GrumpkinScalar,
   getContractClassFromArtifact,
 } from "@aztec/aztec.js";
 import type { FieldsOf } from "@aztec/foundation/types";
 import { type TxReceipt } from "@aztec/stdlib/tx";
-import {
-  computeInitializationHash,
-  computeContractAddressFromInstance,
-  computeSaltedInitializationHash,
-} from "@aztec/stdlib/contract";
-import { getDefaultInitializer } from "@aztec/stdlib/abi";
 import { deriveKeys } from "@aztec/stdlib/keys";
 import {
   setupPXE,
@@ -43,48 +36,6 @@ import {
 import { EscrowContractArtifact, EscrowContract } from "../artifacts/Escrow.js";
 import { TokenContract } from "../artifacts/Token.js";
 import { NFTContract } from "../artifacts/NFT.js";
-
-/**
- * Predicts the contract address for a given artifact and constructor arguments.
- * @param artifact - The contract artifact.
- * @param constructorArgs - The arguments to pass to the constructor.
- * @param deployer - The address of the deployer.
- * @param salt - The salt to use for the contract address. If not provided, a random salt will be used.
- * @param publicKeys - The public keys to use for the contract.
- * @returns The predicted contract address.
- */
-export async function deriveContractAddress(
-  artifact: any,
-  constructorArgs: any,
-  deployer: AztecAddress = AztecAddress.ZERO,
-  salt: Fr = Fr.random(),
-  publicKeys: PublicKeys,
-) {
-  if (!publicKeys) {
-    publicKeys = await PublicKeys.random();
-  }
-
-  const contractClass = await getContractClassFromArtifact(artifact);
-  const contractClassId = contractClass.id;
-  const constructorArtifact = getDefaultInitializer(artifact);
-  const initializationHash = await computeInitializationHash(
-    constructorArtifact,
-    constructorArgs,
-  );
-  const saltedInitializationHash = await computeSaltedInitializationHash({
-    initializationHash,
-    salt,
-    deployer,
-  });
-
-  const address = await computeContractAddressFromInstance({
-    originalContractClassId: contractClassId,
-    saltedInitializationHash: saltedInitializationHash,
-    publicKeys: publicKeys,
-  });
-
-  return { address, initializationHash, saltedInitializationHash };
-}
 
 const setupTestSuite = async () => {
   const { pxe, store, cc } = await setupPXE();
