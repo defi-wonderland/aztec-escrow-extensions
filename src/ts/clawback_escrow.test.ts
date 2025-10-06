@@ -461,8 +461,16 @@ describe("Clawback Escrow - Single PXE", () => {
       // Assert that bob received the note and the escrow the change
       const notes1 = await bobPXE.getNotes({ txHash: claimTx1.txHash });
       expect(notes1.length).toBe(2);
-      expectUintNote(notes1[0], halfAmount, escrow.address);
-      expectUintNote(notes1[1], halfAmount, bob.getAddress());
+      const changeNote = await bobPXE.getNotes({
+        txHash: claimTx1.txHash,
+        recipient: escrow.address,
+      });
+      const transferNote = await bobPXE.getNotes({
+        txHash: claimTx1.txHash,
+        recipient: bob.getAddress(),
+      });
+      expectUintNote(changeNote[0], halfAmount, escrow.address);
+      expectUintNote(transferNote[0], halfAmount, bob.getAddress());
 
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, bob.getAddress(), wad(0), halfAmount);
@@ -715,8 +723,16 @@ describe("Clawback Escrow - Single PXE", () => {
       // Assert that alice received the note and the escrow the change
       const notes1 = await alicePXE.getNotes({ txHash: clawbackTx1.txHash });
       expect(notes1.length).toBe(2);
-      expectUintNote(notes1[0], halfAmount, escrow.address);
-      expectUintNote(notes1[1], halfAmount, alice.getAddress());
+      const changeNote = await alicePXE.getNotes({
+        txHash: clawbackTx1.txHash,
+        recipient: escrow.address,
+      });
+      const transferNote = await alicePXE.getNotes({
+        txHash: clawbackTx1.txHash,
+        recipient: alice.getAddress(),
+      });
+      expectUintNote(changeNote[0], halfAmount, escrow.address);
+      expectUintNote(transferNote[0], halfAmount, alice.getAddress());
 
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, alice.getAddress(), wad(0), halfAmount);
