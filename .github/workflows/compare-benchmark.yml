@@ -62,6 +62,8 @@ jobs:
             core.setOutput('should-benchmark', shouldBenchmark);
 
   benchmark:
+    needs: check-changes
+    if: needs.check-changes.outputs.should-benchmark == 'true'
     strategy:
       matrix:
         os: [ubuntu-latest-m]
