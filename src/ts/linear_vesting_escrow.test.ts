@@ -8,9 +8,9 @@ import {
   AccountWallet,
   PublicKeys,
   AztecAddress,
-  GrumpkinScalar,
   getContractClassFromArtifact,
   DeployOptions,
+  GrumpkinScalar,
 } from "@aztec/aztec.js";
 import {
   computeInitializationHash,
