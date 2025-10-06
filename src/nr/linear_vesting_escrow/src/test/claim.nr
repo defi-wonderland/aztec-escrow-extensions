@@ -56,3 +56,22 @@ unconstrained fn claim_partially_vested_tokens_success() {
     );
     token_utils::check_private_balance(token_contract_address, recipient, half_amount);
 }
+
+// TODO: cannot deploy escrow contract with custom salt. This should pass.
+// #[test]
+// #[test(should_fail_with = "Balance too low 'subtracted > 0")]
+#[test(should_fail_with = "Escrow salt mismatch")]
+unconstrained fn claim_before_start_time() {
+    let duration_blocks = 10;
+    let duration = AZTEC_SLOT_DURATION * duration_blocks;
+    let amount: u128 = 100;
+    let (env, _, recipient, logic_contract_address, escrow_contract_address, token_contract_address)
+         = utils::deploy_and_create_escrow(false, amount, duration);
+
+    token_utils::check_private_balance(token_contract_address, escrow_contract_address, amount);
+    token_utils::check_private_balance(token_contract_address, recipient, 0);
+
+    LinearVestingEscrowLogic::at(logic_contract_address).claim(escrow_contract_address).call(
+        &mut env.private(),
+    );
+}
