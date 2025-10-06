@@ -73,9 +73,9 @@ interface ClawbackEscrowBenchmarkContext extends BenchmarkContext {
 }
 
 // Use export default class extending Benchmark
-export default class TokenContractBenchmark extends Benchmark {
+export default class ClawbackEscrowContractBenchmark extends Benchmark {
   /**
-   * Sets up the benchmark environment for the TokenContract.
+   * Sets up the benchmark environment for the ClawbackEscrowLogic.
    * Creates PXE client, gets accounts, and deploys the contract.
    */
 
