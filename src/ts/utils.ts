@@ -13,6 +13,7 @@ import {
   AuthWitness,
   ContractFunctionInteraction,
   PublicKeys,
+  GrumpkinScalar,
 } from "@aztec/aztec.js";
 import { getPXEServiceConfig } from "@aztec/pxe/config";
 import { createPXEService } from "@aztec/pxe/server";
