@@ -42,9 +42,9 @@ interface LinearVestingEscrowBenchmarkContext extends BenchmarkContext {
 }
 
 // Use export default class extending Benchmark
-export default class TokenContractBenchmark extends Benchmark {
+export default class LinearVestingEscrowContractBenchmark extends Benchmark {
   /**
-   * Sets up the benchmark environment for the TokenContract.
+   * Sets up the benchmark environment for the LinearVestingEscrowContract.
    * Creates PXE client, gets accounts, and deploys the contract.
    */
 
@@ -123,7 +123,7 @@ export default class TokenContractBenchmark extends Benchmark {
   }
 
   /**
-   * Returns the list of TokenContract methods to be benchmarked.
+   * Returns the list of LinearVestingEscrowContract methods to be benchmarked.
    */
   getMethods(
     context: LinearVestingEscrowBenchmarkContext,
