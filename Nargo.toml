@@ -6,3 +6,4 @@ members = [
 
 [benchmark]
 linear_vesting_escrow = "benchmarks/linear_vesting_escrow.benchmark.ts"
+clawback_escrow = "benchmarks/clawback_escrow.benchmark.ts"
