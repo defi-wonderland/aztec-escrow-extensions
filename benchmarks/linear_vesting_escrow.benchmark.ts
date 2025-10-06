@@ -69,9 +69,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
 
     const escrowSk = Fr.ONE;
     const escrowKeys = await deriveKeys(escrowSk);
-    const escrowSalt = new Fr(
-      linearVestingEscrowContract.instance.address.toBigInt(),
-    );
+    const escrowSalt = new Fr(linearVestingEscrowContract.address.toBigInt());
     const escrowContract = (await deployEscrowWithPublicKeysAndSalt(
       escrowKeys.publicKeys,
       deployer,
@@ -87,8 +85,8 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     await tokenContract
       .withWallet(deployer)
       .methods.mint_to_private(
-        escrowContract.instance.address,
-        escrowContract.instance.address,
+        escrowContract.address,
+        escrowContract.address,
         AMOUNT,
       )
       .send()
@@ -147,9 +145,9 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
       linearVestingEscrowContract
         .withWallet(alice)
         .methods.setup_linear_vesting_escrow(
-          escrowContract.instance.address,
+          escrowContract.address,
           bob.getAddress(),
-          tokenContract.instance.address,
+          tokenContract.address,
           start,
           duration,
           AMOUNT,
@@ -162,14 +160,14 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
       {
         interaction: linearVestingEscrowContract
           .withWallet(bob)
-          .methods.claim(escrowContract.instance.address),
+          .methods.claim(escrowContract.address),
         name: "(partial) claim",
       },
       // Claim the remaining amount (does not emit released amount note)
       {
         interaction: linearVestingEscrowContract
           .withWallet(bob)
-          .methods.claim(escrowContract.instance.address),
+          .methods.claim(escrowContract.address),
         name: "(full) claim",
       },
     ];

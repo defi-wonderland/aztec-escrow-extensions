@@ -116,7 +116,7 @@ describe("Clawback Escrow - Single PXE", () => {
     clawbackEscrow = await deployClawbackEscrow(alice, escrowClassId);
 
     // Use the logic contract address as the salt for the escrow contract
-    escrowSalt = new Fr(clawbackEscrow.instance.address.toBigInt());
+    escrowSalt = new Fr(clawbackEscrow.address.toBigInt());
 
     // Deploy an escrow contract
     escrow = (await deployEscrowWithPublicKeysAndSalt(

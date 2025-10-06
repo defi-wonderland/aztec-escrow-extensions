@@ -168,7 +168,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
     )) as LinearVestingEscrowLogicContract;
 
     // Use the logic contract address as the salt for the escrow contract
-    escrowSalt = new Fr(linearVestingEscrow.instance.address.toBigInt());
+    escrowSalt = new Fr(linearVestingEscrow.address.toBigInt());
 
     // Deploy an escrow contract
     escrow = (await deployEscrowWithPublicKeysAndSalt(
@@ -185,11 +185,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
     await token
       .withWallet(alice)
-      .methods.mint_to_private(
-        escrow.instance.address,
-        escrow.instance.address,
-        AMOUNT,
-      )
+      .methods.mint_to_private(escrow.address, escrow.address, AMOUNT)
       .send()
       .wait();
 
@@ -253,7 +249,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         }),
       );
 
-      expect(receiptAfterMined.contract.instance.address).toEqual(
+      expect(receiptAfterMined.contract.address).toEqual(
         deploymentData.address,
       );
     });
@@ -267,7 +263,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         escrowKeys.publicKeys,
       );
 
-      expect(address).toEqual(escrow.instance.address);
+      expect(address).toEqual(escrow.address);
       expect(initializationHash).toEqual(Fr.ZERO);
       expect(initializationHash).toEqual(escrow.instance.initializationHash);
     });
@@ -284,9 +280,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
       it("creates linear vesting escrow shares escrow with bob correctly", async () => {
         const tx = await linearVestingEscrow.methods
           .setup_linear_vesting_escrow(
-            escrow.instance.address,
+            escrow.address,
             bob.getAddress(),
-            token.instance.address,
+            token.address,
             start,
             duration,
             AMOUNT,
@@ -313,7 +309,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         const event = events[0];
 
-        expect(event.escrow).toEqual(escrow.instance.address);
+        expect(event.escrow).toEqual(escrow.address);
         expect(event.nsk_m).toEqual(
           escrowKeys.masterNullifierSecretKey.toBigInt(),
         );
@@ -333,9 +329,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         const tx = await linearVestingEscrow.methods
           .setup_linear_vesting_escrow(
-            escrow.instance.address,
+            escrow.address,
             bob.getAddress(),
-            token.instance.address,
+            token.address,
             start,
             duration,
             AMOUNT,
@@ -397,9 +393,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
       it("creates linear vesting escrow should emit a nullifier for the escrow", async () => {
         const tx = await linearVestingEscrow.methods
           .setup_linear_vesting_escrow(
-            escrow.instance.address,
+            escrow.address,
             bob.getAddress(),
-            token.instance.address,
+            token.address,
             start,
             duration,
             AMOUNT,
@@ -434,9 +430,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         // Create a linear vesting escrow for bob
         await linearVestingEscrow.methods
           .setup_linear_vesting_escrow(
-            escrow.instance.address,
+            escrow.address,
             bob.getAddress(),
-            token.instance.address,
+            token.address,
             start,
             duration,
             AMOUNT,
@@ -452,9 +448,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await expect(
           linearVestingEscrow.methods
             .setup_linear_vesting_escrow(
-              escrow.instance.address,
+              escrow.address,
               carl.getAddress(),
-              token.instance.address,
+              token.address,
               start,
               duration,
               AMOUNT,
@@ -481,9 +477,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await expect(
           linearVestingEscrow.methods
             .setup_linear_vesting_escrow(
-              escrow.instance.address,
+              escrow.address,
               bob.getAddress(),
-              token.instance.address,
+              token.address,
               start,
               duration,
               AMOUNT,
@@ -511,9 +507,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await expect(
           linearVestingEscrow.methods
             .setup_linear_vesting_escrow(
-              escrow.instance.address,
+              escrow.address,
               bob.getAddress(),
-              token.instance.address,
+              token.address,
               start,
               duration,
               AMOUNT,
@@ -537,9 +533,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await expect(
           linearVestingEscrow.methods
             .setup_linear_vesting_escrow(
-              escrow.instance.address,
+              escrow.address,
               bob.getAddress(),
-              token.instance.address,
+              token.address,
               start,
               duration,
               AMOUNT,
@@ -564,9 +560,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await expect(
           linearVestingEscrow.methods
             .setup_linear_vesting_escrow(
-              escrow.instance.address,
+              escrow.address,
               bob.getAddress(),
-              token.instance.address,
+              token.address,
               start,
               duration,
               AMOUNT,
@@ -598,9 +594,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await linearVestingEscrow
           .withWallet(alice)
           .methods.setup_linear_vesting_escrow(
-            escrow.instance.address,
+            escrow.address,
             bob.getAddress(),
-            token.instance.address,
+            token.address,
             start,
             duration,
             AMOUNT,
@@ -614,12 +610,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         // Assert initial balances
         await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
-        await expectTokenBalances(
-          token,
-          escrow.instance.address,
-          wad(0),
-          AMOUNT,
-        );
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT);
 
         // Bob claims the full amount
         const claimTx = await linearVestingEscrow
@@ -636,12 +627,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         // Assert that tokens were effectively transferred
         await expectTokenBalances(token, bob.getAddress(), wad(0), AMOUNT);
-        await expectTokenBalances(
-          token,
-          escrow.instance.address,
-          wad(0),
-          wad(0),
-        );
+        await expectTokenBalances(token, escrow.address, wad(0), wad(0));
       });
 
       it("claim should transfer the tokens partially to the recipient and emit 3 notes (tokens and released amount note)", async () => {
@@ -652,9 +638,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         const tx = await linearVestingEscrow
           .withWallet(alice)
           .methods.setup_linear_vesting_escrow(
-            escrow.instance.address,
+            escrow.address,
             bob.getAddress(),
-            token.instance.address,
+            token.address,
             start,
             duration,
             AMOUNT,
@@ -678,12 +664,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         // Assert initial balances
         await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
-        await expectTokenBalances(
-          token,
-          escrow.instance.address,
-          wad(0),
-          AMOUNT,
-        );
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT);
 
         const claimTx = await linearVestingEscrow
           .withWallet(bob)
@@ -709,13 +690,13 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         const escrowTokenNote = await bobPXE.getNotes({
           txHash: claimTx.txHash,
-          contractAddress: token.instance.address,
-          recipient: escrow.instance.address,
+          contractAddress: token.address,
+          recipient: escrow.address,
         });
         expectUintNote(
           escrowTokenNote[0],
           AMOUNT - receivedAmount,
-          escrow.instance.address,
+          escrow.address,
         );
 
         const releasedAmountNote = await bobPXE.getNotes({
@@ -730,7 +711,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         const bobTokenNote = await bobPXE.getNotes({
           txHash: claimTx.txHash,
-          contractAddress: token.instance.address,
+          contractAddress: token.address,
           recipient: bob.getAddress(),
         });
         expectUintNote(bobTokenNote[0], receivedAmount, bob.getAddress());
@@ -743,7 +724,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         );
         await expectTokenBalances(
           token,
-          escrow.instance.address,
+          escrow.address,
           wad(0),
           AMOUNT - receivedAmount,
         );
@@ -757,9 +738,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         const tx = await linearVestingEscrow
           .withWallet(alice)
           .methods.setup_linear_vesting_escrow(
-            escrow.instance.address,
+            escrow.address,
             bob.getAddress(),
-            token.instance.address,
+            token.address,
             start,
             duration,
             AMOUNT,
@@ -779,12 +760,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         // Assert initial balances
         await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
-        await expectTokenBalances(
-          token,
-          escrow.instance.address,
-          wad(0),
-          AMOUNT,
-        );
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT);
 
         let totalClaimed = 0n;
         let previousTx = tx;
@@ -836,18 +812,18 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
           const escrowTokenNote = await bobPXE.getNotes({
             txHash: claimTx.txHash,
-            contractAddress: token.instance.address,
-            recipient: escrow.instance.address,
+            contractAddress: token.address,
+            recipient: escrow.address,
           });
           expectUintNote(
             escrowTokenNote[0],
             AMOUNT - totalClaimed,
-            escrow.instance.address,
+            escrow.address,
           );
 
           const bobTokenNote = await bobPXE.getNotes({
             txHash: claimTx.txHash,
-            contractAddress: token.instance.address,
+            contractAddress: token.address,
             recipient: bob.getAddress(),
           });
           expectUintNote(bobTokenNote[0], receivedAmount, bob.getAddress());
@@ -863,7 +839,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           );
           await expectTokenBalances(
             token,
-            escrow.instance.address,
+            escrow.address,
             wad(0),
             AMOUNT - totalClaimed,
           );
@@ -885,9 +861,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         const tx = await linearVestingEscrow
           .withWallet(alice)
           .methods.setup_linear_vesting_escrow(
-            escrow.instance.address,
+            escrow.address,
             bob.getAddress(),
-            token.instance.address,
+            token.address,
             start,
             duration,
             AMOUNT,
@@ -907,12 +883,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         // Assert initial balances
         await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
-        await expectTokenBalances(
-          token,
-          escrow.instance.address,
-          wad(0),
-          AMOUNT,
-        );
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT);
 
         let totalClaimed = 0n;
         let previousTx = tx;
@@ -964,7 +935,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
             const bobTokenNote = await bobPXE.getNotes({
               txHash: claimTx.txHash,
-              contractAddress: token.instance.address,
+              contractAddress: token.address,
               recipient: bob.getAddress(),
             });
             expectUintNote(bobTokenNote[0], receivedAmount, bob.getAddress());
@@ -987,18 +958,18 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
             const escrowTokenNote = await bobPXE.getNotes({
               txHash: claimTx.txHash,
-              contractAddress: token.instance.address,
-              recipient: escrow.instance.address,
+              contractAddress: token.address,
+              recipient: escrow.address,
             });
             expectUintNote(
               escrowTokenNote[0],
               AMOUNT - totalClaimed,
-              escrow.instance.address,
+              escrow.address,
             );
 
             const bobTokenNote = await bobPXE.getNotes({
               txHash: claimTx.txHash,
-              contractAddress: token.instance.address,
+              contractAddress: token.address,
               recipient: bob.getAddress(),
             });
             expectUintNote(bobTokenNote[0], receivedAmount, bob.getAddress());
@@ -1016,7 +987,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           );
           await expectTokenBalances(
             token,
-            escrow.instance.address,
+            escrow.address,
             wad(0),
             AMOUNT - totalClaimed,
           );
@@ -1038,11 +1009,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         await newToken
           .withWallet(alice)
-          .methods.mint_to_private(
-            escrow.instance.address,
-            escrow.instance.address,
-            U128_MAX,
-          )
+          .methods.mint_to_private(escrow.address, escrow.address, U128_MAX)
           .send()
           .wait();
 
@@ -1052,9 +1019,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         const tx = await linearVestingEscrow
           .withWallet(alice)
           .methods.setup_linear_vesting_escrow(
-            escrow.instance.address,
+            escrow.address,
             bob.getAddress(),
-            newToken.instance.address,
+            newToken.address,
             start,
             duration,
             U128_MAX,
@@ -1074,12 +1041,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         // Assert initial balances
         await expectTokenBalances(newToken, bob.getAddress(), wad(0), wad(0));
-        await expectTokenBalances(
-          newToken,
-          escrow.instance.address,
-          wad(0),
-          U128_MAX,
-        );
+        await expectTokenBalances(newToken, escrow.address, wad(0), U128_MAX);
 
         let totalClaimed = 0n;
         let previousTx = tx;
@@ -1134,7 +1096,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
             const bobTokenNote = await bobPXE.getNotes({
               txHash: claimTx.txHash,
-              contractAddress: newToken.instance.address,
+              contractAddress: newToken.address,
               recipient: bob.getAddress(),
             });
             expectUintNote(bobTokenNote[0], receivedAmount, bob.getAddress());
@@ -1157,18 +1119,18 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
             const escrowTokenNote = await bobPXE.getNotes({
               txHash: claimTx.txHash,
-              contractAddress: newToken.instance.address,
-              recipient: escrow.instance.address,
+              contractAddress: newToken.address,
+              recipient: escrow.address,
             });
             expectUintNote(
               escrowTokenNote[0],
               U128_MAX - totalClaimed,
-              escrow.instance.address,
+              escrow.address,
             );
 
             const bobTokenNote = await bobPXE.getNotes({
               txHash: claimTx.txHash,
-              contractAddress: newToken.instance.address,
+              contractAddress: newToken.address,
               recipient: bob.getAddress(),
             });
             expectUintNote(bobTokenNote[0], receivedAmount, bob.getAddress());
@@ -1186,7 +1148,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           );
           await expectTokenBalances(
             newToken,
-            escrow.instance.address,
+            escrow.address,
             wad(0),
             U128_MAX - totalClaimed,
           );
@@ -1204,9 +1166,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await linearVestingEscrow
           .withWallet(alice)
           .methods.setup_linear_vesting_escrow(
-            escrow.instance.address,
+            escrow.address,
             bob.getAddress(),
-            token.instance.address,
+            token.address,
             start,
             duration,
             AMOUNT,
@@ -1226,12 +1188,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         // Assert initial balances
         await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
-        await expectTokenBalances(
-          token,
-          escrow.instance.address,
-          wad(0),
-          AMOUNT,
-        );
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT);
 
         // Balance too low error
         await expect(
@@ -1259,9 +1216,9 @@ describe("Linear Vesting Escrow - Single PXE", () => {
       const tx = await linearVestingEscrow
         .withWallet(alice)
         .methods.setup_linear_vesting_escrow(
-          escrow.instance.address,
+          escrow.address,
           bob.getAddress(),
-          token.instance.address,
+          token.address,
           start,
           duration,
           AMOUNT,
@@ -1281,7 +1238,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
       // Assert initial balances
       await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
-      await expectTokenBalances(token, escrow.instance.address, wad(0), AMOUNT);
+      await expectTokenBalances(token, escrow.address, wad(0), AMOUNT);
 
       let totalClaimed = 0n;
       let previousTx = tx;
@@ -1297,10 +1254,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         // Utility functions
         const [utilityReleasable, utilityVested] = await linearVestingEscrow
           .withWallet(bob)
-          .methods.releasable_and_vested_amounts(
-            escrow.instance.address,
-            claimTimestamp,
-          )
+          .methods.releasable_and_vested_amounts(escrow.address, claimTimestamp)
           .simulate();
 
         // Calculate expected values
@@ -1344,7 +1298,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
           const bobTokenNote = await bobPXE.getNotes({
             txHash: claimTx.txHash,
-            contractAddress: token.instance.address,
+            contractAddress: token.address,
             recipient: bob.getAddress(),
           });
           expectUintNote(bobTokenNote[0], utilityReleasable, bob.getAddress());
@@ -1367,18 +1321,18 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
           const escrowTokenNote = await bobPXE.getNotes({
             txHash: claimTx.txHash,
-            contractAddress: token.instance.address,
-            recipient: escrow.instance.address,
+            contractAddress: token.address,
+            recipient: escrow.address,
           });
           expectUintNote(
             escrowTokenNote[0],
             AMOUNT - totalClaimed,
-            escrow.instance.address,
+            escrow.address,
           );
 
           const bobTokenNote = await bobPXE.getNotes({
             txHash: claimTx.txHash,
-            contractAddress: token.instance.address,
+            contractAddress: token.address,
             recipient: bob.getAddress(),
           });
           expectUintNote(bobTokenNote[0], utilityReleasable, bob.getAddress());
@@ -1396,7 +1350,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         );
         await expectTokenBalances(
           token,
-          escrow.instance.address,
+          escrow.address,
           wad(0),
           AMOUNT - totalClaimed,
         );
