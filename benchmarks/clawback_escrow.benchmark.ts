@@ -155,7 +155,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
     const [alice, bob] = accounts;
     await clawbackEscrowContract
       .withWallet(deployer)
-      .methods.create_clawback_escrow(
+      .methods.setup_clawback_escrow(
         escrows[0].contract.address,
         bob.getAddress(),
         alice.getAddress(),
@@ -202,7 +202,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
       // Setup clawback escrow
       clawbackEscrowContract
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrows[1].contract.address,
           bob.getAddress(),
           alice.getAddress(),

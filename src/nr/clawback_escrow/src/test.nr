@@ -1,4 +1,4 @@
-mod create_clawback_escrow;
+mod setup_clawback_escrow;
 mod claim;
 mod clawback;
 mod claim_nft;

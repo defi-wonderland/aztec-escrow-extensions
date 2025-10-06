@@ -8,7 +8,7 @@ use aztec::{
 // TODO: cannot deploy escrow contract with custom salt. This should fail trying to push the same nullifier twice.
 // #[test(should_fail_with = "Rejecting tx for emitting duplicate nullifiers")]
 #[test(should_fail_with = "Escrow salt mismatch")]
-unconstrained fn create_clawback_escrow_cannot_use_same_escrow_twice() {
+unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
     let (env, owner, recipient) = utils::setup(false);
 
     let (escrow_contract_address, contract_class_id) = utils::deploy_escrow_with_secret(env, 1);
@@ -19,7 +19,7 @@ unconstrained fn create_clawback_escrow_cannot_use_same_escrow_twice() {
 
     env.impersonate(owner);
     ClawbackEscrowLogic::at(logic_contract_address)
-        .create_clawback_escrow(
+        .setup_clawback_escrow(
             escrow_contract_address,
             recipient,
             owner,
@@ -34,7 +34,7 @@ unconstrained fn create_clawback_escrow_cannot_use_same_escrow_twice() {
     env.advance_block_by(1);
 
     ClawbackEscrowLogic::at(logic_contract_address)
-        .create_clawback_escrow(
+        .setup_clawback_escrow(
             escrow_contract_address,
             recipient,
             owner,
@@ -51,7 +51,7 @@ unconstrained fn create_clawback_escrow_cannot_use_same_escrow_twice() {
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
 // #[test]
 #[test(should_fail_with = "Escrow salt mismatch")]
-unconstrained fn create_clawback_escrow_success() {
+unconstrained fn setup_clawback_escrow_success() {
     let (env, owner, recipient) = utils::setup(false);
 
     let (escrow_contract_address, contract_class_id) = utils::deploy_escrow_with_secret(env, 1);
@@ -64,7 +64,7 @@ unconstrained fn create_clawback_escrow_success() {
     let deadline = env.committed_timestamp() + AZTEC_SLOT_DURATION * 5;
     env.impersonate(owner);
     ClawbackEscrowLogic::at(logic_contract_address)
-        .create_clawback_escrow(
+        .setup_clawback_escrow(
             escrow_contract_address,
             recipient,
             owner,
