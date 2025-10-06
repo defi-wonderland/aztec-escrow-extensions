@@ -15,7 +15,55 @@ env:
   BENCH_DIR: ./benchmarks
 
 jobs:
+  check-changes:
+    name: Check for relevant changes
+    runs-on: ubuntu-latest-m
+    outputs:
+      should-benchmark: ${{ steps.changes.outputs.should-benchmark }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Check for relevant changes
+        id: changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            console.log('Checking for changes that would affect benchmarks...');
+
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            console.log('Changed files:');
+            files.forEach(file => console.log(`- ${file.filename}`));
+
+            // Check for Noir contracts, config, or benchmark changes
+            const relevantPatterns = /^(src\/nr\/|Nargo\.toml|benchmarks\/)/;
+            const hasRelevantChanges = files.some(file => relevantPatterns.test(file.filename));
+
+            // Check for AZTEC_VERSION change in package.json
+            const hasAztecVersionChange = files.some(file => 
+              file.filename === 'package.json' && file.patch?.includes('aztecVersion')
+            );
+
+            const shouldBenchmark = hasRelevantChanges || hasAztecVersionChange;
+
+            if (hasRelevantChanges) {
+              console.log('📝 Noir contracts, config, or benchmark files changed');
+            } else if (hasAztecVersionChange) {
+              console.log('🔄 AZTEC_VERSION changed in package.json');
+            } else {
+              console.log('⏭️ No benchmark-relevant changes detected, skipping benchmarks');
+            }
+
+            core.setOutput('should-benchmark', shouldBenchmark);
+
   benchmark:
+    needs: check-changes
+    if: needs.check-changes.outputs.should-benchmark == 'true'
     strategy:
       matrix:
         os: [ubuntu-latest-m]
