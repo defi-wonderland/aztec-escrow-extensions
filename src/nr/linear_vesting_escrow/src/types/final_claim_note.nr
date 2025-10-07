@@ -14,19 +14,12 @@ use aztec::{
 
 #[custom_note]
 #[derive(Serialize, Eq)]
-pub struct VestingScheduleNote {
-    escrow: AztecAddress,
-    pub recipient: AztecAddress,
-    pub reclaimer: AztecAddress,
-    pub token: AztecAddress,
-    pub start: u64,
-    pub duration: u64,
-    pub total_amount: u128,
-    pub stop_timestamp: u64,
+pub struct FinalClaimNote {
+    pub escrow: AztecAddress,
     randomness: Field,
 }
 
-impl NoteHash for VestingScheduleNote {
+impl NoteHash for FinalClaimNote {
     fn compute_nullifier(self, _: &mut PrivateContext, note_hash_for_nullify: Field) -> Field {
         poseidon2_hash_with_separator(
             [note_hash_for_nullify, self.escrow.to_field()],
@@ -49,30 +42,11 @@ impl NoteHash for VestingScheduleNote {
     }
 }
 
-impl VestingScheduleNote {
-    pub fn new(
-        escrow: AztecAddress,
-        recipient: AztecAddress,
-        reclaimer: AztecAddress,
-        token: AztecAddress,
-        start: u64,
-        duration: u64,
-        total_amount: u128,
-        stop_timestamp: u64,
-    ) -> Self {
+impl FinalClaimNote {
+    pub fn new(escrow: AztecAddress) -> Self {
         // Safety: random() is safe to call here as it generates cryptographically secure randomness
         // for note creation, which is the intended use case
         let randomness = unsafe { random() };
-        VestingScheduleNote {
-            escrow,
-            recipient,
-            reclaimer,
-            token,
-            start,
-            duration,
-            total_amount,
-            stop_timestamp,
-            randomness,
-        }
+        FinalClaimNote { escrow, randomness }
     }
 }
