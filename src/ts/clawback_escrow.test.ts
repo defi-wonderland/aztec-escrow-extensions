@@ -123,17 +123,8 @@ describe("Clawback Escrow - Single PXE", () => {
       escrowSalt,
     )) as EscrowContract;
 
-    // Deploy a token contract
-    token = (await deployTokenWithMinter(alice, {})) as TokenContract;
-
     const partialAddressEscrow = await escrow.partialAddress;
     await pxe.registerAccount(escrowSk, partialAddressEscrow);
-
-    await token
-      .withWallet(alice)
-      .methods.mint_to_private(escrow.address, escrow.address, AMOUNT)
-      .send()
-      .wait();
 
     const blockNumber = await pxe.getBlockNumber();
     const block = await pxe.getBlock(blockNumber);
@@ -377,6 +368,17 @@ describe("Clawback Escrow - Single PXE", () => {
     beforeAll(async () => {
       await store.delete();
       await setup();
+    });
+
+    beforeEach(async () => {
+      // Deploy a token contract
+      token = (await deployTokenWithMinter(alice, {})) as TokenContract;
+
+      await token
+        .withWallet(alice)
+        .methods.mint_to_private(escrow.address, escrow.address, AMOUNT)
+        .send()
+        .wait();
     });
 
     it("claim should transfer the tokens to the recipient and emit one note (token note)", async () => {
@@ -633,6 +635,17 @@ describe("Clawback Escrow - Single PXE", () => {
     beforeAll(async () => {
       await store.delete();
       await setup();
+    });
+
+    beforeEach(async () => {
+      // Deploy a token contract
+      token = (await deployTokenWithMinter(alice, {})) as TokenContract;
+
+      await token
+        .withWallet(alice)
+        .methods.mint_to_private(escrow.address, escrow.address, AMOUNT)
+        .send()
+        .wait();
     });
 
     it("clawback should transfer the tokens to the recipient and emit one note (token note)", async () => {
