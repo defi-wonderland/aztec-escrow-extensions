@@ -49,7 +49,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
    */
 
   async setup(): Promise<LinearVestingEscrowBenchmarkContext> {
-    const { pxe, store } = await setupPXE();
+    const { pxe, store } = await setupPXE("bench-linear-vesting");
     const managers = await getInitialTestAccountsManagers(pxe);
     const accounts = await Promise.all(managers.map((acc) => acc.register()));
     const [deployer] = accounts;

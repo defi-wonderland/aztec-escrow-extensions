@@ -80,7 +80,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
    */
 
   async setup(): Promise<ClawbackEscrowBenchmarkContext> {
-    const { pxe, store } = await setupPXE();
+    const { pxe, store } = await setupPXE("bench-clawback");
     const managers = await getInitialTestAccountsManagers(pxe);
     const accounts = await Promise.all(managers.map((acc) => acc.register()));
     const [deployer] = accounts;
