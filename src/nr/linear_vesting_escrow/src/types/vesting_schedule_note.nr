@@ -17,10 +17,12 @@ use aztec::{
 pub struct VestingScheduleNote {
     escrow: AztecAddress,
     pub recipient: AztecAddress,
+    pub reclaimer: AztecAddress,
     pub token: AztecAddress,
     pub start: u64,
     pub duration: u64,
     pub total_amount: u128,
+    pub active: bool,
     randomness: Field,
 }
 
@@ -51,14 +53,16 @@ impl VestingScheduleNote {
     pub fn new(
         escrow: AztecAddress,
         recipient: AztecAddress,
+        reclaimer: AztecAddress,
         token: AztecAddress,
         start: u64,
         duration: u64,
         total_amount: u128,
+        active: bool,
     ) -> Self {
         // Safety: random() is safe to call here as it generates cryptographically secure randomness
         // for note creation, which is the intended use case
         let randomness = unsafe { random() };
-        VestingScheduleNote { escrow, recipient, token, start, duration, total_amount, randomness }
+        VestingScheduleNote { escrow, recipient, reclaimer, token, start, duration, total_amount, active, randomness }
     }
 }

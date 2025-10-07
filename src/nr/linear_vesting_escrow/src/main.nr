@@ -80,6 +80,7 @@ contract LinearVestingEscrowLogic {
     fn setup_linear_vesting_escrow(
         escrow: AztecAddress,
         recipient: AztecAddress,
+        reclaimer: AztecAddress,
         token: AztecAddress,
         start: u64,
         duration: u64,
@@ -114,14 +115,16 @@ contract LinearVestingEscrowLogic {
             storage,
             escrow,
             recipient,
+            reclaimer,
             token,
             start,
             duration,
             amount,
+            true
         );
 
         // Create and emit released amount note with zero released amount
-        _create_released_amount_note(&mut context, storage, recipient, escrow, 0);
+        _create_released_amount_note(&mut context, storage, recipient, reclaimer, escrow, 0);
 
         // Check that a linear vesting escrow has not been created for the provided escrow
         let nullifier = std::hash::pedersen_hash([escrow.to_field()]);
@@ -134,6 +137,9 @@ contract LinearVestingEscrowLogic {
     fn claim(escrow: AztecAddress) {
         // Fetch a linear vesting schedule note
         let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
+
+        // We assert that the vesting schedule is active
+        assert(vesting_schedule_note.active);
 
         // Fetch and remove a released amount note
         let released_amount_note = _pop_released_amount_note(storage, escrow);
@@ -157,6 +163,7 @@ contract LinearVestingEscrowLogic {
                 &mut context,
                 storage,
                 vesting_schedule_note.recipient,
+                vesting_schedule_note.reclaimer,
                 escrow,
                 vested_amount,
             );
@@ -169,6 +176,85 @@ contract LinearVestingEscrowLogic {
             vesting_schedule_note.recipient,
             vesting_schedule_note.token,
             releasable_amount,
+        );
+    }
+
+    /// @notice Deactivates the linear vesting
+    /// @dev The deactivated note is also emitted to the recipient to notify them that the vesting is deactivated
+    /// @param escrow The address of the escrow
+    #[private]
+    fn deactivate_linear_vesting(escrow: AztecAddress) {
+        // Pop the vesting schedule note
+        let vesting_schedule_note = _pop_vesting_schedule_note(storage, escrow);
+
+        // Assert that the reclaimer is the message sender
+        assert(vesting_schedule_note.reclaimer == context.msg_sender());
+
+        // Create a new one that is not active
+        _create_vesting_schedule_note(
+            &mut context,
+            storage,
+            escrow,
+            vesting_schedule_note.recipient,
+            vesting_schedule_note.reclaimer,
+            vesting_schedule_note.token,
+            vesting_schedule_note.start,
+            vesting_schedule_note.duration,
+            vesting_schedule_note.total_amount,
+            false,
+        );
+    }
+
+    /// @notice Clawbacks the escrow
+    /// @dev The clawback is only possible if the vesting schedule is not active
+    /// @param escrow The address of the escrow
+    #[private]
+    fn clawback(escrow: AztecAddress) {
+        // Fetch a linear vesting schedule note
+        let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
+
+        // We assert that the vesting schedule is not active
+        assert(!vesting_schedule_note.active);
+
+        // Fetch and remove a released amount note
+        let released_amount_note = _pop_released_amount_note(storage, escrow);
+
+        // TODO should we use this or the router contract to get the timestamp? The second leaks more privacy.
+        // Both methods rely on past timestamps, which benefits the owner.
+        // Get the anchor block's timestamp (historical reference point for private execution)
+        let block_header = context.get_block_header();
+        let timestamp = block_header.global_variables.timestamp;
+
+        // Get releasable amount and vested amount
+        let (releasable_amount, vested_amount) = _calculate_releasable_and_vested_amounts(
+            vesting_schedule_note.start,
+            vesting_schedule_note.duration,
+            vesting_schedule_note.total_amount,
+            released_amount_note.released_amount,
+            timestamp,
+        );
+
+        // Withdraw the tokens for recipient
+        _withdraw(
+            &mut context,
+            escrow,
+            vesting_schedule_note.recipient,
+            vesting_schedule_note.token,
+            releasable_amount,
+        );
+
+        // Calculate the remaining amount as the balance minus the releasable amount
+        // TODO For this we either assume that the total amount was deposited to the contract,
+        // or add a new method to the token contract to get the private balance (reclaimer has access to the escrow notes).
+        let remaining_amount = vesting_schedule_note.total_amount - vested_amount;
+
+        // Withdraw the tokens for owner
+        _withdraw(
+            &mut context,
+            escrow,
+            context.msg_sender(),
+            vesting_schedule_note.token,
+            remaining_amount,
         );
     }
 
@@ -222,6 +308,7 @@ contract LinearVestingEscrowLogic {
     /// @param storage The storage
     /// @param escrow The address of the escrow
     /// @param recipient The address of the recipient
+    /// @param reclaimer The address of the reclaimer
     /// @param token The address of the token
     /// @param start The start time of the vesting
     /// @param duration The duration of the vesting
@@ -232,21 +319,25 @@ contract LinearVestingEscrowLogic {
         storage: Storage<&mut PrivateContext>,
         escrow: AztecAddress,
         recipient: AztecAddress,
+        reclaimer: AztecAddress,
         token: AztecAddress,
         start: u64,
         duration: u64,
         total_amount: u128,
+        active: bool,
     ) {
         let note =
-            VestingScheduleNote::new(escrow, recipient, token, start, duration, total_amount);
+            VestingScheduleNote::new(escrow, recipient, reclaimer, token, start, duration, total_amount, active);
         let note_insertion = storage.escrows.insert(note);
         note_insertion.emit(encode_and_encrypt_note(context, recipient, context.msg_sender()));
+        note_insertion.emit(encode_and_encrypt_note(context, reclaimer, context.msg_sender()));
     }
 
     /// @notice Creates and inserts a new released amount note into the storage and emits it to the recipient
     /// @param context The private context
     /// @param storage The storage
     /// @param recipient The address of the recipient
+    /// @param reclaimer The address of the reclaimer
     /// @param escrow The address of the escrow
     /// @param released_amount The released amount of tokens
     #[contract_library_method]
@@ -254,12 +345,14 @@ contract LinearVestingEscrowLogic {
         context: &mut PrivateContext,
         storage: Storage<&mut PrivateContext>,
         recipient: AztecAddress,
+        reclaimer: AztecAddress,
         escrow: AztecAddress,
         released_amount: u128,
     ) {
         let note = ReleasedAmountNote::new(escrow, released_amount);
         let note_insertion = storage.released_notes.insert(note);
         note_insertion.emit(encode_and_encrypt_note(context, recipient, context.msg_sender()));
+        note_insertion.emit(encode_and_encrypt_note(context, reclaimer, context.msg_sender()));
     }
 
     /// @notice Finds a vesting schedule note in the storage
@@ -296,6 +389,25 @@ contract LinearVestingEscrowLogic {
             .set_limit(1);
 
         let notes = storage.released_notes.pop_notes(options);
+
+        // We revert if there is no note in the filter so we can probably unwrap directly
+        notes.get_unchecked(0)
+    }
+
+    /// @notice Pops a vesting schedule note from the storage
+    /// @param storage The storage
+    /// @param escrow The address of the escrow
+    /// @return The vesting schedule note
+    #[contract_library_method]
+    fn _pop_vesting_schedule_note(
+        storage: Storage<&mut PrivateContext>,
+        escrow: AztecAddress,
+    ) -> VestingScheduleNote {
+        let options = NoteGetterOptions::new()
+            .select(VestingScheduleNote::properties().escrow, Comparator.EQ, escrow)
+            .set_limit(1);
+
+        let notes = storage.escrows.pop_notes(options);
 
         // We revert if there is no note in the filter so we can probably unwrap directly
         notes.get_unchecked(0)
