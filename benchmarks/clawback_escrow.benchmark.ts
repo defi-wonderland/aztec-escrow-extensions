@@ -88,13 +88,9 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
     const escrowClassId = (
       await getContractClassFromArtifact(EscrowContractArtifact)
     ).id;
-    const deployedClawbackEscrow = await deployClawbackEscrow(
+    const clawbackEscrowContract = await deployClawbackEscrow(
       deployer,
       escrowClassId,
-    );
-    const clawbackEscrowContract = await ClawbackEscrowLogicContract.at(
-      deployedClawbackEscrow.address,
-      deployer,
     );
 
     const { escrowContract: escrowContract_1, secretKeys: secretKeys_1 } =
@@ -212,7 +208,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
           escrows[1].secretKeys[2],
           escrows[1].secretKeys[3],
         ),
-      // Partial token claim escrow
+      // Full token claim escrow
       clawbackEscrowContract
         .withWallet(bob)
         .methods.claim(

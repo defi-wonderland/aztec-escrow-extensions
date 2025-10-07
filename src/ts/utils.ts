@@ -18,7 +18,6 @@ import {
 import { getPXEServiceConfig } from "@aztec/pxe/config";
 import { createPXEService } from "@aztec/pxe/server";
 import { createStore } from "@aztec/kv-store/lmdb";
-import { CheatCodes } from "@aztec/aztec.js/testing";
 import {
   LinearVestingEscrowLogicContract,
   LinearVestingEscrowLogicContractArtifact,
@@ -34,7 +33,6 @@ import { NFTContract, NFTContractArtifact } from "../artifacts/NFT.js";
 export const logger = createLogger("aztec:aztec-standards");
 
 const { NODE_URL = "http://localhost:8080" } = process.env;
-const ethRpcUrl = "http://localhost:8545";
 const node = createAztecNodeClient(NODE_URL);
 const l1Contracts = await node.getL1ContractAddresses();
 const config = getPXEServiceConfig();
@@ -48,8 +46,7 @@ export const setupPXE = async () => {
   });
   const pxe = await createPXEService(node, fullConfig, { store });
   await waitForPXE(pxe);
-  const cc = await CheatCodes.create([ethRpcUrl], pxe);
-  return { pxe, store, cc };
+  return { pxe, store };
 };
 
 // --- Token Utils ---

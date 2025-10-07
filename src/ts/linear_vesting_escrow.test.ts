@@ -34,7 +34,6 @@ import {
 } from "./utils.js";
 import { siloNullifier } from "@aztec/stdlib/hash";
 import { pedersenHash } from "@aztec/foundation/crypto";
-import { CheatCodes } from "@aztec/aztec.js/testing";
 import { PXE } from "@aztec/stdlib/interfaces/client";
 import { AztecLmdbStore } from "@aztec/kv-store/lmdb";
 import { getInitialTestAccountsManagers } from "@aztec/accounts/testing";
@@ -89,18 +88,17 @@ export async function deriveContractAddress(
 }
 
 const setupTestSuite = async () => {
-  const { pxe, store, cc } = await setupPXE();
+  const { pxe, store } = await setupPXE();
   const managers = await getInitialTestAccountsManagers(pxe);
   const wallets = await Promise.all(managers.map((acc) => acc.register()));
   const [deployer] = wallets;
 
-  return { pxe, deployer, wallets, store, cc };
+  return { pxe, deployer, wallets, store };
 };
 
 describe("Linear Vesting Escrow - Single PXE", () => {
   let pxe: PXE;
   let store: AztecLmdbStore;
-  let cc: CheatCodes;
 
   let wallets: AccountWalletWithSecretKey[];
   let deployer: AccountWalletWithSecretKey;
@@ -133,7 +131,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
   let duration: bigint;
 
   async function setup() {
-    ({ pxe, deployer, wallets, store, cc } = await setupTestSuite());
+    ({ pxe, deployer, wallets, store } = await setupTestSuite());
 
     [alice, bob, carl] = wallets;
 
