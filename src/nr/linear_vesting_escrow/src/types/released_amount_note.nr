@@ -12,6 +12,9 @@ use aztec::{
     },
 };
 
+/// @param escrow The address of the escrow
+/// @param released_amount The released amount of tokens
+/// @param randomness The randomness used to create the note
 #[custom_note]
 #[derive(Serialize, Eq)]
 pub struct ReleasedAmountNote {

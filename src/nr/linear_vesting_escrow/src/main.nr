@@ -24,14 +24,16 @@ contract LinearVestingEscrowLogic {
     use escrow_standard::library::logic::{
         _check_escrow, _secret_keys_to_public_keys, _share_escrow, _withdraw,
     };
-    // vesting schedule note types
-    use crate::types::vesting_schedule_note::VestingScheduleNote;
-    // released amount note types
-    use crate::types::released_amount_note::ReleasedAmountNote;
-    // final claim note types
-    use crate::types::final_claim_note::FinalClaimNote;
+    // vesting schedule, released amount, final claim note types
+    use crate::types::{
+        vesting_schedule_note::VestingScheduleNote,
+        released_amount_note::ReleasedAmountNote,
+        final_claim_note::FinalClaimNote
+    };
     // bignum library
     use bignum::{BigNum, bignum::to_field, U256};
+    // router contract
+    use router::utils::privately_check_timestamp;
 
     /// @notice Data privately emitted to an account that will use the escrow
     /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
@@ -193,22 +195,16 @@ contract LinearVestingEscrowLogic {
     /// @notice Deactivates the linear vesting
     /// @dev The deactivated note is also emitted to the recipient to notify them that the vesting is deactivated
     /// @param escrow The address of the escrow
+    /// @param stop_timestamp The timestamp at which the vesting will stop (at least the timestamp of the block in which this transaction is included)
     #[private]
-    fn stop_vesting(escrow: AztecAddress) {
+    fn stop_vesting(escrow: AztecAddress, stop_timestamp: u64) {
         // Pop the vesting schedule note
-        let vesting_schedule_note = _pop_vesting_schedule_note(storage, escrow);
+        let vesting_schedule_note: VestingScheduleNote = _pop_vesting_schedule_note(storage, escrow);
 
         // Assert that the reclaimer is the message sender
         assert(vesting_schedule_note.reclaimer == context.msg_sender());
 
-        // TODO should we use this or the router contract to get the timestamp? The second leaks more privacy.
-        // Both methods rely on past timestamps, which benefits the owner.
-        // Get the anchor block's timestamp (historical reference point for private execution)
-        let block_header = context.get_block_header();
-        let stop_timestamp = block_header.global_variables.timestamp;
-
-        // We assert that the vesting schedule is still active and that the stop timestamp in not set
-        assert(stop_timestamp <= vesting_schedule_note.start + vesting_schedule_note.duration);
+        // We assert that the vesting schedule is still active
         assert(vesting_schedule_note.stop_timestamp == 0);
 
         // Create a new one that is not active
@@ -224,10 +220,13 @@ contract LinearVestingEscrowLogic {
             vesting_schedule_note.total_amount,
             stop_timestamp,
         );
+
+        privately_check_timestamp(Comparator.LTE, stop_timestamp, &mut context);
     }
 
     /// @notice Clawbacks the escrow
-    /// @notice It only makes sense to call this method if the reclaimer has something to claim, in which case the recipient should receive what's left for him first
+    /// @notice It only makes sense to call this method if the reclaimer has something to claim
+    // in which case the recipient should receive what's left for him first
     /// @dev The clawback is only possible if the vesting schedule is not active
     /// @param escrow The address of the escrow
     /// @param reclaimer_amount The amount of tokens to clawback from the escrow
@@ -281,7 +280,7 @@ contract LinearVestingEscrowLogic {
         // Fetch a linear vesting schedule note
         let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
 
-        // Assert that the recipient is the message sender
+        // Here we assert because the amount needs to be inputted by the recipient, we cannot trust the reclaimer
         assert(vesting_schedule_note.recipient == context.msg_sender());
 
         // We assert that the vesting schedule is not active
@@ -320,7 +319,8 @@ contract LinearVestingEscrowLogic {
         );
     }
 
-    /// @notice This should happen after the final claim only (how can we be sure that it is the case?)
+    /// @notice Clawbacks the remaining amount from the provided escrow
+    /// @dev This should happen after the final claim only
     /// @param escrow The address of the escrow
     /// @param reclaimer_amount The amount of tokens to clawback from the escrow
     #[private]
@@ -331,14 +331,6 @@ contract LinearVestingEscrowLogic {
 
         // Fetch a linear vesting schedule note
         let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
-
-        // This check shouldn't be needed as the reclaimer should be the only one with the final claim note
-        // Assert that the reclaimer is the message sender
-        // assert(vesting_schedule_note.reclaimer == context.msg_sender());
-
-        // This check shouldn't be needed because if the reclaimer has the final claim note it means that either the recipient has claimed all via the usual method or after the deactivation
-        // We assert that the vesting schedule is not active
-        // assert(vesting_schedule_note.stop_timestamp > 0);
 
         // Withdraw the tokens for reclaimer
         _withdraw(

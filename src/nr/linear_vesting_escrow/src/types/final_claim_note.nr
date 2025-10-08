@@ -12,6 +12,8 @@ use aztec::{
     },
 };
 
+/// @param escrow The address of the escrow
+/// @param randomness The randomness used to create the note
 #[custom_note]
 #[derive(Serialize, Eq)]
 pub struct FinalClaimNote {

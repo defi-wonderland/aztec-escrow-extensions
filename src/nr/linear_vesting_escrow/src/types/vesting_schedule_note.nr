@@ -12,6 +12,15 @@ use aztec::{
     },
 };
 
+/// @param escrow The address of the escrow
+/// @param recipient The address of the recipient
+/// @param reclaimer The address of the reclaimer
+/// @param token The address of the token
+/// @param start The start time of the vesting
+/// @param duration The duration of the vesting
+/// @param total_amount The total amount of tokens to vest
+/// @param stop_timestamp The timestamp at which the vesting stopped (if stopped by the reclaimer)
+/// @param randomness The randomness used to create the note
 #[custom_note]
 #[derive(Serialize, Eq)]
 pub struct VestingScheduleNote {
