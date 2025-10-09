@@ -26,7 +26,7 @@ contract LinearVestingEscrowLogic {
     };
     // vesting schedule, released amount, final claim note types
     use crate::types::{
-        final_claim_note::FinalClaimNote, released_amount_note::ReleasedAmountNote,
+        released_amount_note::ReleasedAmountNote,
         vesting_schedule_note::VestingScheduleNote,
     };
     // bignum library
@@ -58,7 +58,6 @@ contract LinearVestingEscrowLogic {
         escrow_class_id: PublicImmutable<Field, Context>,
         escrows: PrivateSet<VestingScheduleNote, Context>,
         released_notes: PrivateSet<ReleasedAmountNote, Context>,
-        final_claims: PrivateSet<FinalClaimNote, Context>,
     }
 
     /// @dev Initialize the contract
