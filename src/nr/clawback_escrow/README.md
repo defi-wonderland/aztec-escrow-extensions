@@ -24,7 +24,7 @@ fn constructor(escrow_class_id: Field) { /* ... */ }
 
 ## Private Functions
 
-### create_clawback_escrow
+### setup_clawback_escrow
 ```rust
 /// @notice Verifies that the keys correspond to the escrow address and that the escrow
 ///         instance data is correct, shares the escrow data with the recipient and the
@@ -39,7 +39,7 @@ fn constructor(escrow_class_id: Field) { /* ... */ }
 /// @param ovsk_m Outgoing Viewing Key
 /// @param tsk_m Tagging Secret Key
 #[private]
-fn create_clawback_escrow(
+fn setup_clawback_escrow(
     escrow: AztecAddress,
     recipient: AztecAddress,
     reclaimer: AztecAddress,
