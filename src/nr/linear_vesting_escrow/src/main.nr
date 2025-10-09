@@ -26,9 +26,8 @@ contract LinearVestingEscrowLogic {
     };
     // vesting schedule, released amount, final claim note types
     use crate::types::{
+        final_claim_note::FinalClaimNote, released_amount_note::ReleasedAmountNote,
         vesting_schedule_note::VestingScheduleNote,
-        released_amount_note::ReleasedAmountNote,
-        final_claim_note::FinalClaimNote
     };
     // bignum library
     use bignum::{BigNum, bignum::to_field, U256};
@@ -138,57 +137,73 @@ contract LinearVestingEscrowLogic {
 
     /// @notice Claims what's available from the provided escrow
     /// @param escrow The address of the escrow
+    /// @param claim_amount The amount of tokens to claim from the escrow (enables claiming even if escrow is not fully funded)
     #[private]
-    fn claim(escrow: AztecAddress) {
+    fn claim(escrow: AztecAddress, claim_amount: u128) {
         // Fetch a linear vesting schedule note
         let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
 
-        // We assert that the vesting schedule is still active
-        assert(vesting_schedule_note.stop_timestamp == 0);
+        // Assert that the message sender is the recipient (he needs to input the amount)
+        assert(context.msg_sender() == vesting_schedule_note.recipient);
+
+        let mut claim_timestamp: u64 = 0;
+        // Check if the vesting is still active
+        if (vesting_schedule_note.stop_timestamp == 0) {
+            // Get the anchor block's timestamp (historical reference point for private execution)
+            let block_header = context.get_block_header();
+            claim_timestamp = block_header.global_variables.timestamp;
+        } else {
+            // Get the stop timestamp from the vesting schedule note
+            claim_timestamp = vesting_schedule_note.stop_timestamp;
+
+            // TODO Optional (see clawback function)
+            // We could emit a final claim note to the _recipient_ on stop_vesting and consume it (pop) on the this final claim part to avoid race condition.
+            // The race condition comes from the fact that to both claim and clawback both notes (vesting and released amount) are needed.
+            // The attack vector (unlikely and not worth it) happens when the recipient drip-claims the remaining amount (even if the contract is fully funded), blocking the reclaimer to clawback what's remaining as the released amount note is updated constantly.
+            // _pop_final_claim_note(storage, escrow);
+        }
 
         // Fetch and remove a released amount note
         let released_amount_note = _pop_released_amount_note(storage, escrow);
 
-        // Get the anchor block's timestamp (historical reference point for private execution)
-        let block_header = context.get_block_header();
-        let timestamp = block_header.global_variables.timestamp;
-
         // Get releasable amount and vested amount
-        let (releasable_amount, vested_amount) = _calculate_releasable_and_vested_amounts(
+        let (releasable_amount, _) = _calculate_releasable_and_vested_amounts(
             vesting_schedule_note.start,
             vesting_schedule_note.duration,
             vesting_schedule_note.total_amount,
             released_amount_note.released_amount,
-            timestamp,
+            claim_timestamp,
         );
 
-        // We create and emit a new released amount note if the vested amount is less than the total amount
-        if vested_amount < vesting_schedule_note.total_amount {
-            _create_released_amount_note(
-                &mut context,
-                storage,
-                vesting_schedule_note.recipient,
-                vesting_schedule_note.reclaimer,
-                escrow,
-                vested_amount,
-            );
-        } else {
-            // We emit a final claim note to the reclaimer
-            _create_final_claim_note(
-                &mut context,
-                storage,
-                vesting_schedule_note.reclaimer,
-                escrow,
-            );
-        }
+        // Assert that the claim amount is less than or equal to the releasable amount
+        // TODO Should we enforce equality instead if claim_amount > releasable_amount? Maybe it is better given that the timestamp is not necessarily known in advance.
+        assert(claim_amount <= releasable_amount);
+        // Assert that the claim amount is greater than 0 (user needs to claim something).
+        // Because we're always re-emitting the released amount note, it needs to be monotonically increasing.
+        // This ensures that if the total amount was claimed there's no more claims to be made.
+        // Race condition attack is prevented: recipient cannot claim 0 tokens each block to prevent the reclaimer from clawing back the remaining amount.
+        assert(claim_amount > 0);
 
-        // Withdraw the tokens
+        // Update the released amount note by adding the claim amount
+        let updated_released_amount = released_amount_note.released_amount + claim_amount;
+
+        // We create and emit a new released amount note
+        _create_released_amount_note(
+            &mut context,
+            storage,
+            vesting_schedule_note.recipient,
+            vesting_schedule_note.reclaimer,
+            escrow,
+            updated_released_amount,
+        );
+
+        // Withdraw claim_amount tokens
         _withdraw(
             &mut context,
             escrow,
             vesting_schedule_note.recipient,
             vesting_schedule_note.token,
-            releasable_amount,
+            claim_amount,
         );
     }
 
@@ -199,10 +214,11 @@ contract LinearVestingEscrowLogic {
     #[private]
     fn stop_vesting(escrow: AztecAddress, stop_timestamp: u64) {
         // Pop the vesting schedule note
-        let vesting_schedule_note: VestingScheduleNote = _pop_vesting_schedule_note(storage, escrow);
+        let vesting_schedule_note: VestingScheduleNote =
+            _pop_vesting_schedule_note(storage, escrow);
 
-        // Assert that the reclaimer is the message sender
-        assert(vesting_schedule_note.reclaimer == context.msg_sender());
+        // Assert that the message sender is the reclaimer
+        assert(context.msg_sender() == vesting_schedule_note.reclaimer);
 
         // We assert that the vesting schedule is still active
         assert(vesting_schedule_note.stop_timestamp == 0);
@@ -221,12 +237,27 @@ contract LinearVestingEscrowLogic {
             stop_timestamp,
         );
 
+        // TODO Optional (see claim function)
+        // Creating this final claim note to recipient to avoid race condition.
+        // Create final claim note to the recipient
+        // _create_final_claim_note(
+        //     &mut context,
+        //     storage,
+        //     vesting_schedule_note.recipient,
+        //     escrow,
+        // );
+
         privately_check_timestamp(Comparator.LTE, stop_timestamp, &mut context);
     }
 
+    /// Clawback will be called if the reclaimer has something to claim, that means that either he finished the claim of the user or the user did,
+    /// and after that he gets whatever is left for him.
+    /// In the scenario where the user finishes the claim with an amount less that he deserves (unfunded contract), then the escrow is finished.
+    /// This means that instead of having the need of having a final claim note, we can check that released amount note is equal to the total amount.
+
     /// @notice Clawbacks the escrow
     /// @notice It only makes sense to call this method if the reclaimer has something to claim
-    // in which case the recipient should receive what's left for him first
+    /// in which case the recipient should receive what's left for him first
     /// @dev The clawback is only possible if the vesting schedule is not active
     /// @param escrow The address of the escrow
     /// @param reclaimer_amount The amount of tokens to clawback from the escrow
@@ -235,13 +266,13 @@ contract LinearVestingEscrowLogic {
         // Fetch a linear vesting schedule note
         let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
 
-        // Assert that the reclaimer is the message sender
-        assert(vesting_schedule_note.reclaimer == context.msg_sender());
+        // Assert that the message sender is the reclaimer
+        assert(context.msg_sender() == vesting_schedule_note.reclaimer);
 
         // We assert that the vesting schedule is not active
         assert(vesting_schedule_note.stop_timestamp > 0);
 
-        // Fetch and remove a released amount note
+        // Fetch and remove a released amount note (prevents any future claims or clawbacks)
         let released_amount_note = _pop_released_amount_note(storage, escrow);
 
         // Get releasable amount and vested amount
@@ -253,90 +284,23 @@ contract LinearVestingEscrowLogic {
             vesting_schedule_note.stop_timestamp,
         );
 
-        // Withdraw the tokens for recipient
-        _withdraw(
-            &mut context,
-            escrow,
-            vesting_schedule_note.recipient,
-            vesting_schedule_note.token,
-            releasable_amount,
-        );
-
-        // Withdraw the tokens for owner
-        _withdraw(
-            &mut context,
-            escrow,
-            context.msg_sender(),
-            vesting_schedule_note.token,
-            reclaimer_amount,
-        );
-    }
-
-    /// @notice Claims the remaining amount from the provided escrow
-    /// @param escrow The address of the escrow
-    /// @param claim_amount The amount of tokens to claim from the escrow
-    #[private]
-    fn claim_final(escrow: AztecAddress, claim_amount: u128) {
-        // Fetch a linear vesting schedule note
-        let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
-
-        // Here we assert because the amount needs to be inputted by the recipient, we cannot trust the reclaimer
-        assert(vesting_schedule_note.recipient == context.msg_sender());
-
-        // We assert that the vesting schedule is not active
-        assert(vesting_schedule_note.stop_timestamp > 0);
-
-        // Fetch and remove a released amount note
-        let released_amount_note = _pop_released_amount_note(storage, escrow);
-
-        // Get releasable amount and vested amount
-        let (releasable_amount, _) = _calculate_releasable_and_vested_amounts(
-            vesting_schedule_note.start,
-            vesting_schedule_note.duration,
-            vesting_schedule_note.total_amount,
-            released_amount_note.released_amount,
-            vesting_schedule_note.stop_timestamp,
-        );
-
-        // Assert that the claim amount is less than or equal to the releasable amount
-        assert(claim_amount <= releasable_amount);
-
-        // Withdraw the tokens for recipient
-        _withdraw(
-            &mut context,
-            escrow,
-            vesting_schedule_note.recipient,
-            vesting_schedule_note.token,
-            claim_amount,
-        );
-
-        // We emit a final claim note to the reclaimer
-        _create_final_claim_note(
-            &mut context,
-            storage,
-            vesting_schedule_note.reclaimer,
-            escrow,
-        );
-    }
-
-    /// @notice Clawbacks the remaining amount from the provided escrow
-    /// @dev This should happen after the final claim only
-    /// @param escrow The address of the escrow
-    /// @param reclaimer_amount The amount of tokens to clawback from the escrow
-    #[private]
-    fn clawback_remaining(escrow: AztecAddress, reclaimer_amount: u128) {
-        // Fetch a final claim note
-        let final_claim_note = _get_final_claim_note(storage, escrow);
-        assert(final_claim_note.escrow == escrow);
-
-        // Fetch a linear vesting schedule note
-        let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
+        // releasable_amount can be 0 if the recipient already claimed the total amount
+        if releasable_amount > 0 {
+            // Withdraw the tokens for recipient
+            _withdraw(
+                &mut context,
+                escrow,
+                vesting_schedule_note.recipient,
+                vesting_schedule_note.token,
+                releasable_amount,
+            );
+        }
 
         // Withdraw the tokens for reclaimer
         _withdraw(
             &mut context,
             escrow,
-            vesting_schedule_note.reclaimer,
+            context.msg_sender(),
             vesting_schedule_note.token,
             reclaimer_amount,
         );
