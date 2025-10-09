@@ -140,11 +140,11 @@ contract LinearVestingEscrowLogic {
     /// @param claim_amount The amount of tokens to claim from the escrow (enables claiming even if escrow is not fully funded)
     #[private]
     fn claim(escrow: AztecAddress, claim_amount: u128) {
+        // Assert that the claim amount is greater than 0 to ensure the released amount note is strictly increasing.
+        assert(claim_amount > 0);
+
         // Fetch a linear vesting schedule note
         let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
-
-        // Assert that the message sender is the recipient (he needs to input the amount)
-        assert(context.msg_sender() == vesting_schedule_note.recipient);
 
         let mut claim_timestamp: u64 = 0;
         // Check if the vesting is still active
@@ -155,12 +155,6 @@ contract LinearVestingEscrowLogic {
         } else {
             // Get the stop timestamp from the vesting schedule note
             claim_timestamp = vesting_schedule_note.stop_timestamp;
-
-            // TODO Optional (see clawback function)
-            // We could emit a final claim note to the _recipient_ on stop_vesting and consume it (pop) on the this final claim part to avoid race condition.
-            // The race condition comes from the fact that to both claim and clawback both notes (vesting and released amount) are needed.
-            // The attack vector (unlikely and not worth it) happens when the recipient drip-claims the remaining amount (even if the contract is fully funded), blocking the reclaimer to clawback what's remaining as the released amount note is updated constantly.
-            // _pop_final_claim_note(storage, escrow);
         }
 
         // Fetch and remove a released amount note
@@ -176,13 +170,7 @@ contract LinearVestingEscrowLogic {
         );
 
         // Assert that the claim amount is less than or equal to the releasable amount
-        // TODO Should we enforce equality instead if claim_amount > releasable_amount? Maybe it is better given that the timestamp is not necessarily known in advance.
         assert(claim_amount <= releasable_amount);
-        // Assert that the claim amount is greater than 0 (user needs to claim something).
-        // Because we're always re-emitting the released amount note, it needs to be monotonically increasing.
-        // This ensures that if the total amount was claimed there's no more claims to be made.
-        // Race condition attack is prevented: recipient cannot claim 0 tokens each block to prevent the reclaimer from clawing back the remaining amount.
-        assert(claim_amount > 0);
 
         // Update the released amount note by adding the claim amount
         let updated_released_amount = released_amount_note.released_amount + claim_amount;
@@ -237,23 +225,9 @@ contract LinearVestingEscrowLogic {
             stop_timestamp,
         );
 
-        // TODO Optional (see claim function)
-        // Creating this final claim note to recipient to avoid race condition.
-        // Create final claim note to the recipient
-        // _create_final_claim_note(
-        //     &mut context,
-        //     storage,
-        //     vesting_schedule_note.recipient,
-        //     escrow,
-        // );
-
+        // Check timestamp through the router contract
         privately_check_timestamp(Comparator.LTE, stop_timestamp, &mut context);
     }
-
-    /// Clawback will be called if the reclaimer has something to claim, that means that either he finished the claim of the user or the user did,
-    /// and after that he gets whatever is left for him.
-    /// In the scenario where the user finishes the claim with an amount less that he deserves (unfunded contract), then the escrow is finished.
-    /// This means that instead of having the need of having a final claim note, we can check that released amount note is equal to the total amount.
 
     /// @notice Clawbacks the escrow
     /// @notice It only makes sense to call this method if the reclaimer has something to claim
@@ -467,43 +441,6 @@ contract LinearVestingEscrowLogic {
 
         // We revert if there is no note in the filter so we can probably unwrap directly
         notes.get_unchecked(0)
-    }
-
-    /// @notice Creates and inserts a new final claim note into the storage and emits it to the reclaimer
-    /// @param context The private context
-    /// @param storage The storage
-    /// @param reclaimer The address of the reclaimer
-    /// @param escrow The address of the escrow
-    #[contract_library_method]
-    fn _create_final_claim_note(
-        context: &mut PrivateContext,
-        storage: Storage<&mut PrivateContext>,
-        reclaimer: AztecAddress,
-        escrow: AztecAddress,
-    ) {
-        let note = FinalClaimNote::new(escrow);
-        let note_insertion = storage.final_claims.insert(note);
-        note_insertion.emit(encode_and_encrypt_note(context, reclaimer, context.msg_sender()));
-    }
-
-    /// @notice Finds a final claim note in the storage
-    /// @param storage The storage
-    /// @param escrow The address of the escrow
-    /// @return The final claim note
-    #[contract_library_method]
-    fn _get_final_claim_note(
-        storage: Storage<&mut PrivateContext>,
-        escrow: AztecAddress,
-    ) -> FinalClaimNote {
-        let options = NoteGetterOptions::new()
-            .select(FinalClaimNote::properties().escrow, Comparator.EQ, escrow)
-            .set_limit(1);
-
-        let notes = storage.final_claims.get_notes(options);
-
-        // We revert if there is no note in the filter so we can probably unwrap directly
-        let unwrapped_note = notes.get_unchecked(0);
-        unwrapped_note.note
     }
 
     /// @notice Calculates the releasable and vested amounts
