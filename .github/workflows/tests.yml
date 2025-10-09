@@ -1,0 +1,103 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: pr-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  setup-and-run:
+    strategy:
+      matrix:
+        os: [ubuntu-latest-m]
+        threads: [12]
+
+    runs-on: 
+      labels: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    concurrency:
+      group: job-${{ github.head_ref }}-${{ matrix.os }}-${{ matrix.threads }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v2
+
+      - name: Install and cache yarn
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.17.0"
+          cache: 'yarn'
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+
+      - name: Detect Aztec version
+        id: aztec-version
+        run: |
+          AZTEC_VERSION=$(node -p "require('./package.json').config.aztecVersion")
+          echo "version=$AZTEC_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Aztec version is $AZTEC_VERSION"
+
+      - name: Install Aztec CLI
+        run: |
+          curl -s https://install.aztec.network > tmp.sh
+          bash tmp.sh <<< $'yes\nyes'
+
+      - name: Update path
+        run: echo "/home/runner/.aztec/bin" >> $GITHUB_PATH
+
+      - name: Set Aztec version
+        run: |
+          VERSION=${{ steps.aztec-version.outputs.version }} aztec-up
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Cache Noir compilation artifacts
+        id: cache-noir
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/
+            src/artifacts/
+          key: ${{ runner.os }}-noir-${{ steps.aztec-version.outputs.version }}-${{ hashFiles('src/nr/**/*', 'Nargo.toml') }}
+
+      - name: Compile contracts
+        if: steps.cache-noir.outputs.cache-hit != 'true'
+        run: script -e -c "${AZTEC_NARGO:-aztec-nargo} compile"
+
+      - name: Generate artifacts
+        if: steps.cache-noir.outputs.cache-hit != 'true'
+        run: script -e -c "aztec codegen target --outdir src/artifacts"
+
+      - name: Build aztec-standards artifacts
+        if: steps.cache-noir.outputs.cache-hit != 'true'
+        run: yarn build-aztec-standards
+
+      - name: Start PXE
+        run: |
+          VERSION=${{ steps.aztec-version.outputs.version }} aztec start --port 8081 --pxe --pxe.nodeUrl=http://localhost:8080/ --pxe.proverEnabled false &
+
+      - name: Run nr tests
+        run: |
+          script -e -c "aztec test --test-threads ${{ matrix.threads }}"
+
+      - name: Run js tests
+        run: script -e -c "yarn test:js"
