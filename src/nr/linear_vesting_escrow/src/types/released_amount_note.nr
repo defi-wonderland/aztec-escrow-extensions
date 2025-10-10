@@ -14,12 +14,14 @@ use aztec::{
 
 /// @param escrow The address of the escrow
 /// @param released_amount The released amount of tokens
+/// @param claim_completed Whether the final claim is done
 /// @param randomness The randomness used to create the note
 #[custom_note]
 #[derive(Serialize, Eq)]
 pub struct ReleasedAmountNote {
     escrow: AztecAddress,
     pub released_amount: u128,
+    pub claim_completed: bool,
     randomness: Field,
 }
 
@@ -47,10 +49,10 @@ impl NoteHash for ReleasedAmountNote {
 }
 
 impl ReleasedAmountNote {
-    pub fn new(escrow: AztecAddress, released_amount: u128) -> Self {
+    pub fn new(escrow: AztecAddress, released_amount: u128, claim_completed: bool) -> Self {
         // Safety: random() is safe to call here as it generates cryptographically secure randomness
         // for note creation, which is the intended use case
         let randomness = unsafe { random() };
-        ReleasedAmountNote { escrow, released_amount, randomness }
+        ReleasedAmountNote { escrow, released_amount, claim_completed, randomness }
     }
 }

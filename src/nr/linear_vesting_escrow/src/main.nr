@@ -26,8 +26,7 @@ contract LinearVestingEscrowLogic {
     };
     // vesting schedule, released amount, final claim note types
     use crate::types::{
-        released_amount_note::ReleasedAmountNote,
-        vesting_schedule_note::VestingScheduleNote,
+        released_amount_note::ReleasedAmountNote, vesting_schedule_note::VestingScheduleNote,
     };
     // bignum library
     use bignum::{BigNum, bignum::to_field, U256};
@@ -51,8 +50,10 @@ contract LinearVestingEscrowLogic {
         tsk_m: Field,
     }
 
+    /// @notice Storage for the LinearVestingEscrowLogic contract
     /// @param escrow_class_id The contract class id of the escrow contract
     /// @param escrows The storage for the linear vesting escrows
+    /// @param released_notes The storage for the released amount notes
     #[storage]
     struct Storage<Context> {
         escrow_class_id: PublicImmutable<Field, Context>,
@@ -71,6 +72,7 @@ contract LinearVestingEscrowLogic {
     /// @notice Creates a linear vesting escrow for the provided recipient.
     /// @param escrow The address of the escrow
     /// @param recipient The address of the recipient
+    /// @param reclaimer The address of the reclaimer
     /// @param token The address of the token
     /// @param start The start time of the vesting
     /// @param duration The duration of the vesting
@@ -102,9 +104,20 @@ contract LinearVestingEscrowLogic {
             ovsk_m,
             tsk_m,
         );
+        // Share the escrow with the recipient
         _share_escrow(
             &mut context,
             recipient,
+            escrow,
+            nsk_m,
+            ivsk_m,
+            ovsk_m,
+            tsk_m,
+        );
+        // Share the escrow with the reclaimer
+        _share_escrow(
+            &mut context,
+            reclaimer,
             escrow,
             nsk_m,
             ivsk_m,
@@ -126,8 +139,8 @@ contract LinearVestingEscrowLogic {
             0,
         );
 
-        // Create and emit released amount note with zero released amount
-        _create_released_amount_note(&mut context, storage, recipient, reclaimer, escrow, 0);
+        // Create and emit released amount note with zero released amount and claim completed set to false
+        _create_released_amount_note(&mut context, storage, recipient, reclaimer, escrow, 0, false);
 
         // Check that a linear vesting escrow has not been created for the provided escrow
         let nullifier = std::hash::pedersen_hash([escrow.to_field()]);
@@ -135,17 +148,24 @@ contract LinearVestingEscrowLogic {
     }
 
     /// @notice Claims what's available from the provided escrow
+    /// @dev The claim is only possible if the vesting is still active or is stopped but not completed
+    /// @dev Prevents claims after claim_completed is set to true in the released amount note
     /// @param escrow The address of the escrow
     /// @param claim_amount The amount of tokens to claim from the escrow (enables claiming even if escrow is not fully funded)
     #[private]
     fn claim(escrow: AztecAddress, claim_amount: u128) {
-        // Assert that the claim amount is greater than 0 to ensure the released amount note is strictly increasing.
-        assert(claim_amount > 0);
+        // Fetch and remove a released amount note
+        let released_amount_note = _pop_released_amount_note(storage, escrow);
+
+        // Assert that the claim is not completed
+        assert(!released_amount_note.claim_completed, "Claim already completed");
 
         // Fetch a linear vesting schedule note
         let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
 
         let mut claim_timestamp: u64 = 0;
+        let mut claim_completed: bool = false;
+
         // Check if the vesting is still active
         if (vesting_schedule_note.stop_timestamp == 0) {
             // Get the anchor block's timestamp (historical reference point for private execution)
@@ -154,10 +174,9 @@ contract LinearVestingEscrowLogic {
         } else {
             // Get the stop timestamp from the vesting schedule note
             claim_timestamp = vesting_schedule_note.stop_timestamp;
+            // This is the final claim since the vesting is stopped
+            claim_completed = true;
         }
-
-        // Fetch and remove a released amount note
-        let released_amount_note = _pop_released_amount_note(storage, escrow);
 
         // Get releasable amount and vested amount
         let (releasable_amount, _) = _calculate_releasable_and_vested_amounts(
@@ -169,7 +188,7 @@ contract LinearVestingEscrowLogic {
         );
 
         // Assert that the claim amount is less than or equal to the releasable amount
-        assert(claim_amount <= releasable_amount);
+        assert(claim_amount <= releasable_amount, "claim amount too high");
 
         // Update the released amount note by adding the claim amount
         let updated_released_amount = released_amount_note.released_amount + claim_amount;
@@ -182,6 +201,7 @@ contract LinearVestingEscrowLogic {
             vesting_schedule_note.reclaimer,
             escrow,
             updated_released_amount,
+            claim_completed,
         );
 
         // Withdraw claim_amount tokens
@@ -195,6 +215,7 @@ contract LinearVestingEscrowLogic {
     }
 
     /// @notice Deactivates the linear vesting
+    /// @dev Warning: recipient will be able to immediately claim tokens up until stop_timestamp even if that's in the future
     /// @dev The deactivated note is also emitted to the recipient to notify them that the vesting is deactivated
     /// @param escrow The address of the escrow
     /// @param stop_timestamp The timestamp at which the vesting will stop (at least the timestamp of the block in which this transaction is included)
@@ -205,10 +226,10 @@ contract LinearVestingEscrowLogic {
             _pop_vesting_schedule_note(storage, escrow);
 
         // Assert that the message sender is the reclaimer
-        assert(context.msg_sender() == vesting_schedule_note.reclaimer);
+        assert(context.msg_sender() == vesting_schedule_note.reclaimer, "caller is not reclaimer");
 
         // We assert that the vesting schedule is still active
-        assert(vesting_schedule_note.stop_timestamp == 0);
+        assert(vesting_schedule_note.stop_timestamp == 0, "Vesting schedule is not active");
 
         // Create a new one that is not active
         _create_vesting_schedule_note(
@@ -240,10 +261,10 @@ contract LinearVestingEscrowLogic {
         let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
 
         // Assert that the message sender is the reclaimer
-        assert(context.msg_sender() == vesting_schedule_note.reclaimer);
+        assert(context.msg_sender() == vesting_schedule_note.reclaimer, "caller is not reclaimer");
 
         // We assert that the vesting schedule is not active
-        assert(vesting_schedule_note.stop_timestamp > 0);
+        assert(vesting_schedule_note.stop_timestamp > 0, "Vesting schedule is active");
 
         // Fetch and remove a released amount note (prevents any future claims or clawbacks)
         let released_amount_note = _pop_released_amount_note(storage, escrow);
@@ -334,6 +355,7 @@ contract LinearVestingEscrowLogic {
     /// @param start The start time of the vesting
     /// @param duration The duration of the vesting
     /// @param total_amount The total amount of tokens to vest
+    /// @param stop_timestamp The timestamp at which the vesting will stop (zero if not stopped)
     #[contract_library_method]
     fn _create_vesting_schedule_note(
         context: &mut PrivateContext,
@@ -369,6 +391,7 @@ contract LinearVestingEscrowLogic {
     /// @param reclaimer The address of the reclaimer
     /// @param escrow The address of the escrow
     /// @param released_amount The released amount of tokens
+    /// @param claim_completed Whether the final claim is done
     #[contract_library_method]
     fn _create_released_amount_note(
         context: &mut PrivateContext,
@@ -377,8 +400,9 @@ contract LinearVestingEscrowLogic {
         reclaimer: AztecAddress,
         escrow: AztecAddress,
         released_amount: u128,
+        claim_completed: bool,
     ) {
-        let note = ReleasedAmountNote::new(escrow, released_amount);
+        let note = ReleasedAmountNote::new(escrow, released_amount, claim_completed);
         let note_insertion = storage.released_notes.insert(note);
         note_insertion.emit(encode_and_encrypt_note(context, recipient, context.msg_sender()));
         note_insertion.emit(encode_and_encrypt_note(context, reclaimer, context.msg_sender()));
