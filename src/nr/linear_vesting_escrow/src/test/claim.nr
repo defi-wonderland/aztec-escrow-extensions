@@ -17,10 +17,14 @@ unconstrained fn claim_fully_vested_tokens_success() {
     token_utils::check_private_balance(token_contract_address, recipient, 0);
 
     env.advance_timestamp_by(duration);
-
-    LinearVestingEscrowLogic::at(logic_contract_address).claim(escrow_contract_address).call(
-        &mut env.private(),
+    let (releasable_amount, _) = LinearVestingEscrowLogic::releasable_and_vested_amounts(
+        escrow_contract_address,
+        env.committed_timestamp(),
     );
+
+    LinearVestingEscrowLogic::at(logic_contract_address)
+        .claim(escrow_contract_address, releasable_amount)
+        .call(&mut env.private());
     env.advance_block_by(1);
 
     token_utils::check_private_balance(token_contract_address, escrow_contract_address, 0);
@@ -43,10 +47,14 @@ unconstrained fn claim_partially_vested_tokens_success() {
     token_utils::check_private_balance(token_contract_address, recipient, 0);
 
     env.advance_timestamp_by(half_duration);
-
-    LinearVestingEscrowLogic::at(logic_contract_address).claim(escrow_contract_address).call(
-        &mut env.private(),
+    let (releasable_amount, _) = LinearVestingEscrowLogic::releasable_and_vested_amounts(
+        escrow_contract_address,
+        env.committed_timestamp(),
     );
+
+    LinearVestingEscrowLogic::at(logic_contract_address)
+        .claim(escrow_contract_address, releasable_amount)
+        .call(&mut env.private());
     env.advance_block_by(1);
 
     token_utils::check_private_balance(
@@ -71,7 +79,12 @@ unconstrained fn claim_before_start_time() {
     token_utils::check_private_balance(token_contract_address, escrow_contract_address, amount);
     token_utils::check_private_balance(token_contract_address, recipient, 0);
 
-    LinearVestingEscrowLogic::at(logic_contract_address).claim(escrow_contract_address).call(
-        &mut env.private(),
+    let (releasable_amount, _) = LinearVestingEscrowLogic::releasable_and_vested_amounts(
+        escrow_contract_address,
+        env.committed_timestamp(),
     );
+
+    LinearVestingEscrowLogic::at(logic_contract_address)
+        .claim(escrow_contract_address, releasable_amount)
+        .call(&mut env.private());
 }
