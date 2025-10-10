@@ -140,7 +140,15 @@ contract LinearVestingEscrowLogic {
         );
 
         // Create and emit released amount note with zero released amount and claim completed set to false
-        _create_released_amount_note(&mut context, storage, recipient, reclaimer, escrow, 0, false);
+        _create_released_amount_note(
+            &mut context,
+            storage,
+            recipient,
+            reclaimer,
+            escrow,
+            0,
+            false,
+        );
 
         // Check that a linear vesting escrow has not been created for the provided escrow
         let nullifier = std::hash::pedersen_hash([escrow.to_field()]);
