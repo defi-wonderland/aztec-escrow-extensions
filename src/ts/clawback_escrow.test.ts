@@ -25,7 +25,6 @@ import {
 } from "./utils.js";
 import { siloNullifier } from "@aztec/stdlib/hash";
 import { pedersenHash } from "@aztec/foundation/crypto";
-import { CheatCodes } from "@aztec/aztec.js/testing";
 import { PXE } from "@aztec/stdlib/interfaces/client";
 import { AztecLmdbStore } from "@aztec/kv-store/lmdb";
 import { getInitialTestAccountsManagers } from "@aztec/accounts/testing";
@@ -38,12 +37,12 @@ import { TokenContract } from "../artifacts/Token.js";
 import { NFTContract } from "../artifacts/NFT.js";
 
 const setupTestSuite = async () => {
-  const { pxe, store, cc } = await setupPXE();
+  const { pxe, store } = await setupPXE();
   const managers = await getInitialTestAccountsManagers(pxe);
   const wallets = await Promise.all(managers.map((acc) => acc.register()));
   const [deployer] = wallets;
 
-  return { pxe, deployer, wallets, store, cc };
+  return { pxe, deployer, wallets, store };
 };
 
 describe("Clawback Escrow - Single PXE", () => {
@@ -51,7 +50,6 @@ describe("Clawback Escrow - Single PXE", () => {
 
   let pxe: PXE;
   let store: AztecLmdbStore;
-  let cc: CheatCodes;
 
   let wallets: AccountWalletWithSecretKey[];
   let deployer: AccountWalletWithSecretKey;
@@ -85,7 +83,7 @@ describe("Clawback Escrow - Single PXE", () => {
   let deadline: bigint;
 
   async function setup() {
-    ({ pxe, deployer, wallets, store, cc } = await setupTestSuite());
+    ({ pxe, deployer, wallets, store } = await setupTestSuite());
 
     [alice, bob, carl] = wallets;
 
@@ -116,7 +114,7 @@ describe("Clawback Escrow - Single PXE", () => {
     clawbackEscrow = await deployClawbackEscrow(alice, escrowClassId);
 
     // Use the logic contract address as the salt for the escrow contract
-    escrowSalt = new Fr(clawbackEscrow.instance.address.toBigInt());
+    escrowSalt = new Fr(clawbackEscrow.address.toBigInt());
 
     // Deploy an escrow contract
     escrow = (await deployEscrowWithPublicKeysAndSalt(
@@ -125,17 +123,8 @@ describe("Clawback Escrow - Single PXE", () => {
       escrowSalt,
     )) as EscrowContract;
 
-    // Deploy a token contract
-    token = (await deployTokenWithMinter(alice, {})) as TokenContract;
-
     const partialAddressEscrow = await escrow.partialAddress;
     await pxe.registerAccount(escrowSk, partialAddressEscrow);
-
-    await token
-      .withWallet(alice)
-      .methods.mint_to_private(escrow.address, escrow.address, AMOUNT)
-      .send()
-      .wait();
 
     const blockNumber = await pxe.getBlockNumber();
     const block = await pxe.getBlock(blockNumber);
@@ -146,7 +135,7 @@ describe("Clawback Escrow - Single PXE", () => {
     await store.delete();
   });
 
-  describe("create_clawback_escrow", () => {
+  describe("setup_clawback_escrow", () => {
     describe("correct escrow setup", () => {
       let setup_tx: FieldsOf<TxReceipt>;
 
@@ -158,7 +147,7 @@ describe("Clawback Escrow - Single PXE", () => {
       beforeEach(async () => {
         setup_tx = await clawbackEscrow
           .withWallet(alice)
-          .methods.create_clawback_escrow(
+          .methods.setup_clawback_escrow(
             escrow.address,
             bob.getAddress(),
             alice.getAddress(),
@@ -302,7 +291,7 @@ describe("Clawback Escrow - Single PXE", () => {
         // Try to create a clawback escrow for carl
         await expect(
           clawbackEscrow.methods
-            .create_clawback_escrow(
+            .setup_clawback_escrow(
               escrow.address,
               bob.getAddress(),
               alice.getAddress(),
@@ -333,7 +322,7 @@ describe("Clawback Escrow - Single PXE", () => {
 
         await expect(
           wrongClawbackEscrow.methods
-            .create_clawback_escrow(
+            .setup_clawback_escrow(
               escrow.address,
               bob.getAddress(),
               alice.getAddress(),
@@ -358,7 +347,7 @@ describe("Clawback Escrow - Single PXE", () => {
 
         await expect(
           clawbackEscrow.methods
-            .create_clawback_escrow(
+            .setup_clawback_escrow(
               escrow.address,
               bob.getAddress(),
               alice.getAddress(),
@@ -381,6 +370,17 @@ describe("Clawback Escrow - Single PXE", () => {
       await setup();
     });
 
+    beforeEach(async () => {
+      // Deploy a token contract
+      token = (await deployTokenWithMinter(alice, {})) as TokenContract;
+
+      await token
+        .withWallet(alice)
+        .methods.mint_to_private(escrow.address, escrow.address, AMOUNT)
+        .send()
+        .wait();
+    });
+
     it("claim should transfer the tokens to the recipient and emit one note (token note)", async () => {
       const bobPXE = pxe;
 
@@ -392,7 +392,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -432,7 +432,7 @@ describe("Clawback Escrow - Single PXE", () => {
 
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -461,8 +461,16 @@ describe("Clawback Escrow - Single PXE", () => {
       // Assert that bob received the note and the escrow the change
       const notes1 = await bobPXE.getNotes({ txHash: claimTx1.txHash });
       expect(notes1.length).toBe(2);
-      expectUintNote(notes1[0], halfAmount, escrow.address);
-      expectUintNote(notes1[1], halfAmount, bob.getAddress());
+      const changeNote = await bobPXE.getNotes({
+        txHash: claimTx1.txHash,
+        recipient: escrow.address,
+      });
+      const transferNote = await bobPXE.getNotes({
+        txHash: claimTx1.txHash,
+        recipient: bob.getAddress(),
+      });
+      expectUintNote(changeNote[0], halfAmount, escrow.address);
+      expectUintNote(transferNote[0], halfAmount, bob.getAddress());
 
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, bob.getAddress(), wad(0), halfAmount);
@@ -496,7 +504,7 @@ describe("Clawback Escrow - Single PXE", () => {
 
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -553,7 +561,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -596,7 +604,7 @@ describe("Clawback Escrow - Single PXE", () => {
 
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -629,6 +637,17 @@ describe("Clawback Escrow - Single PXE", () => {
       await setup();
     });
 
+    beforeEach(async () => {
+      // Deploy a token contract
+      token = (await deployTokenWithMinter(alice, {})) as TokenContract;
+
+      await token
+        .withWallet(alice)
+        .methods.mint_to_private(escrow.address, escrow.address, AMOUNT)
+        .send()
+        .wait();
+    });
+
     it("clawback should transfer the tokens to the recipient and emit one note (token note)", async () => {
       const alicePXE = pxe;
 
@@ -640,7 +659,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n - 1n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -686,7 +705,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n - 1n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -715,10 +734,16 @@ describe("Clawback Escrow - Single PXE", () => {
       // Assert that alice received the note and the escrow the change
       const notes1 = await alicePXE.getNotes({ txHash: clawbackTx1.txHash });
       expect(notes1.length).toBe(2);
-      console.log(notes1[0]);
-      console.log(notes1[1]);
-      expectUintNote(notes1[0], halfAmount, escrow.address);
-      expectUintNote(notes1[1], halfAmount, alice.getAddress());
+      const changeNote = await alicePXE.getNotes({
+        txHash: clawbackTx1.txHash,
+        recipient: escrow.address,
+      });
+      const transferNote = await alicePXE.getNotes({
+        txHash: clawbackTx1.txHash,
+        recipient: alice.getAddress(),
+      });
+      expectUintNote(changeNote[0], halfAmount, escrow.address);
+      expectUintNote(transferNote[0], halfAmount, alice.getAddress());
 
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, alice.getAddress(), wad(0), halfAmount);
@@ -735,7 +760,6 @@ describe("Clawback Escrow - Single PXE", () => {
       // Assert that alice received the note
       const notes2 = await alicePXE.getNotes({ txHash: clawbackTx2.txHash });
       expect(notes2.length).toBe(1);
-      console.log(notes2[0]);
       expectUintNote(notes2[0], halfAmount, alice.getAddress());
 
       // Assert that tokens were effectively transferred
@@ -752,7 +776,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -809,7 +833,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n - 1n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -851,7 +875,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),

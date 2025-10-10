@@ -55,8 +55,9 @@ contract ClawbackEscrowLogic {
         storage.escrow_class_id.initialize(escrow_class_id);
     }
 
-    /// @notice Verifies that the keys correspond to the escrow address and that the
-    ///         escrow instance data is correct.
+    /// @notice Verifies that the keys correspond to the escrow address and that the escrow
+    ///         instance data is correct, shares the escrow data with the recipient and the
+    ///         reclaimer, and nullifies the escrow address to prevent future reuse.
     /// @dev Reverts if the data is not correct.
     /// @param escrow The address of the escrow
     /// @param recipient The address that can claim tokens before deadline
@@ -67,7 +68,7 @@ contract ClawbackEscrowLogic {
     /// @param ovsk_m Outgoing Viewing Key
     /// @param tsk_m Tagging Secret Key
     #[private]
-    fn create_clawback_escrow(
+    fn setup_clawback_escrow(
         escrow: AztecAddress,
         recipient: AztecAddress,
         reclaimer: AztecAddress,
