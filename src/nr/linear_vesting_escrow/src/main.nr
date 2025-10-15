@@ -140,15 +140,7 @@ contract LinearVestingEscrowLogic {
         );
 
         // Create and emit released amount note with zero released amount and claim completed set to false
-        _create_released_amount_note(
-            &mut context,
-            storage,
-            recipient,
-            reclaimer,
-            escrow,
-            0,
-            false,
-        );
+        _create_released_amount_note(&mut context, storage, escrow, 0, false);
 
         // Check that a linear vesting escrow has not been created for the provided escrow
         let nullifier = std::hash::pedersen_hash([escrow.to_field()]);
@@ -170,6 +162,9 @@ contract LinearVestingEscrowLogic {
 
         // Fetch a linear vesting schedule note
         let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
+
+        // Assert that the message sender is the recipient
+        assert(context.msg_sender() == vesting_schedule_note.recipient, "caller is not recipient");
 
         let mut claim_timestamp: u64 = 0;
         let mut claim_completed: bool = false;
@@ -205,8 +200,6 @@ contract LinearVestingEscrowLogic {
         _create_released_amount_note(
             &mut context,
             storage,
-            vesting_schedule_note.recipient,
-            vesting_schedule_note.reclaimer,
             escrow,
             updated_released_amount,
             claim_completed,
@@ -353,7 +346,7 @@ contract LinearVestingEscrowLogic {
      * ======================== LIBRARIES ========================
      * ======================================================== */
 
-    /// @notice Creates and inserts a new linear vesting schedule note into the storage and emits it to the recipient
+    /// @notice Creates and inserts a new linear vesting schedule note into the storage and emits it to the escrow
     /// @param context The private context
     /// @param storage The storage
     /// @param escrow The address of the escrow
@@ -388,15 +381,12 @@ contract LinearVestingEscrowLogic {
             stop_timestamp,
         );
         let note_insertion = storage.escrows.insert(note);
-        note_insertion.emit(encode_and_encrypt_note(context, recipient, context.msg_sender()));
-        note_insertion.emit(encode_and_encrypt_note(context, reclaimer, context.msg_sender()));
+        note_insertion.emit(encode_and_encrypt_note(context, escrow, context.msg_sender()));
     }
 
-    /// @notice Creates and inserts a new released amount note into the storage and emits it to the recipient
+    /// @notice Creates and inserts a new released amount note into the storage and emits it to the escrow
     /// @param context The private context
     /// @param storage The storage
-    /// @param recipient The address of the recipient
-    /// @param reclaimer The address of the reclaimer
     /// @param escrow The address of the escrow
     /// @param released_amount The released amount of tokens
     /// @param claim_completed Whether the final claim is done
@@ -404,16 +394,13 @@ contract LinearVestingEscrowLogic {
     fn _create_released_amount_note(
         context: &mut PrivateContext,
         storage: Storage<&mut PrivateContext>,
-        recipient: AztecAddress,
-        reclaimer: AztecAddress,
         escrow: AztecAddress,
         released_amount: u128,
         claim_completed: bool,
     ) {
         let note = ReleasedAmountNote::new(escrow, released_amount, claim_completed);
         let note_insertion = storage.released_notes.insert(note);
-        note_insertion.emit(encode_and_encrypt_note(context, recipient, context.msg_sender()));
-        note_insertion.emit(encode_and_encrypt_note(context, reclaimer, context.msg_sender()));
+        note_insertion.emit(encode_and_encrypt_note(context, escrow, context.msg_sender()));
     }
 
     /// @notice Finds a vesting schedule note in the storage
