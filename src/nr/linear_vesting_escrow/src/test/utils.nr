@@ -14,20 +14,22 @@ use token::Token;
 
 pub unconstrained fn setup(
     with_account_contracts: bool,
-) -> (&mut TestEnvironment, AztecAddress, AztecAddress) {
+) -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress) {
     // Setup env, generate keys
     let mut env = TestEnvironment::new();
-    let (owner, user) = if with_account_contracts {
+    let (owner, user1, user2) = if with_account_contracts {
         let owner = env.create_account_contract(1);
-        let user = env.create_account_contract(2);
-        (owner, user)
+        let user1 = env.create_account_contract(2);
+        let user2 = env.create_account_contract(3);
+        (owner, user1, user2)
     } else {
         let owner = env.create_account(1);
-        let user = env.create_account(2);
-        (owner, user)
+        let user1 = env.create_account(2);
+        let user2 = env.create_account(3);
+        (owner, user1, user2)
     };
 
-    (&mut env, owner, user)
+    (&mut env, owner, user1, user2)
 }
 
 pub unconstrained fn deploy_linear_vesting_escrow_logic(
@@ -62,7 +64,7 @@ pub unconstrained fn deploy_and_create_escrow(
     amount: u128,
     duration: u64,
 ) -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
-    let (env, owner, recipient) = setup(with_account_contracts);
+    let (env, owner, recipient, reclaimer) = setup(with_account_contracts);
 
     let (escrow_contract_address, contract_class_id) = deploy_escrow_with_secret(env, 1);
     let logic_contract_address = deploy_linear_vesting_escrow_logic(env, owner, contract_class_id);
@@ -84,6 +86,7 @@ pub unconstrained fn deploy_and_create_escrow(
         .setup_linear_vesting_escrow(
             escrow_contract_address,
             recipient,
+            reclaimer,
             token_contract_address,
             env.committed_timestamp(),
             duration,
