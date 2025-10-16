@@ -163,9 +163,6 @@ contract LinearVestingEscrowLogic {
         // Fetch a linear vesting schedule note
         let vesting_schedule_note = _get_vesting_schedule_note(storage, escrow);
 
-        // Assert that the message sender is the recipient
-        assert(context.msg_sender() == vesting_schedule_note.recipient, "caller is not recipient");
-
         let mut claim_timestamp: u64 = 0;
         let mut claim_completed: bool = false;
 
@@ -175,6 +172,11 @@ contract LinearVestingEscrowLogic {
             let block_header = context.get_block_header();
             claim_timestamp = block_header.global_variables.timestamp;
         } else {
+            // Assert that the message sender is the recipient (final claim only possible for recipient)
+            assert(
+                context.msg_sender() == vesting_schedule_note.recipient,
+                "caller is not recipient",
+            );
             // Get the stop timestamp from the vesting schedule note
             claim_timestamp = vesting_schedule_note.stop_timestamp;
             // This is the final claim since the vesting is stopped
