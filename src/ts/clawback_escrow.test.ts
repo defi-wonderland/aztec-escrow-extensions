@@ -135,7 +135,7 @@ describe("Clawback Escrow - Single PXE", () => {
     await store.delete();
   });
 
-  describe("create_clawback_escrow", () => {
+  describe("setup_clawback_escrow", () => {
     describe("correct escrow setup", () => {
       let setup_tx: FieldsOf<TxReceipt>;
 
@@ -147,7 +147,7 @@ describe("Clawback Escrow - Single PXE", () => {
       beforeEach(async () => {
         setup_tx = await clawbackEscrow
           .withWallet(alice)
-          .methods.create_clawback_escrow(
+          .methods.setup_clawback_escrow(
             escrow.address,
             bob.getAddress(),
             alice.getAddress(),
@@ -291,7 +291,7 @@ describe("Clawback Escrow - Single PXE", () => {
         // Try to create a clawback escrow for carl
         await expect(
           clawbackEscrow.methods
-            .create_clawback_escrow(
+            .setup_clawback_escrow(
               escrow.address,
               bob.getAddress(),
               alice.getAddress(),
@@ -322,7 +322,7 @@ describe("Clawback Escrow - Single PXE", () => {
 
         await expect(
           wrongClawbackEscrow.methods
-            .create_clawback_escrow(
+            .setup_clawback_escrow(
               escrow.address,
               bob.getAddress(),
               alice.getAddress(),
@@ -347,7 +347,7 @@ describe("Clawback Escrow - Single PXE", () => {
 
         await expect(
           clawbackEscrow.methods
-            .create_clawback_escrow(
+            .setup_clawback_escrow(
               escrow.address,
               bob.getAddress(),
               alice.getAddress(),
@@ -392,7 +392,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -432,7 +432,7 @@ describe("Clawback Escrow - Single PXE", () => {
 
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -504,7 +504,7 @@ describe("Clawback Escrow - Single PXE", () => {
 
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -561,7 +561,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -604,7 +604,7 @@ describe("Clawback Escrow - Single PXE", () => {
 
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -659,7 +659,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n - 1n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -705,7 +705,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n - 1n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -776,7 +776,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -833,7 +833,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n - 1n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
@@ -875,7 +875,7 @@ describe("Clawback Escrow - Single PXE", () => {
         block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
       await clawbackEscrow
         .withWallet(alice)
-        .methods.create_clawback_escrow(
+        .methods.setup_clawback_escrow(
           escrow.address,
           bob.getAddress(),
           alice.getAddress(),
