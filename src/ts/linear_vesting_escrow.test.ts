@@ -1254,6 +1254,457 @@ describe("Linear Vesting Escrow - Single PXE", () => {
             .wait(),
         ).rejects.toThrow("Balance too low 'subtracted > 0'");
       });
+
+      it("claim should fail if amount is greater than releasable amount", async () => {
+        const tx = await linearVestingEscrow
+          .withWallet(alice)
+          .methods.setup_linear_vesting_escrow(
+            escrow.address,
+            bob.getAddress(),
+            alice.getAddress(),
+            token.address,
+            start,
+            duration,
+            AMOUNT,
+            secretKeys[0],
+            secretKeys[1],
+            secretKeys[2],
+            secretKeys[3],
+          )
+          .send()
+          .wait();
+
+        // Next claim tx will read previous tx timestamp
+        const block = await pxe.getBlock(tx.blockNumber!);
+        const claimTimestamp = block!.header.globalVariables.timestamp;
+
+        // Get releasable amount to call claim function
+        const [relesableAmount] = await linearVestingEscrow
+          .withWallet(bob)
+          .methods.releasable_and_vested_amounts(escrow.address, claimTimestamp)
+          .simulate();
+
+        // Sync to get linear vesting escrow note
+        await linearVestingEscrow
+          .withWallet(bob)
+          .methods.sync_private_state()
+          .simulate({});
+
+        // Assert initial balances
+        await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT);
+
+        await token.withWallet(bob).methods.sync_private_state().simulate({});
+
+        // Claim amount too high error
+        await expect(
+          linearVestingEscrow
+            .withWallet(bob)
+            .methods.claim(escrow.address, relesableAmount * 2n)
+            .send()
+            .wait(),
+        ).rejects.toThrow("claim amount too high");
+      });
+    });
+
+    describe("part 3: claim after vesting is stopped (final claim)", () => {
+      beforeAll(async () => {
+        await store.delete();
+        await setup();
+      });
+
+      it("final claim should transfer the tokens to the recipient and emit corresponding notes", async () => {
+        duration = 1000n;
+        const setupTx = await linearVestingEscrow.methods
+          .setup_linear_vesting_escrow(
+            escrow.address,
+            bob.getAddress(),
+            alice.getAddress(),
+            token.address,
+            start,
+            duration,
+            AMOUNT,
+            secretKeys[0],
+            secretKeys[1],
+            secretKeys[2],
+            secretKeys[3],
+          )
+          .send()
+          .wait();
+
+        // Assert initial balances
+        await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT);
+
+        const block = await pxe.getBlock(setupTx.blockNumber!);
+        const stopVestingTimestamp =
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+
+        const [releasableAmount, vestedAmount] = await linearVestingEscrow
+          .withWallet(alice)
+          .methods.releasable_and_vested_amounts(
+            escrow.address,
+            stopVestingTimestamp,
+          )
+          .simulate();
+
+        // Sync to get linear vesting escrow note
+        await linearVestingEscrow
+          .withWallet(alice)
+          .methods.sync_private_state()
+          .simulate({});
+
+        // Stop vesting
+        await linearVestingEscrow
+          .withWallet(alice)
+          .methods.stop_vesting(escrow.address, stopVestingTimestamp)
+          .send()
+          .wait();
+
+        // Sync to get linear vesting escrow note
+        await linearVestingEscrow
+          .withWallet(bob)
+          .methods.sync_private_state()
+          .simulate({});
+
+        await token.withWallet(bob).methods.sync_private_state().simulate({});
+
+        const finalClaimTx = await linearVestingEscrow
+          .withWallet(bob)
+          .methods.claim(escrow.address, releasableAmount)
+          .send()
+          .wait();
+
+        await linearVestingEscrow
+          .withWallet(bob)
+          .methods.sync_private_state()
+          .simulate({});
+
+        const notes = await pxe.getNotes({ txHash: finalClaimTx.txHash });
+        expect(notes.length).toBe(1);
+
+        const releasedAmountNote = await pxe.getNotes({
+          txHash: finalClaimTx.txHash,
+          contractAddress: linearVestingEscrow.address,
+          recipient: escrow.address,
+          storageSlot: slotReleasedAmountNotes,
+        });
+
+        expect(releasedAmountNote[0].note.items[1].toBigInt()).toBe(
+          vestedAmount,
+        );
+        // Claim completed
+        expect(releasedAmountNote[0].note.items[2].toBigInt()).toBe(1n); // true is 1n in the contract
+
+        // Assert final balances
+        await expectTokenBalances(
+          token,
+          bob.getAddress(),
+          wad(0),
+          vestedAmount,
+        );
+        await expectTokenBalances(
+          token,
+          escrow.address,
+          wad(0),
+          AMOUNT - vestedAmount,
+        );
+      });
+
+      it("final claim with partially funded escrow should claim correctly", async () => {
+        duration = 500n;
+        const setupTx = await linearVestingEscrow.methods
+          .setup_linear_vesting_escrow(
+            escrow.address,
+            bob.getAddress(),
+            alice.getAddress(),
+            token.address,
+            start,
+            duration,
+            AMOUNT * 2n, // Partially funded escrow
+            secretKeys[0],
+            secretKeys[1],
+            secretKeys[2],
+            secretKeys[3],
+          )
+          .send()
+          .wait();
+
+        // Assert initial balances
+        await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT);
+
+        const block = await pxe.getBlock(setupTx.blockNumber!);
+        const stopVestingTimestamp =
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+
+        const [releasableAmount, vestedAmount] = await linearVestingEscrow
+          .withWallet(alice)
+          .methods.releasable_and_vested_amounts(
+            escrow.address,
+            stopVestingTimestamp,
+          )
+          .simulate();
+
+        // Sync to get linear vesting escrow note
+        await linearVestingEscrow
+          .withWallet(alice)
+          .methods.sync_private_state()
+          .simulate({});
+
+        // Stop vesting
+        await linearVestingEscrow
+          .withWallet(alice)
+          .methods.stop_vesting(escrow.address, stopVestingTimestamp)
+          .send()
+          .wait();
+
+        // Sync to get linear vesting escrow note
+        await linearVestingEscrow
+          .withWallet(bob)
+          .methods.sync_private_state()
+          .simulate({});
+
+        await token.withWallet(bob).methods.sync_private_state().simulate({});
+
+        const finalClaimTx = await linearVestingEscrow
+          .withWallet(bob)
+          .methods.claim(escrow.address, releasableAmount)
+          .send()
+          .wait();
+
+        await linearVestingEscrow
+          .withWallet(bob)
+          .methods.sync_private_state()
+          .simulate({});
+
+        const notes = await pxe.getNotes({ txHash: finalClaimTx.txHash });
+        expect(notes.length).toBe(1);
+
+        const releasedAmountNote = await pxe.getNotes({
+          txHash: finalClaimTx.txHash,
+          contractAddress: linearVestingEscrow.address,
+          recipient: escrow.address,
+          storageSlot: slotReleasedAmountNotes,
+        });
+
+        expect(releasedAmountNote[0].note.items[1].toBigInt()).toBe(
+          vestedAmount,
+        );
+        // Claim completed
+        expect(releasedAmountNote[0].note.items[2].toBigInt()).toBe(1n); // true is 1n in the contract
+
+        // Assert final balances
+        await expectTokenBalances(
+          token,
+          bob.getAddress(),
+          wad(0),
+          vestedAmount,
+        );
+        await expectTokenBalances(
+          token,
+          escrow.address,
+          wad(0),
+          AMOUNT - vestedAmount,
+        );
+      });
+
+      it("final claim should not allow further claims", async () => {
+        const setupTx = await linearVestingEscrow.methods
+          .setup_linear_vesting_escrow(
+            escrow.address,
+            bob.getAddress(),
+            alice.getAddress(),
+            token.address,
+            start,
+            duration,
+            AMOUNT,
+            secretKeys[0],
+            secretKeys[1],
+            secretKeys[2],
+            secretKeys[3],
+          )
+          .send()
+          .wait();
+
+        // Assert initial balances
+        await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT);
+
+        const block = await pxe.getBlock(setupTx.blockNumber!);
+        const stopVestingTimestamp =
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+
+        const [releasableAmount] = await linearVestingEscrow
+          .withWallet(alice)
+          .methods.releasable_and_vested_amounts(
+            escrow.address,
+            stopVestingTimestamp,
+          )
+          .simulate();
+
+        // Sync to get linear vesting escrow note
+        await linearVestingEscrow
+          .withWallet(alice)
+          .methods.sync_private_state()
+          .simulate({});
+
+        // Stop vesting
+        await linearVestingEscrow
+          .withWallet(alice)
+          .methods.stop_vesting(escrow.address, stopVestingTimestamp)
+          .send()
+          .wait();
+
+        // Sync to get linear vesting escrow note
+        await linearVestingEscrow
+          .withWallet(bob)
+          .methods.sync_private_state()
+          .simulate({});
+
+        await token.withWallet(bob).methods.sync_private_state().simulate({});
+
+        await linearVestingEscrow
+          .withWallet(bob)
+          .methods.claim(escrow.address, releasableAmount)
+          .send()
+          .wait();
+
+        await linearVestingEscrow
+          .withWallet(bob)
+          .methods.sync_private_state()
+          .simulate({});
+
+        // Try to claim again should fail
+        await expect(
+          linearVestingEscrow
+            .withWallet(bob)
+            .methods.claim(escrow.address, 1n)
+            .send()
+            .wait(),
+        ).rejects.toThrow("Claim already completed");
+      });
+
+      it("final claim should fail if the caller is not the recipient", async () => {
+        const setupTx = await linearVestingEscrow.methods
+          .setup_linear_vesting_escrow(
+            escrow.address,
+            bob.getAddress(),
+            alice.getAddress(),
+            token.address,
+            start,
+            duration * 5n,
+            AMOUNT,
+            secretKeys[0],
+            secretKeys[1],
+            secretKeys[2],
+            secretKeys[3],
+          )
+          .send()
+          .wait();
+
+        const block = await pxe.getBlock(setupTx.blockNumber!);
+        const stopVestingTimestamp =
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+
+        const [releasableAmount] = await linearVestingEscrow
+          .withWallet(alice)
+          .methods.releasable_and_vested_amounts(
+            escrow.address,
+            stopVestingTimestamp,
+          )
+          .simulate();
+
+        // Sync to get linear vesting escrow note
+        await linearVestingEscrow
+          .withWallet(alice)
+          .methods.sync_private_state()
+          .simulate({});
+
+        // Stop vesting
+        await linearVestingEscrow
+          .withWallet(alice)
+          .methods.stop_vesting(escrow.address, stopVestingTimestamp)
+          .send()
+          .wait();
+
+        // Sync to get linear vesting escrow note
+        await linearVestingEscrow
+          .withWallet(alice)
+          .methods.sync_private_state()
+          .simulate({});
+
+        await token.withWallet(alice).methods.sync_private_state().simulate({});
+
+        await expect(
+          linearVestingEscrow
+            .withWallet(alice)
+            .methods.claim(escrow.address, releasableAmount)
+            .send()
+            .wait(),
+        ).rejects.toThrow("caller is not recipient");
+      });
+
+      it("final claim should fail if amount is greater than releasable amount", async () => {
+        const setupTx = await linearVestingEscrow.methods
+          .setup_linear_vesting_escrow(
+            escrow.address,
+            bob.getAddress(),
+            alice.getAddress(),
+            token.address,
+            start,
+            duration * 5n,
+            AMOUNT,
+            secretKeys[0],
+            secretKeys[1],
+            secretKeys[2],
+            secretKeys[3],
+          )
+          .send()
+          .wait();
+
+        const block = await pxe.getBlock(setupTx.blockNumber!);
+        const stopVestingTimestamp =
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+
+        const [releasableAmount] = await linearVestingEscrow
+          .withWallet(alice)
+          .methods.releasable_and_vested_amounts(
+            escrow.address,
+            stopVestingTimestamp,
+          )
+          .simulate();
+
+        // Sync to get linear vesting escrow note
+        await linearVestingEscrow
+          .withWallet(alice)
+          .methods.sync_private_state()
+          .simulate({});
+
+        // Stop vesting
+        const stopVestingTx = await linearVestingEscrow
+          .withWallet(alice)
+          .methods.stop_vesting(escrow.address, stopVestingTimestamp)
+          .send()
+          .wait();
+
+        // Sync to get linear vesting escrow note
+        await linearVestingEscrow
+          .withWallet(alice)
+          .methods.sync_private_state()
+          .simulate({});
+
+        await token.withWallet(bob).methods.sync_private_state().simulate({});
+
+        // We set the amount to 2x the releasable amount to test the claim amount too high error
+        await expect(
+          linearVestingEscrow
+            .withWallet(bob)
+            .methods.claim(escrow.address, releasableAmount * 2n)
+            .send()
+            .wait(),
+        ).rejects.toThrow("claim amount too high");
+      });
     });
   });
 
@@ -1450,7 +1901,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
     });
   });
 
-  describe.only("clawback", () => {
+  describe("clawback", () => {
     describe("part 1", () => {
       beforeAll(async () => {
         await store.delete();
