@@ -147,6 +147,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         .methods.setup_linear_vesting_escrow(
           escrowContract.address,
           bob.getAddress(),
+          alice.getAddress(),
           tokenContract.address,
           start,
           duration,
@@ -160,14 +161,14 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
       {
         interaction: linearVestingEscrowContract
           .withWallet(bob)
-          .methods.claim(escrowContract.address),
+          .methods.claim(escrowContract.address, AMOUNT / 2n),
         name: "(partial) claim",
       },
       // Claim the remaining amount (does not emit released amount note)
       {
         interaction: linearVestingEscrowContract
           .withWallet(bob)
-          .methods.claim(escrowContract.address),
+          .methods.claim(escrowContract.address, AMOUNT / 2n),
         name: "(full) claim",
       },
     ];
