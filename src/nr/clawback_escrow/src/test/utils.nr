@@ -84,7 +84,7 @@ pub unconstrained fn deploy_and_create_escrow(
 
     env.impersonate(owner);
     ClawbackEscrowLogic::at(logic_contract_address)
-        .create_clawback_escrow(
+        .setup_clawback_escrow(
             escrow_contract_address,
             recipient,
             owner,

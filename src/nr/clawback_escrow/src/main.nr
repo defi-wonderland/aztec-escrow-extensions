@@ -68,7 +68,7 @@ contract ClawbackEscrowLogic {
     /// @param ovsk_m Outgoing Viewing Key
     /// @param tsk_m Tagging Secret Key
     #[private]
-    fn create_clawback_escrow(
+    fn setup_clawback_escrow(
         escrow: AztecAddress,
         recipient: AztecAddress,
         reclaimer: AztecAddress,

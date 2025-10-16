@@ -24,7 +24,7 @@ fn constructor(escrow_class_id: Field) { /* ... */ }
 
 ## Private Functions
 
-### create_clawback_escrow
+### setup_linear_vesting_escrow
 ```rust
 /// @notice Creates a linear vesting escrow for the provided recipient.
 /// @param escrow The address of the escrow
