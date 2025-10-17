@@ -15,8 +15,9 @@ use aztec::{
 /// @param released_amount The released amount of tokens
 /// @param claim_completed Whether the final claim is done
 /// @param randomness The randomness used to create the note
+#[derive(Packable)]
 #[custom_note]
-#[derive(Packable, Serialize, Eq)]
+#[derive(Serialize, Eq)]
 pub struct ReleasedAmountNote {
     pub escrow: AztecAddress,
     pub released_amount: u128,

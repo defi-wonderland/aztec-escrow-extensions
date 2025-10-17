@@ -20,8 +20,9 @@ use aztec::{
 /// @param total_amount The total amount of tokens to vest
 /// @param stop_timestamp The timestamp at which the vesting stopped (if stopped by the reclaimer)
 /// @param randomness The randomness used to create the note
+#[derive(Packable)]
 #[custom_note]
-#[derive(Packable, Serialize, Eq)]
+#[derive(Serialize, Eq)]
 pub struct VestingScheduleNote {
     pub escrow: AztecAddress,
     pub recipient: AztecAddress,
