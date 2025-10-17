@@ -2,7 +2,8 @@ use crate::LinearVestingEscrowLogic;
 use crate::test::utils;
 use aztec::{
     oracle::get_contract_instance::get_contract_instance,
-    protocol_types::{contract_instance::ContractInstance, traits::ToField,}, test::txe_constants::AZTEC_SLOT_DURATION,
+    protocol_types::{contract_instance::ContractInstance, traits::ToField},
+    test::txe_constants::AZTEC_SLOT_DURATION,
 };
 use escrow_standard::test::utils as escrow_utils;
 use token::test::utils as token_utils;

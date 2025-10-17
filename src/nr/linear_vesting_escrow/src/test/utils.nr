@@ -14,12 +14,12 @@ use aztec::{
         public_keys::{IvpkM, NpkM, OvpkM, PublicKeys, TpkM},
         traits::ToField,
     },
+    state_vars::private_set::PrivateSet,
     test::helpers::{test_environment::TestEnvironment, txe_oracles as cheatcodes},
     utils::comparison::Comparator,
-    state_vars::private_set::PrivateSet,
 };
-use escrow_standard::types::escrow_details_event::MasterSecretKeys;
 use escrow_standard::test::utils as escrow_utils;
+use escrow_standard::types::escrow_details_event::MasterSecretKeys;
 use token::test::utils as token_utils;
 use token::Token;
 

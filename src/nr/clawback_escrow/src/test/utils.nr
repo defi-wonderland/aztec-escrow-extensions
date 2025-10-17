@@ -19,12 +19,12 @@ use aztec::{
         storage::map::derive_storage_slot_in_map,
         traits::ToField,
     },
+    state_vars::private_set::PrivateSet,
     test::helpers::{test_environment::TestEnvironment, txe_oracles as cheatcodes},
     utils::comparison::Comparator,
-    state_vars::private_set::PrivateSet,
 };
-use escrow_standard::types::escrow_details_event::MasterSecretKeys;
 use escrow_standard::test::utils as escrow_utils;
+use escrow_standard::types::escrow_details_event::MasterSecretKeys;
 use nft::NFT;
 use nft::test::utils as nft_utils;
 use token::test::utils as token_utils;
