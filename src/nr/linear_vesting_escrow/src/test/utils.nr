@@ -112,7 +112,7 @@ pub unconstrained fn get_vesting_schedule_note(
 ) -> VestingScheduleNote {
     let offset = 0;
     let notes = env.utility_context_at(logic_contract_address, |context| {
-        let options = NoteViewerOptions::new()
+        let mut options = NoteViewerOptions::new()
             .select(VestingScheduleNote::properties().escrow, Comparator.EQ, escrow)
             .set_limit(1);
         let vesting_schedule_slot = LinearVestingEscrowLogic::storage_layout().escrows.slot;
@@ -133,7 +133,7 @@ pub unconstrained fn get_released_amount_note(
 ) -> ReleasedAmountNote {
     let offset = 0;
     let notes = env.utility_context_at(logic_contract_address, |context| {
-        let options = NoteViewerOptions::new()
+        let mut options = NoteViewerOptions::new()
             .select(ReleasedAmountNote::properties().escrow, Comparator.EQ, escrow)
             .set_limit(1);
         let released_notes_slot = LinearVestingEscrowLogic::storage_layout().released_notes.slot;

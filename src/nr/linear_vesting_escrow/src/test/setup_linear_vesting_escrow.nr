@@ -106,7 +106,7 @@ unconstrained fn create_linear_vesting_escrow_success() {
     assert(vesting_schedule_note.total_amount == amount, "Note: amount mismatch");
 
     let released_amount_note =
-        utils::get_released_amount_note(env, logic_contract_address, escrow_contract_address);
+        utils::get_released_amount_note(*env, logic_contract_address, escrow_contract_address);
     assert(released_amount_note.escrow == escrow_contract_address, "Note: escrow address mismatch");
     assert(released_amount_note.released_amount == 0, "Note: released amount mismatch");
 }

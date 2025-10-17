@@ -174,7 +174,7 @@ pub unconstrained fn get_escrow_note(
 ) -> ClawbackEscrowNote {
     let offset = 0;
     let notes = env.utility_context_at(logic_contract_address, |context| {
-        let options = NoteViewerOptions::new()
+        let mut options = NoteViewerOptions::new()
             .select(ClawbackEscrowNote::properties().escrow, Comparator.EQ, escrow)
             .set_limit(1);
         let escrows_slot = ClawbackEscrowLogic::storage_layout().escrows.slot;
