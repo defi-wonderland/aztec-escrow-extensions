@@ -23,7 +23,7 @@ use aztec::{
 #[custom_note]
 #[derive(Packable, Serialize, Eq)]
 pub struct VestingScheduleNote {
-    escrow: AztecAddress,
+    pub escrow: AztecAddress,
     pub recipient: AztecAddress,
     pub reclaimer: AztecAddress,
     pub token: AztecAddress,

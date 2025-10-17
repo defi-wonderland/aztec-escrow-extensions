@@ -14,7 +14,7 @@ use aztec::{
 #[custom_note]
 #[derive(Packable, Serialize, Eq)]
 pub struct ClawbackEscrowNote {
-    escrow: AztecAddress,
+    pub escrow: AztecAddress,
     pub recipient: AztecAddress,
     pub reclaimer: AztecAddress,
     pub deadline: u64,

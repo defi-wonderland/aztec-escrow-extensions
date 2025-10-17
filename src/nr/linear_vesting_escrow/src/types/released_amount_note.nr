@@ -18,7 +18,7 @@ use aztec::{
 #[custom_note]
 #[derive(Packable, Serialize, Eq)]
 pub struct ReleasedAmountNote {
-    escrow: AztecAddress,
+    pub escrow: AztecAddress,
     pub released_amount: u128,
     pub claim_completed: bool,
     randomness: Field,
