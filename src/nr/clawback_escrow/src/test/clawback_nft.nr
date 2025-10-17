@@ -1,8 +1,6 @@
 use crate::ClawbackEscrowLogic;
 use crate::test::utils;
-use aztec::{
-    test::txe_constants::AZTEC_SLOT_DURATION,
-};
+use aztec::test::txe_constants::AZTEC_SLOT_DURATION;
 use nft::test::utils as nft_utils;
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
