@@ -6,7 +6,7 @@ use aztec::{
         constants::MAX_NOTES_PER_PAGE, note_getter::view_notes, note_interface::NoteProperties,
         note_viewer_options::NoteViewerOptions,
     },
-    oracle::execution::get_contract_address,
+    oracle::get_contract_instance::get_contract_instance,
     protocol_types::{
         address::AztecAddress,
         contract_instance::ContractInstance,
