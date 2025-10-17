@@ -2378,7 +2378,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await setup();
       });
 
-      it("clawback should fail the escrow vesting is still active", async () => {
+      it("clawback should fail if the escrow vesting is still active", async () => {
         await linearVestingEscrow.methods
           .setup_linear_vesting_escrow(
             escrow.address,
