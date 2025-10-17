@@ -94,7 +94,7 @@ unconstrained fn create_linear_vesting_escrow_success() {
     );
 
     let vesting_schedule_note =
-        utils::get_vesting_schedule_note(env, logic_contract_address, escrow_contract_address);
+        utils::get_vesting_schedule_note(*env, logic_contract_address, escrow_contract_address);
     assert(
         vesting_schedule_note.escrow == escrow_contract_address,
         "Note: escrow address mismatch",
