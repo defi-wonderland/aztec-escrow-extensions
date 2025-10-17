@@ -24,9 +24,6 @@ use nft::test::utils as nft_utils;
 use token::test::utils as token_utils;
 use token::Token;
 
-// TODO: this has changed
-pub global AZTEC_SLOT_DURATION: u64 = 32 as u64;
-
 pub unconstrained fn setup(
     with_account_contracts: bool,
 ) -> (&mut TestEnvironment, AztecAddress, AztecAddress) {

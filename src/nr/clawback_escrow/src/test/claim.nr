@@ -6,8 +6,8 @@ use token::test::utils as token_utils;
 // #[test]
 #[test(should_fail_with = "Escrow salt mismatch")]
 unconstrained fn claim_tokens_success() {
-    let timeout_blocks = 5;
-    let timeout = utils::AZTEC_SLOT_DURATION * timeout_blocks;
+    // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
+    let timeout = 10;
     let amount: u128 = 100;
     let (env, owner, recipient, logic_contract_address, escrow_contract_address, token_contract_address, _) =
         utils::deploy_and_create_escrow(false, amount, timeout);
@@ -20,6 +20,7 @@ unconstrained fn claim_tokens_success() {
     );
     token_utils::check_private_balance(*env, token_contract_address, recipient, 0);
 
+    env.set_next_block_timestamp(env.last_block_timestamp() + timeout);
     env.call_private(
         recipient,
         ClawbackEscrowLogic::at(logic_contract_address).claim(
@@ -37,14 +38,13 @@ unconstrained fn claim_tokens_success() {
 // #[test(should_fail_with = "Timestamp mismatch")]
 #[test(should_fail_with = "Escrow salt mismatch")]
 unconstrained fn claim_tokens_fails_after_deadline() {
-    let timeout_blocks = 5;
-    let timeout = utils::AZTEC_SLOT_DURATION * timeout_blocks;
+    // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
+    let timeout = 10;
     let amount: u128 = 100;
     let (env, owner, recipient, logic_contract_address, escrow_contract_address, token_contract_address, _) =
         utils::deploy_and_create_escrow(false, amount, timeout);
 
-    // TODO: calculate the exact edge case
-    env.advance_next_block_timestamp_by(timeout);
+    env.set_next_block_timestamp(env.last_block_timestamp() + timeout + 1);
     env.call_private(
         recipient,
         ClawbackEscrowLogic::at(logic_contract_address).claim(

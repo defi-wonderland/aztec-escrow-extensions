@@ -26,7 +26,7 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
         token_utils::deploy_token_with_initial_supply(env, owner, amount, owner);
 
     let start = env.last_block_timestamp();
-    let duration = utils::AZTEC_SLOT_DURATION * 100;
+    let duration = 100;
 
     env.call_private(
         owner,
@@ -77,7 +77,7 @@ unconstrained fn create_linear_vesting_escrow_success() {
 
     let start = env.last_block_timestamp();
 
-    let duration = utils::AZTEC_SLOT_DURATION * 100;
+    let duration = 100;
 
     env.call_private(
         owner,

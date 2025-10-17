@@ -6,14 +6,15 @@ use nft::test::utils as nft_utils;
 // #[test]
 #[test(should_fail_with = "Escrow salt mismatch")]
 unconstrained fn claim_nft_success() {
-    let timeout_blocks = 5;
-    let timeout = utils::AZTEC_SLOT_DURATION * timeout_blocks;
+    // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
+    let timeout = 10;
     let amount: u128 = 100;
     let (env, owner, recipient, logic_contract_address, escrow_contract_address, _, nft_contract_address) =
         utils::deploy_and_create_escrow(false, amount, timeout);
 
     nft_utils::assert_owns_private_nft(*env, nft_contract_address, escrow_contract_address, 1);
 
+    env.set_next_block_timestamp(env.last_block_timestamp() + timeout);
     env.call_private(
         recipient,
         ClawbackEscrowLogic::at(logic_contract_address).claim_nft(
@@ -30,13 +31,13 @@ unconstrained fn claim_nft_success() {
 // #[test(should_fail_with = "Timestamp mismatch")]
 #[test(should_fail_with = "Escrow salt mismatch")]
 unconstrained fn claim_nft_fails_after_deadline() {
-    let timeout_blocks = 5;
-    let timeout = utils::AZTEC_SLOT_DURATION * timeout_blocks;
+    // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
+    let timeout = 10;
     let amount: u128 = 100;
     let (env, owner, recipient, logic_contract_address, escrow_contract_address, _, nft_contract_address) =
         utils::deploy_and_create_escrow(false, amount, timeout);
 
-    // TODO: calculate the exact edge case
+    env.set_next_block_timestamp(env.last_block_timestamp() + timeout + 1);
     env.advance_next_block_timestamp_by(timeout);
     env.call_private(
         recipient,
