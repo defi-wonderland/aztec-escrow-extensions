@@ -22,10 +22,10 @@ unconstrained fn claim_fully_vested_tokens_success() {
     token_utils::check_private_balance(*env, token_contract_address, recipient, 0);
 
     env.advance_next_block_timestamp_by(duration);
-    let (releasable_amount, _) = LinearVestingEscrowLogic::releasable_and_vested_amounts(
-        escrow_contract_address,
-        env.last_block_timestamp(),
-    );
+    let (releasable_amount, _) = env.simulate_utility(LinearVestingEscrowLogic::at(
+        logic_contract_address,
+    )
+        .releasable_and_vested_amounts(escrow_contract_address, env.last_block_timestamp()));
 
     env.call_private(
         recipient,
@@ -60,10 +60,10 @@ unconstrained fn claim_partially_vested_tokens_success() {
     token_utils::check_private_balance(*env, token_contract_address, recipient, 0);
 
     env.advance_next_block_timestamp_by(half_duration);
-    let (releasable_amount, _) = LinearVestingEscrowLogic::releasable_and_vested_amounts(
-        escrow_contract_address,
-        env.last_block_timestamp(),
-    );
+    let (releasable_amount, _) = env.simulate_utility(LinearVestingEscrowLogic::at(
+        logic_contract_address,
+    )
+        .releasable_and_vested_amounts(escrow_contract_address, env.last_block_timestamp()));
 
     env.call_private(
         recipient,
@@ -74,7 +74,8 @@ unconstrained fn claim_partially_vested_tokens_success() {
     );
 
     token_utils::check_private_balance(
-        *token_contract_address,
+        *env,
+        token_contract_address,
         escrow_contract_address,
         half_amount,
     );
@@ -100,10 +101,10 @@ unconstrained fn claim_before_start_time() {
     );
     token_utils::check_private_balance(*env, token_contract_address, recipient, 0);
 
-    let (releasable_amount, _) = LinearVestingEscrowLogic::releasable_and_vested_amounts(
-        escrow_contract_address,
-        env.last_block_timestamp(),
-    );
+    let (releasable_amount, _) = env.simulate_utility(LinearVestingEscrowLogic::at(
+        logic_contract_address,
+    )
+        .releasable_and_vested_amounts(escrow_contract_address, env.last_block_timestamp()));
 
     env.call_private(
         recipient,
