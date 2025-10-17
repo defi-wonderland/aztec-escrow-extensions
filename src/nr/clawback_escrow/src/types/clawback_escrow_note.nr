@@ -1,7 +1,7 @@
 use aztec::{
     context::PrivateContext,
     macros::notes::custom_note,
-    note::{note_interface::{NoteHash, NoteType}, utils::compute_note_hash_for_nullify},
+    note::note_interface::NoteHash,
     oracle::random::random,
     protocol_types::{
         address::AztecAddress,
