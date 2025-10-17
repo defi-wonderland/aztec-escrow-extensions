@@ -3,7 +3,6 @@ use crate::test::utils;
 use aztec::{
     oracle::get_contract_instance::get_contract_instance,
     protocol_types::{contract_instance::ContractInstance, traits::ToField},
-    test::txe_constants::AZTEC_SLOT_DURATION,
 };
 use escrow_standard::test::utils as escrow_utils;
 
@@ -27,7 +26,7 @@ unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
             escrow_contract_address,
             recipient,
             owner,
-            env.last_block_timestamp() + AZTEC_SLOT_DURATION * 10,
+            env.last_block_timestamp() + utils::AZTEC_SLOT_DURATION * 10,
             vector_secret_keys_1,
         ),
     );
@@ -38,7 +37,7 @@ unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
             escrow_contract_address,
             recipient,
             owner,
-            env.last_block_timestamp() + AZTEC_SLOT_DURATION * 5,
+            env.last_block_timestamp() + utils::AZTEC_SLOT_DURATION * 5,
             vector_secret_keys_1,
         ),
     );
@@ -58,7 +57,7 @@ unconstrained fn setup_clawback_escrow_success() {
     let (vector_public_keys_1, vector_secret_keys_1, vector_public_keys_2, vector_secret_keys_2) =
         utils::get_test_vector();
 
-    let deadline = env.last_block_timestamp() + AZTEC_SLOT_DURATION * 5;
+    let deadline = env.last_block_timestamp() + utils::AZTEC_SLOT_DURATION * 5;
     env.call_private(
         owner,
         ClawbackEscrowLogic::at(logic_contract_address).setup_clawback_escrow(
@@ -70,7 +69,7 @@ unconstrained fn setup_clawback_escrow_success() {
         ),
     );
 
-    let escrow_note = utils::get_escrow_note(env, logic_contract_address, escrow_contract_address);
+    let escrow_note = utils::get_escrow_note(*env, logic_contract_address, escrow_contract_address);
     assert(escrow_note.escrow == escrow_contract_address, "Note: escrow address mismatch");
     assert(escrow_note.recipient == recipient, "Note: recipient address mismatch");
     assert(escrow_note.reclaimer == owner, "Note: reclaimer address mismatch");

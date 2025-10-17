@@ -1,6 +1,5 @@
 use crate::LinearVestingEscrowLogic;
 use crate::test::utils;
-use aztec::test::txe_constants::AZTEC_SLOT_DURATION;
 use token::test::utils as token_utils;
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
@@ -8,7 +7,7 @@ use token::test::utils as token_utils;
 #[test(should_fail_with = "Escrow salt mismatch")]
 unconstrained fn claim_fully_vested_tokens_success() {
     let duration_blocks = 10;
-    let duration = AZTEC_SLOT_DURATION * duration_blocks;
+    let duration = utils::AZTEC_SLOT_DURATION * duration_blocks;
     let amount: u128 = 100;
     let (env, _, recipient, logic_contract_address, escrow_contract_address, token_contract_address)
          = utils::deploy_and_create_escrow(false, amount, duration);
@@ -44,7 +43,7 @@ unconstrained fn claim_fully_vested_tokens_success() {
 #[test(should_fail_with = "Escrow salt mismatch")]
 unconstrained fn claim_partially_vested_tokens_success() {
     let duration_blocks = 5;
-    let duration = AZTEC_SLOT_DURATION * duration_blocks;
+    let duration = utils::AZTEC_SLOT_DURATION * duration_blocks;
     let half_duration = duration / 2;
     let amount: u128 = 100;
     let half_amount = amount / 2;
@@ -88,7 +87,7 @@ unconstrained fn claim_partially_vested_tokens_success() {
 #[test(should_fail_with = "Escrow salt mismatch")]
 unconstrained fn claim_before_start_time() {
     let duration_blocks = 10;
-    let duration = AZTEC_SLOT_DURATION * duration_blocks;
+    let duration = utils::AZTEC_SLOT_DURATION * duration_blocks;
     let amount: u128 = 100;
     let (env, _, recipient, logic_contract_address, escrow_contract_address, token_contract_address)
          = utils::deploy_and_create_escrow(false, amount, duration);

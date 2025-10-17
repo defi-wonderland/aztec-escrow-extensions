@@ -3,7 +3,6 @@ use crate::test::utils;
 use aztec::{
     oracle::get_contract_instance::get_contract_instance,
     protocol_types::{contract_instance::ContractInstance, traits::ToField},
-    test::txe_constants::AZTEC_SLOT_DURATION,
 };
 use escrow_standard::test::utils as escrow_utils;
 use token::test::utils as token_utils;
@@ -27,7 +26,7 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
         token_utils::deploy_token_with_initial_supply(env, owner, amount, owner);
 
     let start = env.last_block_timestamp();
-    let duration = AZTEC_SLOT_DURATION * 100;
+    let duration = utils::AZTEC_SLOT_DURATION * 100;
 
     env.call_private(
         owner,
@@ -78,7 +77,7 @@ unconstrained fn create_linear_vesting_escrow_success() {
 
     let start = env.last_block_timestamp();
 
-    let duration = AZTEC_SLOT_DURATION * 100;
+    let duration = utils::AZTEC_SLOT_DURATION * 100;
 
     env.call_private(
         owner,

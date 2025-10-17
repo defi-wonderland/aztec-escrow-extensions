@@ -1,6 +1,5 @@
 use crate::ClawbackEscrowLogic;
 use crate::test::utils;
-use aztec::test::txe_constants::AZTEC_SLOT_DURATION;
 use nft::test::utils as nft_utils;
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
@@ -8,7 +7,7 @@ use nft::test::utils as nft_utils;
 #[test(should_fail_with = "Escrow salt mismatch")]
 unconstrained fn claim_nft_success() {
     let timeout_blocks = 5;
-    let timeout = AZTEC_SLOT_DURATION * timeout_blocks;
+    let timeout = utils::AZTEC_SLOT_DURATION * timeout_blocks;
     let amount: u128 = 100;
     let (env, owner, recipient, logic_contract_address, escrow_contract_address, _, nft_contract_address) =
         utils::deploy_and_create_escrow(false, amount, timeout);
@@ -32,7 +31,7 @@ unconstrained fn claim_nft_success() {
 #[test(should_fail_with = "Escrow salt mismatch")]
 unconstrained fn claim_nft_fails_after_deadline() {
     let timeout_blocks = 5;
-    let timeout = AZTEC_SLOT_DURATION * timeout_blocks;
+    let timeout = utils::AZTEC_SLOT_DURATION * timeout_blocks;
     let amount: u128 = 100;
     let (env, owner, recipient, logic_contract_address, escrow_contract_address, _, nft_contract_address) =
         utils::deploy_and_create_escrow(false, amount, timeout);

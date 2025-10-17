@@ -1,6 +1,5 @@
 use crate::ClawbackEscrowLogic;
 use crate::test::utils;
-use aztec::test::txe_constants::AZTEC_SLOT_DURATION;
 use token::test::utils as token_utils;
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
@@ -8,7 +7,7 @@ use token::test::utils as token_utils;
 #[test(should_fail_with = "Escrow salt mismatch")]
 unconstrained fn claim_tokens_success() {
     let timeout_blocks = 5;
-    let timeout = AZTEC_SLOT_DURATION * timeout_blocks;
+    let timeout = utils::AZTEC_SLOT_DURATION * timeout_blocks;
     let amount: u128 = 100;
     let (env, owner, recipient, logic_contract_address, escrow_contract_address, token_contract_address, _) =
         utils::deploy_and_create_escrow(false, amount, timeout);
@@ -39,7 +38,7 @@ unconstrained fn claim_tokens_success() {
 #[test(should_fail_with = "Escrow salt mismatch")]
 unconstrained fn claim_tokens_fails_after_deadline() {
     let timeout_blocks = 5;
-    let timeout = AZTEC_SLOT_DURATION * timeout_blocks;
+    let timeout = utils::AZTEC_SLOT_DURATION * timeout_blocks;
     let amount: u128 = 100;
     let (env, owner, recipient, logic_contract_address, escrow_contract_address, token_contract_address, _) =
         utils::deploy_and_create_escrow(false, amount, timeout);
