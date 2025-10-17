@@ -160,10 +160,10 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
 
     // Set the start timestamp equal to the start 1 slot before it is stopped
     const start_2 = currentTimestamp + AZTEC_SLOT_TIME * 6n;
-    // We choose a 4 slots duration be able to clawback the remaining amount
-    const duration_2 = AZTEC_SLOT_TIME * 4n;
+    // We choose a 30 slots duration be able to clawback the remaining amount
+    const duration_2 = AZTEC_SLOT_TIME * 30n;
     // Stop timestamp (1 slot after starting)
-    const stopTimestamp_2 = start_2 + AZTEC_SLOT_TIME;
+    const stopTimestamp_2 = start_2 + AZTEC_SLOT_TIME * 5n;
     // Setup the second escrow
     await linearVestingEscrowContract
       .withWallet(alice)
@@ -197,9 +197,9 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     // Set the start timestamp equal to one previous to the stop
     const start_3 = currentTimestamp + AZTEC_SLOT_TIME * 8n;
     // We choose a 4 slots duration be able to claim the remaining amount and then clawback the rest
-    const duration_3 = AZTEC_SLOT_TIME * 4n;
+    const duration_3 = AZTEC_SLOT_TIME * 30n;
     // Stop timestamp (1 slot after starting)
-    const stopTimestamp_3 = start_3 + AZTEC_SLOT_TIME;
+    const stopTimestamp_3 = start_3 + AZTEC_SLOT_TIME * 5n;
 
     // Third escrow: Create and stop vesting
     await linearVestingEscrowContract
