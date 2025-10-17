@@ -312,16 +312,16 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         const event = events[0];
 
         expect(event.escrow).toEqual(escrow.address);
-        expect(event.nsk_m).toEqual(
+        expect(event.master_secret_keys.nsk_m).toEqual(
           escrowKeys.masterNullifierSecretKey.toBigInt(),
         );
-        expect(event.ivsk_m).toEqual(
+        expect(event.master_secret_keys.ivsk_m).toEqual(
           escrowKeys.masterIncomingViewingSecretKey.toBigInt(),
         );
-        expect(event.ovsk_m).toEqual(
+        expect(event.master_secret_keys.ovsk_m).toEqual(
           escrowKeys.masterOutgoingViewingSecretKey.toBigInt(),
         );
-        expect(event.tsk_m).toEqual(
+        expect(event.master_secret_keys.tsk_m).toEqual(
           escrowKeys.masterTaggingSecretKey.toBigInt(),
         );
       });
@@ -345,7 +345,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await linearVestingEscrow
           .withWallet(bob)
           .methods.sync_private_state()
-          .simulate({});
+          .simulate({ from: bob.getAddress() });
 
         const notes = await bobPXE.getNotes({
           contractAddress: linearVestingEscrow.address,
@@ -601,7 +601,10 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           .methods.claim(escrow.address)
           .send({ from: bob.getAddress() })
           .wait();
-        await token.withWallet(bob).methods.sync_private_state().simulate({});
+        await token
+          .withWallet(bob)
+          .methods.sync_private_state()
+          .simulate({ from: bob.getAddress() });
 
         // Assert that bob received the note
         const notes = await bobPXE.getNotes({
@@ -643,7 +646,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await linearVestingEscrow
           .withWallet(bob)
           .methods.sync_private_state()
-          .simulate({});
+          .simulate({ from: bob.getAddress() });
 
         // Assert initial balances
         await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
@@ -654,11 +657,14 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           .methods.claim(escrow.address)
           .send({ from: bob.getAddress() })
           .wait();
-        await token.withWallet(bob).methods.sync_private_state().simulate({});
+        await token
+          .withWallet(bob)
+          .methods.sync_private_state()
+          .simulate({ from: bob.getAddress() });
         await linearVestingEscrow
           .withWallet(bob)
           .methods.sync_private_state()
-          .simulate({});
+          .simulate({ from: bob.getAddress() });
 
         const receivedAmount =
           ((BigInt(claimTimestamp) - BigInt(start)) * AMOUNT) /
@@ -739,7 +745,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await linearVestingEscrow
           .withWallet(bob)
           .methods.sync_private_state()
-          .simulate({});
+          .simulate({ from: bob.getAddress() });
 
         // Assert initial balances
         await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
@@ -754,11 +760,14 @@ describe("Linear Vesting Escrow - Single PXE", () => {
             .methods.claim(escrow.address)
             .send({ from: bob.getAddress() })
             .wait();
-          await token.withWallet(bob).methods.sync_private_state().simulate({});
+          await token
+            .withWallet(bob)
+            .methods.sync_private_state()
+            .simulate({ from: bob.getAddress() });
           await linearVestingEscrow
             .withWallet(bob)
             .methods.sync_private_state()
-            .simulate({});
+            .simulate({ from: bob.getAddress() });
 
           // Use the timestamp from the PREVIOUS transaction for calculation
           const previousBlock = await pxe.getBlock(previousTx.blockNumber!);
@@ -862,7 +871,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await linearVestingEscrow
           .withWallet(bob)
           .methods.sync_private_state()
-          .simulate({});
+          .simulate({ from: bob.getAddress() });
 
         // Assert initial balances
         await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
@@ -880,11 +889,14 @@ describe("Linear Vesting Escrow - Single PXE", () => {
             .methods.claim(escrow.address)
             .send({ from: bob.getAddress() })
             .wait();
-          await token.withWallet(bob).methods.sync_private_state().simulate({});
+          await token
+            .withWallet(bob)
+            .methods.sync_private_state()
+            .simulate({ from: bob.getAddress() });
           await linearVestingEscrow
             .withWallet(bob)
             .methods.sync_private_state()
-            .simulate({});
+            .simulate({ from: bob.getAddress() });
 
           // Use the timestamp from the PREVIOUS transaction for calculation
           const previousBlock = await pxe.getBlock(previousTx.blockNumber!);
@@ -1008,7 +1020,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await linearVestingEscrow
           .withWallet(bob)
           .methods.sync_private_state()
-          .simulate({});
+          .simulate({ from: bob.getAddress() });
 
         // Assert initial balances
         await expectTokenBalances(newToken, bob.getAddress(), wad(0), wad(0));
@@ -1029,11 +1041,11 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           await newToken
             .withWallet(bob)
             .methods.sync_private_state()
-            .simulate({});
+            .simulate({ from: bob.getAddress() });
           await linearVestingEscrow
             .withWallet(bob)
             .methods.sync_private_state()
-            .simulate({});
+            .simulate({ from: bob.getAddress() });
 
           // Use the timestamp from the PREVIOUS transaction for calculation
           const previousBlock = await pxe.getBlock(previousTx.blockNumber!);
@@ -1146,7 +1158,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await linearVestingEscrow
           .withWallet(bob)
           .methods.sync_private_state()
-          .simulate({});
+          .simulate({ from: bob.getAddress() });
 
         // Assert initial balances
         await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
@@ -1193,7 +1205,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
       await linearVestingEscrow
         .withWallet(bob)
         .methods.sync_private_state()
-        .simulate({});
+        .simulate({ from: bob.getAddress() });
 
       // Assert initial balances
       await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
@@ -1214,7 +1226,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         const [utilityReleasable, utilityVested] = await linearVestingEscrow
           .withWallet(bob)
           .methods.releasable_and_vested_amounts(escrow.address, claimTimestamp)
-          .simulate();
+          .simulate({ from: bob.getAddress() });
 
         // Calculate expected values
         const totalVestedAmount =
@@ -1239,11 +1251,14 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           .methods.claim(escrow.address)
           .send({ from: bob.getAddress() })
           .wait();
-        await token.withWallet(bob).methods.sync_private_state().simulate({});
+        await token
+          .withWallet(bob)
+          .methods.sync_private_state()
+          .simulate({ from: bob.getAddress() });
         await linearVestingEscrow
           .withWallet(bob)
           .methods.sync_private_state()
-          .simulate({});
+          .simulate({ from: bob.getAddress() });
 
         // Check if vesting is complete
         const isVestingComplete = claimTimestamp >= start + duration;
