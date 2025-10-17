@@ -16,14 +16,18 @@ unconstrained fn claim_nft_success() {
     let (env, owner, recipient, logic_contract_address, escrow_contract_address, _, nft_contract_address) =
         utils::deploy_and_create_escrow(false, amount, timeout);
 
-    nft_utils::assert_owns_private_nft(nft_contract_address, escrow_contract_address, 1);
+    nft_utils::assert_owns_private_nft(*env, nft_contract_address, escrow_contract_address, 1);
 
-    ClawbackEscrowLogic::at(logic_contract_address)
-        .claim_nft(escrow_contract_address, nft_contract_address, 1)
-        .call(&mut env.private());
-    env.advance_block_by(1);
+    env.call_private(
+        recipient,
+        ClawbackEscrowLogic::at(logic_contract_address).claim_nft(
+            escrow_contract_address,
+            nft_contract_address,
+            1,
+        ),
+    );
 
-    nft_utils::assert_owns_private_nft(nft_contract_address, recipient, 1);
+    nft_utils::assert_owns_private_nft(*env, nft_contract_address, recipient, 1);
 }
 
 // TODO: cannot deploy escrow contract with custom salt. This should fail trying to claim_nft after deadline.
@@ -37,8 +41,13 @@ unconstrained fn claim_nft_fails_after_deadline() {
         utils::deploy_and_create_escrow(false, amount, timeout);
 
     // TODO: calculate the exact edge case
-    env.advance_timestamp_by(timeout);
-    ClawbackEscrowLogic::at(logic_contract_address)
-        .claim_nft(escrow_contract_address, nft_contract_address, 1)
-        .call(&mut env.private());
+    env.advance_next_block_timestamp_by(timeout);
+    env.call_private(
+        recipient,
+        ClawbackEscrowLogic::at(logic_contract_address).claim_nft(
+            escrow_contract_address,
+            nft_contract_address,
+            1,
+        ),
+    );
 }

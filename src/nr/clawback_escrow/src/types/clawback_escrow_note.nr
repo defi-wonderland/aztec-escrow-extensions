@@ -3,8 +3,8 @@ use aztec::{
     macros::notes::custom_note,
     note::{note_interface::{NoteHash, NoteType}, utils::compute_note_hash_for_nullify},
     oracle::random::random,
-    prelude::AztecAddress,
     protocol_types::{
+        address::AztecAddress,
         constants::{GENERATOR_INDEX__NOTE_HASH, GENERATOR_INDEX__NOTE_NULLIFIER},
         hash::poseidon2_hash_with_separator,
         traits::{Packable, Serialize, ToField},
@@ -13,12 +13,12 @@ use aztec::{
 };
 
 #[custom_note]
-#[derive(Serialize, Eq)]
+#[derive(Packable, Serialize, Eq)]
 pub struct ClawbackEscrowNote {
     escrow: AztecAddress,
-    recipient: AztecAddress,
-    reclaimer: AztecAddress,
-    deadline: u64,
+    pub recipient: AztecAddress,
+    pub reclaimer: AztecAddress,
+    pub deadline: u64,
     randomness: Field,
 }
 
@@ -39,7 +39,7 @@ impl NoteHash for ClawbackEscrowNote {
 
     fn compute_note_hash(self, storage_slot: Field) -> Field {
         poseidon2_hash_with_separator(
-            array_concat(self.pack(), [storage_slot]),
+            self.pack().concat([storage_slot]),
             GENERATOR_INDEX__NOTE_HASH,
         )
     }

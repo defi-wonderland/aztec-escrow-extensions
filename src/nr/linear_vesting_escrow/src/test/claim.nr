@@ -13,22 +13,30 @@ unconstrained fn claim_fully_vested_tokens_success() {
     let (env, _, recipient, logic_contract_address, escrow_contract_address, token_contract_address)
          = utils::deploy_and_create_escrow(false, amount, duration);
 
-    token_utils::check_private_balance(token_contract_address, escrow_contract_address, amount);
-    token_utils::check_private_balance(token_contract_address, recipient, 0);
+    token_utils::check_private_balance(
+        *env,
+        token_contract_address,
+        escrow_contract_address,
+        amount,
+    );
+    token_utils::check_private_balance(*env, token_contract_address, recipient, 0);
 
-    env.advance_timestamp_by(duration);
+    env.advance_next_block_timestamp_by(duration);
     let (releasable_amount, _) = LinearVestingEscrowLogic::releasable_and_vested_amounts(
         escrow_contract_address,
-        env.committed_timestamp(),
+        env.last_block_timestamp(),
     );
 
-    LinearVestingEscrowLogic::at(logic_contract_address)
-        .claim(escrow_contract_address, releasable_amount)
-        .call(&mut env.private());
-    env.advance_block_by(1);
+    env.call_private(
+        recipient,
+        LinearVestingEscrowLogic::at(logic_contract_address).claim(
+            escrow_contract_address,
+            releasable_amount,
+        ),
+    );
 
-    token_utils::check_private_balance(token_contract_address, escrow_contract_address, 0);
-    token_utils::check_private_balance(token_contract_address, recipient, amount);
+    token_utils::check_private_balance(*env, token_contract_address, escrow_contract_address, 0);
+    token_utils::check_private_balance(*env, token_contract_address, recipient, amount);
 }
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
@@ -43,26 +51,34 @@ unconstrained fn claim_partially_vested_tokens_success() {
     let (env, _, recipient, logic_contract_address, escrow_contract_address, token_contract_address)
          = utils::deploy_and_create_escrow(false, amount, duration);
 
-    token_utils::check_private_balance(token_contract_address, escrow_contract_address, amount);
-    token_utils::check_private_balance(token_contract_address, recipient, 0);
+    token_utils::check_private_balance(
+        *env,
+        token_contract_address,
+        escrow_contract_address,
+        amount,
+    );
+    token_utils::check_private_balance(*env, token_contract_address, recipient, 0);
 
-    env.advance_timestamp_by(half_duration);
+    env.advance_next_block_timestamp_by(half_duration);
     let (releasable_amount, _) = LinearVestingEscrowLogic::releasable_and_vested_amounts(
         escrow_contract_address,
-        env.committed_timestamp(),
+        env.last_block_timestamp(),
     );
 
-    LinearVestingEscrowLogic::at(logic_contract_address)
-        .claim(escrow_contract_address, releasable_amount)
-        .call(&mut env.private());
-    env.advance_block_by(1);
+    env.call_private(
+        recipient,
+        LinearVestingEscrowLogic::at(logic_contract_address).claim(
+            escrow_contract_address,
+            releasable_amount,
+        ),
+    );
 
     token_utils::check_private_balance(
-        token_contract_address,
+        *token_contract_address,
         escrow_contract_address,
         half_amount,
     );
-    token_utils::check_private_balance(token_contract_address, recipient, half_amount);
+    token_utils::check_private_balance(*env, token_contract_address, recipient, half_amount);
 }
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
@@ -76,15 +92,24 @@ unconstrained fn claim_before_start_time() {
     let (env, _, recipient, logic_contract_address, escrow_contract_address, token_contract_address)
          = utils::deploy_and_create_escrow(false, amount, duration);
 
-    token_utils::check_private_balance(token_contract_address, escrow_contract_address, amount);
-    token_utils::check_private_balance(token_contract_address, recipient, 0);
+    token_utils::check_private_balance(
+        *env,
+        token_contract_address,
+        escrow_contract_address,
+        amount,
+    );
+    token_utils::check_private_balance(*env, token_contract_address, recipient, 0);
 
     let (releasable_amount, _) = LinearVestingEscrowLogic::releasable_and_vested_amounts(
         escrow_contract_address,
-        env.committed_timestamp(),
+        env.last_block_timestamp(),
     );
 
-    LinearVestingEscrowLogic::at(logic_contract_address)
-        .claim(escrow_contract_address, releasable_amount)
-        .call(&mut env.private());
+    env.call_private(
+        recipient,
+        LinearVestingEscrowLogic::at(logic_contract_address).claim(
+            escrow_contract_address,
+            releasable_amount,
+        ),
+    );
 }

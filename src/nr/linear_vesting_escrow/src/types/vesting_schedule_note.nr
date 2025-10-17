@@ -3,8 +3,8 @@ use aztec::{
     macros::notes::custom_note,
     note::note_interface::NoteHash,
     oracle::random::random,
-    prelude::AztecAddress,
     protocol_types::{
+        address::AztecAddress,
         constants::{GENERATOR_INDEX__NOTE_HASH, GENERATOR_INDEX__NOTE_NULLIFIER},
         hash::poseidon2_hash_with_separator,
         traits::{Packable, Serialize, ToField},
@@ -22,7 +22,7 @@ use aztec::{
 /// @param stop_timestamp The timestamp at which the vesting stopped (if stopped by the reclaimer)
 /// @param randomness The randomness used to create the note
 #[custom_note]
-#[derive(Serialize, Eq)]
+#[derive(Packable, Serialize, Eq)]
 pub struct VestingScheduleNote {
     escrow: AztecAddress,
     pub recipient: AztecAddress,
@@ -52,7 +52,7 @@ impl NoteHash for VestingScheduleNote {
 
     fn compute_note_hash(self, storage_slot: Field) -> Field {
         poseidon2_hash_with_separator(
-            array_concat(self.pack(), [storage_slot]),
+            self.pack().concat([storage_slot]),
             GENERATOR_INDEX__NOTE_HASH,
         )
     }

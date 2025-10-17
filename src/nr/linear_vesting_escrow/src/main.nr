@@ -3,7 +3,7 @@ mod test;
 mod types;
 
 #[aztec]
-contract LinearVestingEscrowLogic {
+pub contract LinearVestingEscrowLogic {
     // aztec library
     use aztec::{
         context::{PrivateContext, UtilityContext},
@@ -13,9 +13,12 @@ contract LinearVestingEscrowLogic {
             storage::storage,
         },
         messages::logs::note::encode_and_encrypt_note,
-        note::{note_interface::NoteProperties, note_viewer_options::NoteViewerOptions},
-        prelude::{AztecAddress, NoteGetterOptions, PrivateSet, PublicImmutable},
-        protocol_types::{public_keys::PublicKeys, traits::ToField},
+        note::{
+            note_getter_options::NoteGetterOptions, note_interface::NoteProperties,
+            note_viewer_options::NoteViewerOptions,
+        },
+        protocol_types::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
+        state_vars::{private_set::PrivateSet, public_immutable::PublicImmutable},
         utils::comparison::Comparator,
     };
     // std library
@@ -24,6 +27,7 @@ contract LinearVestingEscrowLogic {
     use escrow_standard::library::logic::{
         _check_escrow, _secret_keys_to_public_keys, _share_escrow, _withdraw,
     };
+    use escrow_standard::types::escrow_details_event::MasterSecretKeys;
     // vesting schedule, released amount, final claim note types
     use crate::types::{
         released_amount_note::ReleasedAmountNote, vesting_schedule_note::VestingScheduleNote,
@@ -36,18 +40,11 @@ contract LinearVestingEscrowLogic {
     /// @notice Data privately emitted to an account that will use the escrow
     /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
     /// @param escrow The address of the escrow
-    /// @param nsk_m Master Nullifier Secret Key
-    /// @param ivsk_m Incoming Viewing Key
-    /// @param ovsk_m Outgoing Viewing Key
-    /// @param tsk_m Tagging Secret Key
+    /// @param master_secret_keys The master secret keys
     #[event]
-    #[allow(dead_code)]
     struct EscrowDetailsLogContent {
         escrow: AztecAddress,
-        nsk_m: Field,
-        ivsk_m: Field,
-        ovsk_m: Field,
-        tsk_m: Field,
+        master_secret_keys: MasterSecretKeys,
     }
 
     /// @notice Storage for the LinearVestingEscrowLogic contract
@@ -77,10 +74,7 @@ contract LinearVestingEscrowLogic {
     /// @param start The start time of the vesting
     /// @param duration The duration of the vesting
     /// @param amount The total amount of tokens to vest
-    /// @param nsk_m Master Nullifier Secret Key
-    /// @param ivsk_m Incoming Viewing Key
-    /// @param ovsk_m Outgoing Viewing Key
-    /// @param tsk_m Tagging Secret Key
+    /// @param master_secret_keys The master secret keys
     #[private]
     fn setup_linear_vesting_escrow(
         escrow: AztecAddress,
@@ -90,40 +84,18 @@ contract LinearVestingEscrowLogic {
         start: u64,
         duration: u64,
         amount: u128,
-        nsk_m: Field,
-        ivsk_m: Field,
-        ovsk_m: Field,
-        tsk_m: Field,
+        master_secret_keys: MasterSecretKeys,
     ) {
         _check_escrow(
             &mut context,
             escrow,
             storage.escrow_class_id.read(),
-            nsk_m,
-            ivsk_m,
-            ovsk_m,
-            tsk_m,
+            master_secret_keys,
         );
         // Share the escrow with the recipient
-        _share_escrow(
-            &mut context,
-            recipient,
-            escrow,
-            nsk_m,
-            ivsk_m,
-            ovsk_m,
-            tsk_m,
-        );
+        _share_escrow(&mut context, recipient, escrow, master_secret_keys);
         // Share the escrow with the reclaimer
-        _share_escrow(
-            &mut context,
-            reclaimer,
-            escrow,
-            nsk_m,
-            ivsk_m,
-            ovsk_m,
-            tsk_m,
-        );
+        _share_escrow(&mut context, reclaimer, escrow, master_secret_keys);
 
         // Create and emit linear vesting schedule note
         _create_vesting_schedule_note(
@@ -308,19 +280,13 @@ contract LinearVestingEscrowLogic {
      * ======================================================== */
 
     /// @notice Derives public keys from secret keys.
-    /// @param nsk_m Master Nullifier Secret Key
-    /// @param ivsk_m Incoming Viewing Key
-    /// @param ovsk_m Outgoing Viewing Key
-    /// @param tsk_m Tagging Secret Key
+    /// @param master_secret_keys The master secret keys
     /// @return PublicKeys containing the derived public keys.
     #[utility]
-    pub unconstrained fn secret_keys_to_public_keys(
-        nsk_m: Field,
-        ivsk_m: Field,
-        ovsk_m: Field,
-        tsk_m: Field,
-    ) -> PublicKeys {
-        _secret_keys_to_public_keys(nsk_m, ivsk_m, ovsk_m, tsk_m)
+    unconstrained fn secret_keys_to_public_keys(
+        master_secret_keys: MasterSecretKeys,
+    ) -> pub PublicKeys {
+        _secret_keys_to_public_keys(master_secret_keys)
     }
 
     /// @notice Calculates the releasable and vested amounts for a linear vesting note
@@ -328,7 +294,7 @@ contract LinearVestingEscrowLogic {
     /// @param timestamp The timestamp
     /// @return The releasable and vested amounts
     #[utility]
-    pub unconstrained fn releasable_and_vested_amounts(
+    unconstrained fn releasable_and_vested_amounts(
         escrow: AztecAddress,
         timestamp: u64,
     ) -> (u128, u128) {
@@ -383,7 +349,7 @@ contract LinearVestingEscrowLogic {
             stop_timestamp,
         );
         let note_insertion = storage.escrows.insert(note);
-        note_insertion.emit(encode_and_encrypt_note(context, escrow, context.msg_sender()));
+        note_insertion.emit(encode_and_encrypt_note(context, escrow));
     }
 
     /// @notice Creates and inserts a new released amount note into the storage and emits it to the escrow
@@ -402,7 +368,7 @@ contract LinearVestingEscrowLogic {
     ) {
         let note = ReleasedAmountNote::new(escrow, released_amount, claim_completed);
         let note_insertion = storage.released_notes.insert(note);
-        note_insertion.emit(encode_and_encrypt_note(context, escrow, context.msg_sender()));
+        note_insertion.emit(encode_and_encrypt_note(context, escrow));
     }
 
     /// @notice Finds a vesting schedule note in the storage

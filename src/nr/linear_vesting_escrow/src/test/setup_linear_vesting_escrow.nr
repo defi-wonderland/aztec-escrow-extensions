@@ -1,6 +1,10 @@
 use crate::LinearVestingEscrowLogic;
 use crate::test::utils;
-use aztec::test::txe_constants::AZTEC_SLOT_DURATION;
+use aztec::{
+    oracle::get_contract_instance::get_contract_instance,
+    protocol_types::{contract_instance::ContractInstance, traits::ToField,}, test::txe_constants::AZTEC_SLOT_DURATION,
+};
+use escrow_standard::test::utils as escrow_utils;
 use token::test::utils as token_utils;
 
 // TODO: cannot deploy escrow contract with custom salt. This should fail trying to push the same nullifier twice.
@@ -9,7 +13,9 @@ use token::test::utils as token_utils;
 unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
     let (env, owner, recipient, reclaimer) = utils::setup(false);
 
-    let (escrow_contract_address, contract_class_id) = utils::deploy_escrow_with_secret(env, 1);
+    let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1);
+    let escrow_instance: ContractInstance = get_contract_instance(escrow_contract_address);
+    let contract_class_id = escrow_instance.contract_class_id.to_field();
     let logic_contract_address =
         utils::deploy_linear_vesting_escrow_logic(env, owner, contract_class_id);
 
@@ -19,12 +25,12 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
     let token_contract_address =
         token_utils::deploy_token_with_initial_supply(env, owner, amount, owner);
 
-    let start = env.committed_timestamp();
+    let start = env.last_block_timestamp();
     let duration = AZTEC_SLOT_DURATION * 100;
 
-    env.impersonate(owner);
-    LinearVestingEscrowLogic::at(logic_contract_address)
-        .setup_linear_vesting_escrow(
+    env.call_private(
+        owner,
+        LinearVestingEscrowLogic::at(logic_contract_address).setup_linear_vesting_escrow(
             escrow_contract_address,
             recipient,
             reclaimer,
@@ -32,16 +38,13 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
             start,
             duration,
             amount,
-            vector_secret_keys_1[0],
-            vector_secret_keys_1[1],
-            vector_secret_keys_1[2],
-            vector_secret_keys_1[3],
-        )
-        .call(&mut env.private());
-    env.advance_block_by(1);
+            vector_secret_keys_1,
+        ),
+    );
 
-    LinearVestingEscrowLogic::at(logic_contract_address)
-        .setup_linear_vesting_escrow(
+    env.call_private(
+        owner,
+        LinearVestingEscrowLogic::at(logic_contract_address).setup_linear_vesting_escrow(
             escrow_contract_address,
             recipient,
             reclaimer,
@@ -49,12 +52,9 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
             start,
             duration,
             amount,
-            vector_secret_keys_1[0],
-            vector_secret_keys_1[1],
-            vector_secret_keys_1[2],
-            vector_secret_keys_1[3],
-        )
-        .call(&mut env.private());
+            vector_secret_keys_1,
+        ),
+    );
 }
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
@@ -63,7 +63,9 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
 unconstrained fn create_linear_vesting_escrow_success() {
     let (env, owner, recipient, reclaimer) = utils::setup(false);
 
-    let (escrow_contract_address, contract_class_id) = utils::deploy_escrow_with_secret(env, 1);
+    let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1);
+    let escrow_instance: ContractInstance = get_contract_instance(escrow_contract_address);
+    let contract_class_id = escrow_instance.contract_class_id.to_field();
     let logic_contract_address =
         utils::deploy_linear_vesting_escrow_logic(env, owner, contract_class_id);
 
@@ -73,13 +75,13 @@ unconstrained fn create_linear_vesting_escrow_success() {
     let token_contract_address =
         token_utils::deploy_token_with_initial_supply(env, owner, amount, owner);
 
-    let start = env.committed_timestamp();
+    let start = env.last_block_timestamp();
 
     let duration = AZTEC_SLOT_DURATION * 100;
 
-    env.impersonate(owner);
-    LinearVestingEscrowLogic::at(logic_contract_address)
-        .setup_linear_vesting_escrow(
+    env.call_private(
+        owner,
+        LinearVestingEscrowLogic::at(logic_contract_address).setup_linear_vesting_escrow(
             escrow_contract_address,
             recipient,
             reclaimer,
@@ -87,15 +89,12 @@ unconstrained fn create_linear_vesting_escrow_success() {
             start,
             duration,
             amount,
-            vector_secret_keys_1[0],
-            vector_secret_keys_1[1],
-            vector_secret_keys_1[2],
-            vector_secret_keys_1[3],
-        )
-        .call(&mut env.private());
+            vector_secret_keys_1,
+        ),
+    );
 
     let vesting_schedule_note =
-        utils::get_vesting_schedule_note(logic_contract_address, escrow_contract_address);
+        utils::get_vesting_schedule_note(env, logic_contract_address, escrow_contract_address);
     assert(
         vesting_schedule_note.escrow == escrow_contract_address,
         "Note: escrow address mismatch",
@@ -107,7 +106,7 @@ unconstrained fn create_linear_vesting_escrow_success() {
     assert(vesting_schedule_note.total_amount == amount, "Note: amount mismatch");
 
     let released_amount_note =
-        utils::get_released_amount_note(logic_contract_address, escrow_contract_address);
+        utils::get_released_amount_note(env, logic_contract_address, escrow_contract_address);
     assert(released_amount_note.escrow == escrow_contract_address, "Note: escrow address mismatch");
     assert(released_amount_note.released_amount == 0, "Note: released amount mismatch");
 }

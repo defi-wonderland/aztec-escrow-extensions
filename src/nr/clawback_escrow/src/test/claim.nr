@@ -16,16 +16,25 @@ unconstrained fn claim_tokens_success() {
     let (env, owner, recipient, logic_contract_address, escrow_contract_address, token_contract_address, _) =
         utils::deploy_and_create_escrow(false, amount, timeout);
 
-    token_utils::check_private_balance(token_contract_address, escrow_contract_address, amount);
-    token_utils::check_private_balance(token_contract_address, recipient, 0);
+    token_utils::check_private_balance(
+        *env,
+        token_contract_address,
+        escrow_contract_address,
+        amount,
+    );
+    token_utils::check_private_balance(*env, token_contract_address, recipient, 0);
 
-    ClawbackEscrowLogic::at(logic_contract_address)
-        .claim(escrow_contract_address, token_contract_address, amount)
-        .call(&mut env.private());
-    env.advance_block_by(1);
+    env.call_private(
+        recipient,
+        ClawbackEscrowLogic::at(logic_contract_address).claim(
+            escrow_contract_address,
+            token_contract_address,
+            amount,
+        ),
+    );
 
-    token_utils::check_private_balance(token_contract_address, escrow_contract_address, 0);
-    token_utils::check_private_balance(token_contract_address, recipient, amount);
+    token_utils::check_private_balance(*env, token_contract_address, escrow_contract_address, 0);
+    token_utils::check_private_balance(*env, token_contract_address, recipient, amount);
 }
 
 // TODO: cannot deploy escrow contract with custom salt. This should fail trying to claim after deadline.
@@ -39,8 +48,13 @@ unconstrained fn claim_tokens_fails_after_deadline() {
         utils::deploy_and_create_escrow(false, amount, timeout);
 
     // TODO: calculate the exact edge case
-    env.advance_timestamp_by(timeout);
-    ClawbackEscrowLogic::at(logic_contract_address)
-        .claim(escrow_contract_address, token_contract_address, amount)
-        .call(&mut env.private());
+    env.advance_next_block_timestamp_by(timeout);
+    env.call_private(
+        recipient,
+        ClawbackEscrowLogic::at(logic_contract_address).claim(
+            escrow_contract_address,
+            token_contract_address,
+            amount,
+        ),
+    );
 }
