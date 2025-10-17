@@ -1,8 +1,7 @@
 use crate::ClawbackEscrowLogic;
 use crate::test::utils;
 use aztec::{
-    note::constants::MAX_NOTES_PER_PAGE,
-    test::{helpers::authwit as authwit_cheatcodes, txe_constants::AZTEC_SLOT_DURATION},
+    test::txe_constants::AZTEC_SLOT_DURATION,
 };
 use nft::test::utils as nft_utils;
 

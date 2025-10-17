@@ -18,7 +18,7 @@ pub contract ClawbackEscrowLogic {
         protocol_types::{
             address::AztecAddress,
             public_keys::PublicKeys,
-            traits::{Serialize, ToField},
+            traits::ToField,
         },
         state_vars::{private_set::PrivateSet, public_immutable::PublicImmutable},
         utils::comparison::Comparator,

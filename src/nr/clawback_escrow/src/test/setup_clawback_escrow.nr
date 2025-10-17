@@ -1,10 +1,9 @@
 use crate::ClawbackEscrowLogic;
 use crate::test::utils;
 use aztec::{
-    note::constants::MAX_NOTES_PER_PAGE,
     oracle::get_contract_instance::get_contract_instance,
     protocol_types::{contract_instance::ContractInstance, traits::ToField},
-    test::{helpers::authwit as authwit_cheatcodes, txe_constants::AZTEC_SLOT_DURATION},
+    test::txe_constants::AZTEC_SLOT_DURATION,
 };
 use escrow_standard::test::utils as escrow_utils;
 

@@ -5,18 +5,12 @@ use aztec::{
         constants::MAX_NOTES_PER_PAGE, note_getter::view_notes, note_interface::NoteProperties,
         note_viewer_options::NoteViewerOptions,
     },
-    oracle::{
-        execution::{get_block_number, get_contract_address},
-        get_contract_instance::get_contract_instance,
-        random::random,
-        storage::storage_read,
-    },
+    oracle::get_contract_instance::get_contract_instance,
     protocol_types::{
         address::AztecAddress,
         contract_instance::ContractInstance,
         point::Point,
         public_keys::{IvpkM, NpkM, OvpkM, PublicKeys, TpkM},
-        storage::map::derive_storage_slot_in_map,
         traits::ToField,
     },
     state_vars::private_set::PrivateSet,
@@ -181,7 +175,7 @@ pub unconstrained fn get_escrow_note(
             .select(ClawbackEscrowNote::properties().escrow, Comparator.EQ, escrow)
             .set_limit(1);
         let escrows_slot = ClawbackEscrowLogic::storage_layout().escrows.slot;
-        let set = PrivateSet::new(context, released_notes_slot);
+        let set = PrivateSet::new(context, escrows_slot);
         let notes: BoundedVec<ClawbackEscrowNote, MAX_NOTES_PER_PAGE> =
             set.view_notes(options.set_offset(offset));
         notes
