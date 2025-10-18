@@ -5,11 +5,9 @@ import {
   getContractInstanceFromInstantiationParams,
   Contract,
   AccountWalletWithSecretKey,
-  AccountWallet,
   PublicKeys,
   AztecAddress,
   getContractClassFromArtifact,
-  DeployOptions,
   GrumpkinScalar,
 } from "@aztec/aztec.js";
 import {
