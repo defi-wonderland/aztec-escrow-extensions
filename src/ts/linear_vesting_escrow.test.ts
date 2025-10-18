@@ -2,7 +2,7 @@ import {
   ContractDeployer,
   Fr,
   TxStatus,
-  getContractInstanceFromDeployParams,
+  getContractInstanceFromInstantiationParams,
   Contract,
   AccountWalletWithSecretKey,
   AccountWallet,
@@ -210,7 +210,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
     it("deploys linear vesting escrow with correct constructor params", async () => {
       const salt = Fr.random();
-      const deploymentData = await getContractInstanceFromDeployParams(
+      const deploymentData = await getContractInstanceFromInstantiationParams(
         LinearVestingEscrowLogicContractArtifact,
         {
           constructorArtifact: "constructor",
