@@ -7,7 +7,7 @@ use token::test::utils as token_utils;
 // #[test(should_fail_with = "Rejecting tx for emitting duplicate nullifiers")]
 #[test(should_fail_with = "Escrow salt mismatch")]
 unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
-    let (env, owner, recipient) = utils::setup(false);
+    let (env, owner, recipient, reclaimer) = utils::setup(false);
 
     let (escrow_contract_address, contract_class_id) = utils::deploy_escrow_with_secret(env, 1);
     let logic_contract_address =
@@ -27,6 +27,7 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
         .setup_linear_vesting_escrow(
             escrow_contract_address,
             recipient,
+            reclaimer,
             token_contract_address,
             start,
             duration,
@@ -43,6 +44,7 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
         .setup_linear_vesting_escrow(
             escrow_contract_address,
             recipient,
+            reclaimer,
             token_contract_address,
             start,
             duration,
@@ -59,7 +61,7 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
 // #[test]
 #[test(should_fail_with = "Escrow salt mismatch")]
 unconstrained fn create_linear_vesting_escrow_success() {
-    let (env, owner, recipient) = utils::setup(false);
+    let (env, owner, recipient, reclaimer) = utils::setup(false);
 
     let (escrow_contract_address, contract_class_id) = utils::deploy_escrow_with_secret(env, 1);
     let logic_contract_address =
@@ -80,6 +82,7 @@ unconstrained fn create_linear_vesting_escrow_success() {
         .setup_linear_vesting_escrow(
             escrow_contract_address,
             recipient,
+            reclaimer,
             token_contract_address,
             start,
             duration,
