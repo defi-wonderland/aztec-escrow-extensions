@@ -1572,7 +1572,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await expectTokenBalances(token, escrow.address, wad(0), AMOUNT);
       });
 
-      it("clawback successfully: escrow is fully funded, releasable amount > 0", async () => {
+      it("clawback successfully when escrow is fully funded and there's still releasable amount", async () => {
         const block = await pxe.getBlock(tx.blockNumber!);
         // Stop timestamp to match exactly the next block timestamp
         const stopTimestamp =
@@ -1622,7 +1622,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await expectTokenBalances(token, escrow.address, wad(0), wad(0));
       });
 
-      it("clawback successfully: escrow is fully funded, releasable amount == 0", async () => {
+      it("clawback successfully when escrow was fully funded and there's no releasable amount (after final claim)", async () => {
         const block = await pxe.getBlock(tx.blockNumber!);
         // Stop timestamp to match exactly the next block timestamp
         const stopTimestamp =
@@ -1687,6 +1687,88 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         // Assert notes
         const notes = await pxe.getNotes({ txHash: clawbackTx.txHash });
         expect(notes.length).toBe(1);
+
+        // Assert final balances
+        await expectTokenBalances(
+          token,
+          alice.getAddress(),
+          wad(0),
+          clawbackAmount,
+        );
+        await expectTokenBalances(
+          token,
+          bob.getAddress(),
+          wad(0),
+          releasableAmount,
+        );
+        await expectTokenBalances(token, escrow.address, wad(0), wad(0));
+      });
+
+      it("clawback successfully when escrow was fully funded and there's still releasable amount (after final partial claim)", async () => {
+        const block = await pxe.getBlock(tx.blockNumber!);
+        // Stop timestamp to match exactly the next block timestamp
+        const stopTimestamp =
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+
+        // Stop vesting
+        await linearVestingEscrow
+          .withWallet(alice)
+          .methods.stop_vesting(escrow.address, stopTimestamp)
+          .send()
+          .wait();
+
+        // releasableAmount here is not 0, it will be after the claim transaction
+        const [releasableAmount, vestedAmount] = await linearVestingEscrow
+          .withWallet(alice)
+          .methods.releasable_and_vested_amounts(escrow.address, stopTimestamp)
+          .simulate();
+
+        // Bob claims the releasable amount, making the releasable amount 0 for the clawback transaction
+        await linearVestingEscrow
+          .withWallet(bob)
+          .methods.claim(escrow.address, releasableAmount / 2n)
+          .send()
+          .wait();
+        await token.withWallet(bob).methods.sync_private_state().simulate({});
+
+        // releasableAmount should be 0 after the claim transaction
+        const [releasableAmountAfterClaim, _] = await linearVestingEscrow
+          .withWallet(alice)
+          .methods.releasable_and_vested_amounts(escrow.address, stopTimestamp)
+          .simulate();
+
+        expect(releasableAmountAfterClaim).toBe(releasableAmount / 2n);
+
+        // Assert post-claim balances
+        await expectTokenBalances(token, alice.getAddress(), wad(0), wad(0));
+        await expectTokenBalances(
+          token,
+          bob.getAddress(),
+          wad(0),
+          releasableAmount / 2n,
+        );
+        await expectTokenBalances(
+          token,
+          escrow.address,
+          wad(0),
+          AMOUNT - releasableAmount / 2n,
+        );
+
+        const clawbackAmount = AMOUNT - vestedAmount;
+
+        // Clawback
+        const clawbackTx = await linearVestingEscrow
+          .withWallet(alice)
+          .methods.clawback(escrow.address, clawbackAmount)
+          .send()
+          .wait();
+
+        await token.withWallet(alice).methods.sync_private_state().simulate({});
+        await token.withWallet(bob).methods.sync_private_state().simulate({});
+
+        // Assert notes
+        const notes = await pxe.getNotes({ txHash: clawbackTx.txHash });
+        expect(notes.length).toBe(2);
 
         // Assert final balances
         await expectTokenBalances(
