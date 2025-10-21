@@ -293,68 +293,77 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
       NamedBenchmarkedInteraction | ContractFunctionInteraction
     > = [
       // Setup linear vesting escrow
-      linearVestingEscrowContract
-        .withWallet(alice)
-        .methods.setup_linear_vesting_escrow(
-          escrows[0].contract.address,
-          bob.getAddress(),
-          alice.getAddress(),
-          tokenContract.address,
-          additionalData.start_1,
-          additionalData.duration_1,
-          AMOUNT,
-          escrows[0].secretKeys[0],
-          escrows[0].secretKeys[1],
-          escrows[0].secretKeys[2],
-          escrows[0].secretKeys[3],
-        ),
+      {
+        name: "setup_linear_vesting_escrow",
+        interaction: linearVestingEscrowContract
+          .withWallet(alice)
+          .methods.setup_linear_vesting_escrow(
+            escrows[0].contract.address,
+            bob.getAddress(),
+            alice.getAddress(),
+            tokenContract.address,
+            additionalData.start_1,
+            additionalData.duration_1,
+            AMOUNT,
+            escrows[0].secretKeys[0],
+            escrows[0].secretKeys[1],
+            escrows[0].secretKeys[2],
+            escrows[0].secretKeys[3],
+          ),
+      },
       // Partial claim (emits released amount note)
       {
+        name: "claim (partial)",
         interaction: linearVestingEscrowContract
           .withWallet(bob)
           .methods.claim(escrows[0].contract.address, AMOUNT / 2n),
-        name: "(partial) claim",
       },
       // Claim the remaining amount (does not emit released amount note)
       {
+        name: "claim (full)",
         interaction: linearVestingEscrowContract
           .withWallet(bob)
           .methods.claim(escrows[0].contract.address, AMOUNT / 2n),
-        name: "(full) claim",
       },
       // Stop vesting
-      linearVestingEscrowContract
-        .withWallet(alice)
-        .methods.stop_vesting(
-          escrows[1].contract.address,
-          additionalData.stop_timestamp_2,
-        ),
+      {
+        name: "stop_vesting",
+        interaction: linearVestingEscrowContract
+          .withWallet(alice)
+          .methods.stop_vesting(
+            escrows[1].contract.address,
+            additionalData.stop_timestamp_2,
+          ),
+      },
       // Clawback the second escrow
-      linearVestingEscrowContract
-        .withWallet(alice)
-        .methods.clawback(
-          escrows[1].contract.address,
-          additionalData.clawbackAmount_2,
-        ),
+      {
+        name: "clawback",
+        interaction: linearVestingEscrowContract
+          .withWallet(alice)
+          .methods.clawback(
+            escrows[1].contract.address,
+            additionalData.clawbackAmount_2,
+          ),
+      },
       // Claim after stop vesting
       {
+        name: "claim (final)",
         interaction: linearVestingEscrowContract
           .withWallet(bob)
           .methods.claim(
             escrows[2].contract.address,
             additionalData.releasableAmount_3,
           ),
-        name: "(final) claim",
       },
       // Clawback without withdrawing to recipient
       {
+        name: "clawback (only to reclaimer)",
         interaction: linearVestingEscrowContract
           .withWallet(alice)
           .methods.clawback(
             escrows[2].contract.address,
             additionalData.clawbackAmount_3,
           ),
-        name: "(no withdraw to recipient) clawback",
       },
     ];
 
