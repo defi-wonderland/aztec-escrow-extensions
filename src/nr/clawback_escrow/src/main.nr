@@ -172,6 +172,7 @@ pub contract ClawbackEscrowLogic {
             .select(ClawbackEscrowNote::properties().escrow, Comparator.EQ, escrow)
             .set_limit(1);
         let notes = storage.escrows.get_notes(options);
+        assert(notes.len() == 1, "clawback escrow note not found");
 
         // We revert if there is no note in the filter so we can probably unwrap directly
         let unwrapped_note = notes.get_unchecked(0);

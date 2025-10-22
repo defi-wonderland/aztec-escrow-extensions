@@ -104,9 +104,11 @@ unconstrained fn create_linear_vesting_escrow_success() {
     assert(vesting_schedule_note.start == start, "Note: start mismatch");
     assert(vesting_schedule_note.duration == duration, "Note: duration mismatch");
     assert(vesting_schedule_note.total_amount == amount, "Note: amount mismatch");
+    assert(vesting_schedule_note.stop_timestamp == 0, "Note: stop timestamp mismatch");
 
     let released_amount_note =
         utils::get_released_amount_note(*env, logic_contract_address, escrow_contract_address);
     assert(released_amount_note.escrow == escrow_contract_address, "Note: escrow address mismatch");
     assert(released_amount_note.released_amount == 0, "Note: released amount mismatch");
+    assert(released_amount_note.claim_completed == false, "Note: claim completed mismatch");
 }

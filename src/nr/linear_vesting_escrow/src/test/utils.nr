@@ -61,7 +61,7 @@ pub unconstrained fn deploy_and_create_escrow(
     with_account_contracts: bool,
     amount: u128,
     duration: u64,
-) -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
+    ) -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
     let (env, owner, recipient, reclaimer) = setup(with_account_contracts);
 
     let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1);
@@ -99,7 +99,10 @@ pub unconstrained fn deploy_and_create_escrow(
         ),
     );
 
-    (env, owner, recipient, logic_contract_address, escrow_contract_address, token_contract_address)
+    (
+        env, owner, recipient, reclaimer, logic_contract_address, escrow_contract_address,
+        token_contract_address,
+    )
 }
 
 pub unconstrained fn get_vesting_schedule_note(
