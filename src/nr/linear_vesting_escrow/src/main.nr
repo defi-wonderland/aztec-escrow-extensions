@@ -419,6 +419,7 @@ contract LinearVestingEscrowLogic {
             .set_limit(1);
 
         let notes = storage.escrows.get_notes(options);
+        assert(notes.len() == 1, "vesting schedule note not found");
 
         // We revert if there is no note in the filter so we can probably unwrap directly
         let unwrapped_note = notes.get_unchecked(0);
@@ -439,6 +440,7 @@ contract LinearVestingEscrowLogic {
             .set_limit(1);
 
         let notes = storage.released_notes.pop_notes(options);
+        assert(notes.len() == 1, "released amount note not found");
 
         // We revert if there is no note in the filter so we can probably unwrap directly
         notes.get_unchecked(0)
@@ -458,6 +460,7 @@ contract LinearVestingEscrowLogic {
             .set_limit(1);
 
         let notes = storage.escrows.pop_notes(options);
+        assert(notes.len() == 1, "vesting schedule note not found");
 
         // We revert if there is no note in the filter so we can probably unwrap directly
         notes.get_unchecked(0)
