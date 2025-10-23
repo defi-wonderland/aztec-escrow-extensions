@@ -45,6 +45,10 @@ export const setupPXE = async (suffix?: string) => {
     dataDirectory: storeDir,
     dataStoreMapSizeKB: 1e6,
   });
+  await store.transaction(async () => {
+    // Clear PXE store to avoid leftover state between runs
+    await store.clear();
+  });
   const pxe = await createPXEService(node, fullConfig, { store });
   await waitForPXE(pxe);
   return { pxe, store };

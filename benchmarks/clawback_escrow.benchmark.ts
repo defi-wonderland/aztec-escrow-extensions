@@ -7,6 +7,7 @@ import {
 } from "@aztec/aztec.js";
 import { getInitialTestAccountsManagers } from "@aztec/accounts/testing";
 import { deriveKeys } from "@aztec/stdlib/keys";
+import { type AztecLmdbStore } from "@aztec/kv-store/lmdb";
 
 // Import the new Benchmark base class and context
 import { Benchmark, BenchmarkContext } from "@defi-wonderland/aztec-benchmark";
@@ -27,6 +28,9 @@ import {
 } from "../src/artifacts/Escrow.js";
 import { TokenContract } from "../src/artifacts/Token.js";
 import { NFTContract } from "../src/artifacts/NFT.js";
+
+// Declare store globally to delete it in the teardown method
+let store: AztecLmdbStore;
 
 // Escrow key counter starting at 2, incremented on each deployment
 let escrowKeyCounter = 2n;
@@ -83,7 +87,8 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
    */
 
   async setup(): Promise<ClawbackEscrowBenchmarkContext> {
-    const { pxe, store } = await setupPXE("bench-clawback");
+    const { pxe, store: pxeStore } = await setupPXE("bench-clawback");
+    store = pxeStore;
     const managers = await getInitialTestAccountsManagers(pxe);
     const accounts = await Promise.all(managers.map((acc) => acc.register()));
     const [deployer] = accounts;
@@ -112,20 +117,12 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
     )) as TokenContract;
     await tokenContract
       .withWallet(deployer)
-      .methods.mint_to_private(
-        escrows[0].contract.address,
-        escrows[0].contract.address,
-        AMOUNT,
-      )
+      .methods.mint_to_private(escrows[0].contract.address, AMOUNT)
       .send({ from: deployer.getAddress() })
       .wait();
     await tokenContract
       .withWallet(deployer)
-      .methods.mint_to_private(
-        escrows[1].contract.address,
-        escrows[1].contract.address,
-        AMOUNT,
-      )
+      .methods.mint_to_private(escrows[1].contract.address, AMOUNT)
       .send({ from: deployer.getAddress() })
       .wait();
 
@@ -232,5 +229,13 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
     ];
 
     return methods.filter(Boolean);
+  }
+
+  /**
+   * Cleans up the benchmark environment for the LinearVestingEscrowContract.
+   * Deletes the store.
+   */
+  async teardown(_context: ClawbackEscrowBenchmarkContext): Promise<void> {
+    await store.delete();
   }
 }

@@ -151,9 +151,10 @@ function runCodegen(repoDir: string): boolean {
 /**
  * Copy files without overwriting existing ones
  */
-function copyFilesWithoutOverwrite(
+function copyFiles(
   sourceDir: string,
   targetDir: string,
+  forceOverwrite = false,
 ): number {
   if (!fs.existsSync(sourceDir)) {
     console.log(`⚠️ Source directory ${sourceDir} does not exist`);
@@ -169,14 +170,14 @@ function copyFilesWithoutOverwrite(
     const srcPath = path.join(sourceDir, file);
     const dstPath = path.join(targetDir, file);
 
-    if (fs.existsSync(dstPath)) {
+    if (fs.existsSync(dstPath) && !forceOverwrite) {
       console.log(`⏭️ Skipping ${file} (already exists)`);
       skippedCount++;
       continue;
     }
-
+    // Overwrite or copy new
     if (fs.statSync(srcPath).isDirectory()) {
-      cp(srcPath, dstPath);
+      fs.cpSync(srcPath, dstPath, { recursive: true, force: true });
     } else {
       fs.copyFileSync(srcPath, dstPath);
     }
@@ -190,8 +191,9 @@ function copyFilesWithoutOverwrite(
 }
 
 async function main() {
-  // Get commit/tag from command line argument
+  // Args: <commit-or-tag> [--force]
   const commitOrTag = process.argv[2];
+  const forceOverwrite = process.argv.includes("--force");
 
   if (!commitOrTag) {
     console.error("❌ Please provide a commit or tag as the first argument");
@@ -253,17 +255,19 @@ async function main() {
       // 5) Copy artifacts to ARTIFACTS_OUTPUT_DIR (without overwriting)
       const targetArtifactsDir = path.join(process.cwd(), ARTIFACTS_OUTPUT_DIR);
       console.log(`\n📁 Copying artifacts to: ${targetArtifactsDir}`);
-      copyFilesWithoutOverwrite(
+      copyFiles(
         path.join(repoDir, ARTIFACTS_OUTPUT_DIR),
         targetArtifactsDir,
+        forceOverwrite,
       );
 
       // 6) Copy target to TARGET_OUTPUT_DIR (without overwriting)
       const targetTargetDir = path.join(process.cwd(), TARGET_OUTPUT_DIR);
       console.log(`\n📁 Copying target to: ${targetTargetDir}`);
-      copyFilesWithoutOverwrite(
+      copyFiles(
         path.join(repoDir, TARGET_OUTPUT_DIR),
         targetTargetDir,
+        forceOverwrite,
       );
 
       console.log(

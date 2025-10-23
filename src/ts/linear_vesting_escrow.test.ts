@@ -208,7 +208,6 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
   describe("Deployment", () => {
     beforeAll(async () => {
-      await store.delete();
       await setup();
     });
 
@@ -282,7 +281,6 @@ describe("Linear Vesting Escrow - Single PXE", () => {
     // Split in 2 parts due to memory limit of the store
     describe("part 1", () => {
       beforeAll(async () => {
-        await store.delete();
         await setup();
       });
 
@@ -429,7 +427,6 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
     describe("part 2", () => {
       beforeAll(async () => {
-        await store.delete();
         await setup();
       });
 
@@ -541,7 +538,6 @@ describe("Linear Vesting Escrow - Single PXE", () => {
     // Split in 3 parts due to memory limit of the store
     describe("part 1", () => {
       beforeAll(async () => {
-        await store.delete();
         await setup();
       });
 
@@ -910,7 +906,6 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
     describe("part 2", () => {
       beforeAll(async () => {
-        await store.delete();
         await setup();
       });
 
@@ -1126,7 +1121,6 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
     describe("part 3", () => {
       beforeAll(async () => {
-        await store.delete();
         await setup();
       });
 
@@ -1382,7 +1376,6 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
   describe("stop_vesting", () => {
     beforeAll(async () => {
-      await store.delete();
       await setup();
     });
 
@@ -1519,7 +1512,6 @@ describe("Linear Vesting Escrow - Single PXE", () => {
   describe("clawback", () => {
     describe("part 1", () => {
       beforeAll(async () => {
-        await store.delete();
         await setup();
       });
 
@@ -1818,7 +1810,6 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
     describe("part 2", () => {
       beforeAll(async () => {
-        await store.delete();
         await setup();
       });
 
@@ -2119,7 +2110,6 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
   describe("releasable and vested amount", () => {
     beforeAll(async () => {
-      await store.delete();
       await setup();
     });
 
