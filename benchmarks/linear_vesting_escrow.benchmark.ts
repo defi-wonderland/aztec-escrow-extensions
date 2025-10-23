@@ -7,6 +7,7 @@ import {
 } from "@aztec/aztec.js";
 import { getInitialTestAccountsManagers } from "@aztec/accounts/testing";
 import { deriveKeys } from "@aztec/stdlib/keys";
+import { type AztecLmdbStore } from "@aztec/kv-store/lmdb";
 
 // Import the new Benchmark base class and context
 import { Benchmark, BenchmarkContext } from "@defi-wonderland/aztec-benchmark";
@@ -27,6 +28,9 @@ import {
   EscrowContractArtifact,
   EscrowContract,
 } from "../src/artifacts/Escrow.js";
+
+// Declare store globally to delete it in the teardown method
+let store: AztecLmdbStore;
 
 // Escrow key counter starting at 1000 (no overlap with clawback escrow key counter), incremented on each deployment
 let escrowKeyCounter = 1000n;
@@ -91,7 +95,8 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
    */
 
   async setup(): Promise<LinearVestingEscrowBenchmarkContext> {
-    const { pxe, store } = await setupPXE("bench-linear-vesting");
+    const { pxe, store: pxeStore } = await setupPXE("bench-linear-vesting");
+    store = pxeStore;
     const managers = await getInitialTestAccountsManagers(pxe);
     const accounts = await Promise.all(managers.map((acc) => acc.register()));
     const [deployer] = accounts;
@@ -361,5 +366,13 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     ];
 
     return methods.filter(Boolean);
+  }
+
+  /**
+   * Cleans up the benchmark environment for the LinearVestingEscrowContract.
+   * Deletes the store.
+   */
+  async teardown(_context: LinearVestingEscrowBenchmarkContext): Promise<void> {
+    await store.delete();
   }
 }
