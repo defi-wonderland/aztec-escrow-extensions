@@ -117,20 +117,12 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
     )) as TokenContract;
     await tokenContract
       .withWallet(deployer)
-      .methods.mint_to_private(
-        escrows[0].contract.address,
-        escrows[0].contract.address,
-        AMOUNT,
-      )
+      .methods.mint_to_private(escrows[0].contract.address, AMOUNT)
       .send({ from: deployer.getAddress() })
       .wait();
     await tokenContract
       .withWallet(deployer)
-      .methods.mint_to_private(
-        escrows[1].contract.address,
-        escrows[1].contract.address,
-        AMOUNT,
-      )
+      .methods.mint_to_private(escrows[1].contract.address, AMOUNT)
       .send({ from: deployer.getAddress() })
       .wait();
 

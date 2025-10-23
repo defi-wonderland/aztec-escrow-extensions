@@ -132,29 +132,17 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     )) as TokenContract;
     await tokenContract
       .withWallet(deployer)
-      .methods.mint_to_private(
-        escrowContract_1.address,
-        escrowContract_1.address,
-        AMOUNT,
-      )
+      .methods.mint_to_private(escrowContract_1.address, AMOUNT)
       .send({ from: deployer.getAddress() })
       .wait();
     await tokenContract
       .withWallet(deployer)
-      .methods.mint_to_private(
-        escrowContract_2.address,
-        escrowContract_2.address,
-        AMOUNT,
-      )
+      .methods.mint_to_private(escrowContract_2.address, AMOUNT)
       .send({ from: deployer.getAddress() })
       .wait();
     await tokenContract
       .withWallet(deployer)
-      .methods.mint_to_private(
-        escrowContract_3.address,
-        escrowContract_3.address,
-        AMOUNT,
-      )
+      .methods.mint_to_private(escrowContract_3.address, AMOUNT)
       .send({ from: deployer.getAddress() })
       .wait();
 
