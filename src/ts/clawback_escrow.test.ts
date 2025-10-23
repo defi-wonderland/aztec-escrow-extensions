@@ -145,7 +145,6 @@ describe("Clawback Escrow - Single PXE", () => {
       let setup_tx: FieldsOf<TxReceipt>;
 
       beforeAll(async () => {
-        await store.delete();
         await setup();
       });
 
@@ -311,7 +310,6 @@ describe("Clawback Escrow - Single PXE", () => {
 
     describe("incorrect escrow setup", () => {
       beforeAll(async () => {
-        await store.delete();
         await setup();
       });
 
@@ -362,7 +360,6 @@ describe("Clawback Escrow - Single PXE", () => {
 
   describe("claim", () => {
     beforeAll(async () => {
-      await store.delete();
       await setup();
     });
 
@@ -543,7 +540,6 @@ describe("Clawback Escrow - Single PXE", () => {
     const tokenId = 1n;
 
     beforeAll(async () => {
-      await store.delete();
       await setup();
     });
 
@@ -640,7 +636,6 @@ describe("Clawback Escrow - Single PXE", () => {
 
   describe("clawback", () => {
     beforeAll(async () => {
-      await store.delete();
       await setup();
     });
 
@@ -826,7 +821,6 @@ describe("Clawback Escrow - Single PXE", () => {
     const tokenId = 1n;
 
     beforeAll(async () => {
-      await store.delete();
       await setup();
     });
 
