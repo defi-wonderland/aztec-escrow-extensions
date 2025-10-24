@@ -1,6 +1,6 @@
 # Linear Vesting Escrow Logic Contract
 
-The `LinearVestingEscrowLogic` contract supports privacy-preserving linear vesting schedules of escrowed tokens compliant with the [AIP-20 Aztec Token Standard](https://forum.aztec.network/t/request-for-comments-aip-20-aztec-token-standard/7737). The total amount to be vested must be defined at each escrow's setup, but the escrow itself can be funded at any point. It is the responsibility of the user to fund the escrow with the desired amount of tokens. Tokens sent to the escrow that exceed the amount predefined at setup will be lost.
+The `LinearVestingEscrowLogic` contract supports privacy-preserving linear vesting schedules of escrowed tokens compliant with the [AIP-20 Aztec Token Standard](https://forum.aztec.network/t/request-for-comments-aip-20-aztec-token-standard/7737). The total amount to be vested must be defined at each escrow's setup, but the escrow itself can be funded at any point. It is the responsibility of the user to fund the escrow with the desired amount of tokens. Tokens sent to the escrow beyond the predefined amount can later be recovered by stopping the vesting and executing a clawback.
 
 The `LinearVestingEscrowLogic` address can be publicly known and multiple independent linear vesting escrows can be setup with it without leaking any information.
 
@@ -43,13 +43,11 @@ stateDiagram-v2
     Finished --> [*]
 ```
 
-Once stopped, the recipient can finish claiming or the recipient can clawback. An intended race condition arises at this point as both of the users hold the notes required for the calls.
+Once stopped, the recipient can finish claiming or the reclaimer can clawback. A race condition exists because the recipient must be able to claim even after the vesting has been stopped, without relying on the reclaimer to call clawback, which may be delayed indefinitely or never occur.
 
 Claiming after a stopped vesting is the _last claim possible_, only executable by the recipient, which finalizes the claims by setting `claim_complete` to `true`.
 
 The reclaimer can clawback the escrow after the last claim or before. By doing so, it first withdraws any releasable amount remaining to the recipient, and then receives the amount specified in the call.
-
-The design needs to allow the recipient to claim when the vesting stopped, he cannot depend on the good will of the reclaimer calling clawback. The incentive of calling clawback for the reclaimer is if there is any excess amount to be "clawbacked".
 
 ## Storage Fields
 - `escrow_class_id: Field`: Contract Class ID of the escrow contract that the logic contract supports.
