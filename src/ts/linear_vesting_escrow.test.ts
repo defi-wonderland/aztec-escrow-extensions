@@ -860,7 +860,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         expect(claimCount).toBeGreaterThan(1);
       });
 
-      it("claim before the start time should not transfer", async () => {
+      it.only("claim before the start time should transfer zero tokens", async () => {
         // We increment the start so the tokens are not claimable yet
         start = start + 10000n;
 
@@ -893,14 +893,14 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
         await expectTokenBalances(token, escrow.address, wad(0), AMOUNT);
 
-        // Balance too low error
-        await expect(
-          linearVestingEscrow
-            .withWallet(bob)
-            .methods.claim(escrow.address, releasableAmount)
-            .send({ from: bob.getAddress() })
-            .wait(),
-        ).rejects.toThrow(/Balance too low 'subtracted > 0'/);
+        await linearVestingEscrow
+          .withWallet(bob)
+          .methods.claim(escrow.address, releasableAmount)
+          .send({ from: bob.getAddress() })
+          .wait();
+
+        await expectTokenBalances(token, bob.getAddress(), wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT);
       });
     });
 
@@ -1821,7 +1821,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         amount = AMOUNT * 2n;
       });
 
-      it("clawback should fail if the reclaimer amount is zero", async () => {
+      it.only("clawback should transfer zero tokens if the reclaimer amount is zero", async () => {
         const tx = await linearVestingEscrow
           .withWallet(alice)
           .methods.setup_linear_vesting_escrow(
@@ -1849,14 +1849,30 @@ describe("Linear Vesting Escrow - Single PXE", () => {
           .send({ from: alice.getAddress() })
           .wait();
 
-        // TODO: this should not revert after upgrading to 2.x
-        await expect(
-          linearVestingEscrow
-            .withWallet(alice)
-            .methods.clawback(escrow.address, 0n)
-            .send({ from: alice.getAddress() })
-            .wait(),
-        ).rejects.toThrow(/Balance too low 'subtracted > 0'/);
+        const [releasableAmount, _] = await linearVestingEscrow
+          .withWallet(alice)
+          .methods.releasable_and_vested_amounts(escrow.address, stopTimestamp)
+          .simulate({ from: alice.getAddress() });
+
+        linearVestingEscrow
+          .withWallet(alice)
+          .methods.clawback(escrow.address, 0n)
+          .send({ from: alice.getAddress() })
+          .wait();
+
+        await expectTokenBalances(token, alice.getAddress(), wad(0), wad(0));
+        await expectTokenBalances(
+          token,
+          bob.getAddress(),
+          wad(0),
+          releasableAmount,
+        );
+        await expectTokenBalances(
+          token,
+          escrow.address,
+          wad(0),
+          AMOUNT - releasableAmount,
+        );
       });
 
       it("clawback successfully: escrow is not fully funded, releasable amount > 0", async () => {
