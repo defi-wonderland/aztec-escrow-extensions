@@ -29,9 +29,6 @@ import {
   EscrowContract,
 } from "../src/artifacts/Escrow.js";
 
-// Declare store globally to delete it in the teardown method
-let store: AztecLmdbStore;
-
 // Escrow key counter starting at 1000 (no overlap with clawback escrow key counter), incremented on each deployment
 let escrowKeyCounter = 1000n;
 const AZTEC_SLOT_TIME = 36n;
@@ -68,6 +65,7 @@ async function deployEscrow(
 // Extend the BenchmarkContext from the new package
 interface LinearVestingEscrowBenchmarkContext extends BenchmarkContext {
   pxe: PXE;
+  store: AztecLmdbStore;
   deployer: AccountWallet;
   accounts: AccountWallet[];
   linearVestingEscrowContract: LinearVestingEscrowLogicContract;
@@ -95,8 +93,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
    */
 
   async setup(): Promise<LinearVestingEscrowBenchmarkContext> {
-    const { pxe, store: pxeStore } = await setupPXE("bench-linear-vesting");
-    store = pxeStore;
+    const { pxe, store } = await setupPXE("bench-linear-vesting");
     const managers = await getInitialTestAccountsManagers(pxe);
     const accounts = await Promise.all(managers.map((acc) => acc.register()));
     const [deployer] = accounts;
@@ -252,6 +249,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
 
     return {
       pxe,
+      store,
       deployer,
       accounts,
       linearVestingEscrowContract,
@@ -360,7 +358,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
    * Cleans up the benchmark environment for the LinearVestingEscrowContract.
    * Deletes the store.
    */
-  async teardown(_context: LinearVestingEscrowBenchmarkContext): Promise<void> {
-    await store.delete();
+  async teardown(context: LinearVestingEscrowBenchmarkContext): Promise<void> {
+    await context.store.delete();
   }
 }

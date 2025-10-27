@@ -29,9 +29,6 @@ import {
 import { TokenContract } from "../src/artifacts/Token.js";
 import { NFTContract } from "../src/artifacts/NFT.js";
 
-// Declare store globally to delete it in the teardown method
-let store: AztecLmdbStore;
-
 // Escrow key counter starting at 2, incremented on each deployment
 let escrowKeyCounter = 2n;
 
@@ -67,6 +64,7 @@ async function deployEscrow(
 // Extend the BenchmarkContext from the new package
 interface ClawbackEscrowBenchmarkContext extends BenchmarkContext {
   pxe: PXE;
+  store: AztecLmdbStore;
   deployer: AccountWallet;
   accounts: AccountWallet[];
   clawbackEscrowContract: ClawbackEscrowLogicContract;
@@ -87,8 +85,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
    */
 
   async setup(): Promise<ClawbackEscrowBenchmarkContext> {
-    const { pxe, store: pxeStore } = await setupPXE("bench-clawback");
-    store = pxeStore;
+    const { pxe, store } = await setupPXE("bench-clawback");
     const managers = await getInitialTestAccountsManagers(pxe);
     const accounts = await Promise.all(managers.map((acc) => acc.register()));
     const [deployer] = accounts;
@@ -159,6 +156,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
 
     return {
       pxe,
+      store,
       deployer,
       accounts,
       clawbackEscrowContract,
@@ -235,7 +233,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
    * Cleans up the benchmark environment for the LinearVestingEscrowContract.
    * Deletes the store.
    */
-  async teardown(_context: ClawbackEscrowBenchmarkContext): Promise<void> {
-    await store.delete();
+  async teardown(context: ClawbackEscrowBenchmarkContext): Promise<void> {
+    await context.store.delete();
   }
 }
