@@ -369,7 +369,7 @@ describe("Clawback Escrow - Single PXE", () => {
 
       await token
         .withWallet(alice)
-        .methods.mint_to_private(escrow.address, escrow.address, AMOUNT)
+        .methods.mint_to_private(escrow.address, AMOUNT)
         .send({ from: alice.getAddress() })
         .wait();
     });
@@ -645,7 +645,7 @@ describe("Clawback Escrow - Single PXE", () => {
 
       await token
         .withWallet(alice)
-        .methods.mint_to_private(escrow.address, escrow.address, AMOUNT)
+        .methods.mint_to_private(escrow.address, AMOUNT)
         .send({ from: alice.getAddress() })
         .wait();
     });

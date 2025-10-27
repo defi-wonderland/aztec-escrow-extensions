@@ -192,7 +192,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
     await token
       .withWallet(alice)
-      .methods.mint_to_private(escrow.address, escrow.address, AMOUNT)
+      .methods.mint_to_private(escrow.address, AMOUNT)
       .send({ from: alice.getAddress() })
       .wait();
 
@@ -709,7 +709,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
         await newToken
           .withWallet(alice)
-          .methods.mint_to_private(escrow.address, escrow.address, U128_MAX)
+          .methods.mint_to_private(escrow.address, U128_MAX)
           .send({ from: alice.getAddress() })
           .wait();
 
