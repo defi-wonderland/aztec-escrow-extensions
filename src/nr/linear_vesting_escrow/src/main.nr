@@ -253,17 +253,14 @@ pub contract LinearVestingEscrowLogic {
             vesting_schedule_note.stop_timestamp,
         );
 
-        // releasable_amount can be 0 if the recipient already claimed the total amount
-        if releasable_amount > 0 {
-            // Withdraw the tokens for recipient
-            _withdraw(
-                &mut context,
-                escrow,
-                vesting_schedule_note.recipient,
-                vesting_schedule_note.token,
-                releasable_amount,
-            );
-        }
+        // Withdraw the tokens for recipient
+        _withdraw(
+            &mut context,
+            escrow,
+            vesting_schedule_note.recipient,
+            vesting_schedule_note.token,
+            releasable_amount,
+        );
 
         // Withdraw the tokens for reclaimer
         _withdraw(
