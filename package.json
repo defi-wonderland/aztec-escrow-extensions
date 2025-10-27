@@ -23,10 +23,10 @@
     "*.ts": "prettier --write -u"
   },
   "dependencies": {
-    "@aztec/accounts": "2.0.3",
-    "@aztec/aztec.js": "2.0.3",
-    "@aztec/noir-contracts.js": "2.0.3",
-    "@aztec/pxe": "2.0.3",
+    "@aztec/accounts": "2.1.0-rc.6",
+    "@aztec/aztec.js": "2.1.0-rc.6",
+    "@aztec/noir-contracts.js": "2.1.0-rc.6",
+    "@aztec/pxe": "2.1.0-rc.6",
     "@defi-wonderland/aztec-benchmark": "2.0.0"
   },
   "devDependencies": {
@@ -41,7 +41,7 @@
     "vitest": "3.2.4"
   },
   "config": {
-    "aztecVersion": "2.0.3"
+    "aztecVersion": "2.1.0-rc.6"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
   "engines": {
