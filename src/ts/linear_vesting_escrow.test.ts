@@ -860,7 +860,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         expect(claimCount).toBeGreaterThan(1);
       });
 
-      it.only("claim before the start time should transfer zero tokens", async () => {
+      it("claim before the start time should transfer zero tokens", async () => {
         // We increment the start so the tokens are not claimable yet
         start = start + 10000n;
 
@@ -1821,7 +1821,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
         amount = AMOUNT * 2n;
       });
 
-      it.only("clawback should transfer zero tokens if the reclaimer amount is zero", async () => {
+      it("clawback should transfer zero tokens if the reclaimer amount is zero", async () => {
         const tx = await linearVestingEscrow
           .withWallet(alice)
           .methods.setup_linear_vesting_escrow(
