@@ -7,6 +7,7 @@ import {
 } from "@aztec/aztec.js";
 import { getInitialTestAccountsManagers } from "@aztec/accounts/testing";
 import { deriveKeys } from "@aztec/stdlib/keys";
+import { type AztecLmdbStore } from "@aztec/kv-store/lmdb";
 
 // Import the new Benchmark base class and context
 import { Benchmark, BenchmarkContext } from "@defi-wonderland/aztec-benchmark";
@@ -50,12 +51,12 @@ async function deployEscrow(
   const partialAddressEscrow = await escrowContract.partialAddress;
   await pxe.registerAccount(escrowSk, partialAddressEscrow);
 
-  const secretKeys = [
-    grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
-    grumpkinScalarToFr(escrowKeys.masterIncomingViewingSecretKey),
-    grumpkinScalarToFr(escrowKeys.masterOutgoingViewingSecretKey),
-    grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
-  ];
+  const secretKeys = {
+    nsk_m: grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
+    ivsk_m: grumpkinScalarToFr(escrowKeys.masterIncomingViewingSecretKey),
+    ovsk_m: grumpkinScalarToFr(escrowKeys.masterOutgoingViewingSecretKey),
+    tsk_m: grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
+  };
 
   return { escrowContract, secretKeys };
 }
@@ -63,10 +64,14 @@ async function deployEscrow(
 // Extend the BenchmarkContext from the new package
 interface ClawbackEscrowBenchmarkContext extends BenchmarkContext {
   pxe: PXE;
+  store: AztecLmdbStore;
   deployer: AccountWallet;
   accounts: AccountWallet[];
   clawbackEscrowContract: ClawbackEscrowLogicContract;
-  escrows: { contract: EscrowContract; secretKeys: Fr[] }[];
+  escrows: {
+    contract: EscrowContract;
+    secretKeys: { nsk_m: Fr; ivsk_m: Fr; ovsk_m: Fr; tsk_m: Fr };
+  }[];
   tokenContract: TokenContract;
   nftContract: NFTContract;
   timestamp: bigint;
@@ -106,41 +111,29 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
     // Deploy a token contract
     const tokenContract = (await deployTokenWithMinter(
       deployer,
-      {},
     )) as TokenContract;
     await tokenContract
       .withWallet(deployer)
-      .methods.mint_to_private(
-        escrows[0].contract.address,
-        escrows[0].contract.address,
-        AMOUNT,
-      )
-      .send()
+      .methods.mint_to_private(escrows[0].contract.address, AMOUNT)
+      .send({ from: deployer.getAddress() })
       .wait();
     await tokenContract
       .withWallet(deployer)
-      .methods.mint_to_private(
-        escrows[1].contract.address,
-        escrows[1].contract.address,
-        AMOUNT,
-      )
-      .send()
+      .methods.mint_to_private(escrows[1].contract.address, AMOUNT)
+      .send({ from: deployer.getAddress() })
       .wait();
 
     // Deploy a nft contract
-    const nftContract = (await deployNFTWithMinter(
-      deployer,
-      {},
-    )) as NFTContract;
+    const nftContract = (await deployNFTWithMinter(deployer)) as NFTContract;
     await nftContract
       .withWallet(deployer)
       .methods.mint_to_private(escrows[0].contract.address, 1) // token ID: 1
-      .send()
+      .send({ from: deployer.getAddress() })
       .wait();
     await nftContract
       .withWallet(deployer)
       .methods.mint_to_private(escrows[1].contract.address, 2) // token ID: 2
-      .send()
+      .send({ from: deployer.getAddress() })
       .wait();
 
     const blockNumber = await pxe.getBlockNumber();
@@ -156,16 +149,14 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
         bob.getAddress(),
         alice.getAddress(),
         pastDeadline,
-        escrows[0].secretKeys[0],
-        escrows[0].secretKeys[1],
-        escrows[0].secretKeys[2],
-        escrows[0].secretKeys[3],
+        escrows[0].secretKeys,
       )
-      .send()
+      .send({ from: deployer.getAddress() })
       .wait();
 
     return {
       pxe,
+      store,
       deployer,
       accounts,
       clawbackEscrowContract,
@@ -203,10 +194,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
           bob.getAddress(),
           alice.getAddress(),
           futureDeadline,
-          escrows[1].secretKeys[0],
-          escrows[1].secretKeys[1],
-          escrows[1].secretKeys[2],
-          escrows[1].secretKeys[3],
+          escrows[1].secretKeys,
         ),
       // Full token claim escrow
       clawbackEscrowContract
@@ -239,5 +227,13 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
     ];
 
     return methods.filter(Boolean);
+  }
+
+  /**
+   * Cleans up the benchmark environment for the LinearVestingEscrowContract.
+   * Deletes the store.
+   */
+  async teardown(context: ClawbackEscrowBenchmarkContext): Promise<void> {
+    await context.store.delete();
   }
 }

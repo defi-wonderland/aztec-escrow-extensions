@@ -81,7 +81,7 @@ jobs:
 
       - name: Compile contracts
         if: steps.cache-noir.outputs.cache-hit != 'true'
-        run: script -e -c "${AZTEC_NARGO:-aztec-nargo} compile"
+        run: script -e -c "${AZTEC_NARGO:-aztec-nargo} compile && aztec-postprocess-contract"
 
       - name: Generate artifacts
         if: steps.cache-noir.outputs.cache-hit != 'true'

@@ -7,6 +7,7 @@ import {
 } from "@aztec/aztec.js";
 import { getInitialTestAccountsManagers } from "@aztec/accounts/testing";
 import { deriveKeys } from "@aztec/stdlib/keys";
+import { type AztecLmdbStore } from "@aztec/kv-store/lmdb";
 
 // Import the new Benchmark base class and context
 import { Benchmark, BenchmarkContext } from "@defi-wonderland/aztec-benchmark";
@@ -51,12 +52,12 @@ async function deployEscrow(
   const partialAddressEscrow = await escrowContract.partialAddress;
   await pxe.registerAccount(escrowSk, partialAddressEscrow);
 
-  const secretKeys = [
-    grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
-    grumpkinScalarToFr(escrowKeys.masterIncomingViewingSecretKey),
-    grumpkinScalarToFr(escrowKeys.masterOutgoingViewingSecretKey),
-    grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
-  ];
+  const secretKeys = {
+    nsk_m: grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
+    ivsk_m: grumpkinScalarToFr(escrowKeys.masterIncomingViewingSecretKey),
+    ovsk_m: grumpkinScalarToFr(escrowKeys.masterOutgoingViewingSecretKey),
+    tsk_m: grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
+  };
 
   return { escrowContract, secretKeys };
 }
@@ -64,10 +65,14 @@ async function deployEscrow(
 // Extend the BenchmarkContext from the new package
 interface LinearVestingEscrowBenchmarkContext extends BenchmarkContext {
   pxe: PXE;
+  store: AztecLmdbStore;
   deployer: AccountWallet;
   accounts: AccountWallet[];
   linearVestingEscrowContract: LinearVestingEscrowLogicContract;
-  escrows: { contract: EscrowContract; secretKeys: Fr[] }[];
+  escrows: {
+    contract: EscrowContract;
+    secretKeys: { nsk_m: Fr; ivsk_m: Fr; ovsk_m: Fr; tsk_m: Fr };
+  }[];
   tokenContract: TokenContract;
   additionalData: {
     start_1: bigint;
@@ -121,34 +126,21 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     // Deploy a token contract and fund the escrows
     const tokenContract = (await deployTokenWithMinter(
       deployer,
-      {},
     )) as TokenContract;
     await tokenContract
       .withWallet(deployer)
-      .methods.mint_to_private(
-        escrowContract_1.address,
-        escrowContract_1.address,
-        AMOUNT,
-      )
-      .send()
+      .methods.mint_to_private(escrowContract_1.address, AMOUNT)
+      .send({ from: deployer.getAddress() })
       .wait();
     await tokenContract
       .withWallet(deployer)
-      .methods.mint_to_private(
-        escrowContract_2.address,
-        escrowContract_2.address,
-        AMOUNT,
-      )
-      .send()
+      .methods.mint_to_private(escrowContract_2.address, AMOUNT)
+      .send({ from: deployer.getAddress() })
       .wait();
     await tokenContract
       .withWallet(deployer)
-      .methods.mint_to_private(
-        escrowContract_3.address,
-        escrowContract_3.address,
-        AMOUNT,
-      )
-      .send()
+      .methods.mint_to_private(escrowContract_3.address, AMOUNT)
+      .send({ from: deployer.getAddress() })
       .wait();
 
     const currentBlockNumber = await pxe.getBlockNumber();
@@ -175,12 +167,9 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         start_2,
         duration_2,
         AMOUNT,
-        escrows[1].secretKeys[0],
-        escrows[1].secretKeys[1],
-        escrows[1].secretKeys[2],
-        escrows[1].secretKeys[3],
+        escrows[1].secretKeys,
       )
-      .send()
+      .send({ from: alice.getAddress() })
       .wait();
 
     // Get the releasable amount of the second escrow
@@ -190,7 +179,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         escrows[1].contract.address,
         stopTimestamp_2,
       )
-      .simulate();
+      .simulate({ from: alice.getAddress() });
 
     const clawbackAmount_2 = AMOUNT - vestedAmount_2;
 
@@ -212,12 +201,9 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         start_3,
         duration_3,
         AMOUNT,
-        escrows[2].secretKeys[0],
-        escrows[2].secretKeys[1],
-        escrows[2].secretKeys[2],
-        escrows[2].secretKeys[3],
+        escrows[2].secretKeys,
       )
-      .send()
+      .send({ from: alice.getAddress() })
       .wait();
 
     // Get the releasable amount of the third escrow
@@ -228,19 +214,19 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
           escrows[2].contract.address,
           stopTimestamp_3,
         )
-        .simulate();
+        .simulate({ from: alice.getAddress() });
     const clawbackAmount_3 = AMOUNT - vestedAmount_3;
 
     // Sync to get linear vesting escrow note
     await linearVestingEscrowContract
       .withWallet(alice)
       .methods.sync_private_state()
-      .simulate({});
+      .simulate({ from: alice.getAddress() });
 
     await linearVestingEscrowContract
       .withWallet(alice)
       .methods.stop_vesting(escrows[2].contract.address, stopTimestamp_3)
-      .send()
+      .send({ from: alice.getAddress() })
       .wait();
 
     // Get the start timestamp of the first escrow
@@ -263,6 +249,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
 
     return {
       pxe,
+      store,
       deployer,
       accounts,
       linearVestingEscrowContract,
@@ -305,10 +292,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
             additionalData.start_1,
             additionalData.duration_1,
             AMOUNT,
-            escrows[0].secretKeys[0],
-            escrows[0].secretKeys[1],
-            escrows[0].secretKeys[2],
-            escrows[0].secretKeys[3],
+            escrows[0].secretKeys,
           ),
       },
       // Partial claim (emits released amount note)
@@ -368,5 +352,13 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     ];
 
     return methods.filter(Boolean);
+  }
+
+  /**
+   * Cleans up the benchmark environment for the LinearVestingEscrowContract.
+   * Deletes the store.
+   */
+  async teardown(context: LinearVestingEscrowBenchmarkContext): Promise<void> {
+    await context.store.delete();
   }
 }
