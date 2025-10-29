@@ -67,6 +67,7 @@ async function deployEscrow(
 // Extend the BenchmarkContext from the new package
 interface ClawbackEscrowBenchmarkContext extends BenchmarkContext {
   pxe: PXE;
+  store: AztecLmdbStore;
   deployer: AccountWallet;
   accounts: AccountWallet[];
   clawbackEscrowContract: ClawbackEscrowLogicContract;
@@ -159,6 +160,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
 
     return {
       pxe,
+      store,
       deployer,
       accounts,
       clawbackEscrowContract,
@@ -235,7 +237,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
    * Cleans up the benchmark environment for the LinearVestingEscrowContract.
    * Deletes the store.
    */
-  async teardown(_context: ClawbackEscrowBenchmarkContext): Promise<void> {
-    await store.delete();
+  async teardown(context: ClawbackEscrowBenchmarkContext): Promise<void> {
+    await context.store.delete();
   }
 }

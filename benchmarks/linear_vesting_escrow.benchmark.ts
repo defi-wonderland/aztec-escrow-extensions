@@ -68,6 +68,7 @@ async function deployEscrow(
 // Extend the BenchmarkContext from the new package
 interface LinearVestingEscrowBenchmarkContext extends BenchmarkContext {
   pxe: PXE;
+  store: AztecLmdbStore;
   deployer: AccountWallet;
   accounts: AccountWallet[];
   linearVestingEscrowContract: LinearVestingEscrowLogicContract;
@@ -252,6 +253,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
 
     return {
       pxe,
+      store,
       deployer,
       accounts,
       linearVestingEscrowContract,
@@ -360,7 +362,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
    * Cleans up the benchmark environment for the LinearVestingEscrowContract.
    * Deletes the store.
    */
-  async teardown(_context: LinearVestingEscrowBenchmarkContext): Promise<void> {
-    await store.delete();
+  async teardown(context: LinearVestingEscrowBenchmarkContext): Promise<void> {
+    await context.store.delete();
   }
 }
