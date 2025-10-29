@@ -135,7 +135,7 @@ jobs:
         run: yarn codegen
 
       - name: Build aztec-standards (BASE)
-        run: yarn build-aztec-standards
+        run: yarn build-aztec-standards --force
 
       - name: Benchmark (BASE)
         run: |
@@ -207,7 +207,7 @@ jobs:
         run: yarn codegen
 
       - name: Build aztec-standards (PR)
-        run: yarn build-aztec-standards
+        run: yarn build-aztec-standards --force
 
       # ──────────────────────────────────────────────────────────────
       # 3️⃣  DIFF &  COMMENT
