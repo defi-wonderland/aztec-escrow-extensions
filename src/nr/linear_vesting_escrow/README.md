@@ -6,6 +6,10 @@ The `LinearVestingEscrowLogic` address can be publicly known and multiple indepe
 
 The `LinearVestingEscrowLogic` should be used with escrow instances of the [standardized escrow implementation]( https://github.com/defi-wonderland/aztec-standards/tree/dev).
 
+> ⚠️ **WARNING — Private Balance Loss**
+>
+> any tokens transferred to the Linear Vesting Escrow Logic's private balance will be lost forever, as the contract doesn't have keys to spend a private balance nor any recovery mechanism. Token must be sent to the Escrow contract.
+
 ## Design
 
 The escrow instance is shared with the recipient and reclaimer, and used indirectly to share `vesting schedule` and `released amount` notes with them.
