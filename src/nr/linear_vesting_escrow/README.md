@@ -8,7 +8,7 @@ The `LinearVestingEscrowLogic` should be used with escrow instances of the [stan
 
 > ⚠️ **WARNING — Private Balance Loss**
 >
-> any tokens transferred to the Linear Vesting Escrow Logic's private balance will be lost forever, as the contract doesn't have keys to spend a private balance nor any recovery mechanism. Token must be sent to the Escrow contract.
+> any tokens transferred to the Linear Vesting Escrow Logic's private balance will be lost forever, as the contract doesn't have keys to spend a private balance nor any recovery mechanism. Tokens must be sent to the Escrow contract.
 
 ## Design
 
