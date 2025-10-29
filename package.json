@@ -16,7 +16,7 @@
     "build": "yarn compile && yarn codegen -f",
     "prepare": "husky",
     "ccc": "yarn clean && yarn compile && yarn codegen && yarn build-aztec-standards",
-    "build-aztec-standards": "npx tsx scripts/build-aztec-standards.ts d80de411a19d91f13bf70ee7de0020b2a623484e",
+    "build-aztec-standards": "npx tsx scripts/build-aztec-standards.ts origin/dev",
     "bench": "NODE_NO_WARNINGS=1 aztec-benchmark --suffix _base"
   },
   "lint-staged": {
