@@ -29,9 +29,6 @@ import {
   EscrowContract,
 } from "../src/artifacts/Escrow.js";
 
-// Declare store globally to delete it in the teardown method
-let store: AztecLmdbStore;
-
 // Escrow key counter starting at 1000 (no overlap with clawback escrow key counter), incremented on each deployment
 let escrowKeyCounter = 1000n;
 const AZTEC_SLOT_TIME = 36n;
@@ -96,8 +93,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
    */
 
   async setup(): Promise<LinearVestingEscrowBenchmarkContext> {
-    const { pxe, store: pxeStore } = await setupPXE("bench-linear-vesting");
-    store = pxeStore;
+    const { pxe, store } = await setupPXE("bench-linear-vesting");
     const managers = await getInitialTestAccountsManagers(pxe);
     const accounts = await Promise.all(managers.map((acc) => acc.register()));
     const [deployer] = accounts;
