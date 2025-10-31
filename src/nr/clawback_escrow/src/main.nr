@@ -79,8 +79,7 @@ pub contract ClawbackEscrowLogic {
         // Create and emit note with gating logic parameters
         let note = ClawbackEscrowNote::new(escrow, recipient, reclaimer, deadline);
         let note_insertion = storage.escrows.insert(note);
-        note_insertion.emit(encode_and_encrypt_note(&mut context, reclaimer));
-        note_insertion.emit(encode_and_encrypt_note(&mut context, recipient));
+        note_insertion.emit(encode_and_encrypt_note(&mut context, escrow));
 
         // Check that a clawback escrow has not been created for the provided escrow
         let nullifier = std::hash::pedersen_hash([escrow.to_field()]);
