@@ -2,13 +2,24 @@ use crate::LinearVestingEscrowLogic;
 use crate::types::released_amount_note::ReleasedAmountNote;
 use crate::types::vesting_schedule_note::VestingScheduleNote;
 use aztec::{
-    note::{constants::MAX_NOTES_PER_PAGE, note_getter::view_notes, note_interface::NoteProperties},
-    oracle::execution::get_contract_address,
-    prelude::{AztecAddress, NoteViewerOptions},
-    protocol_types::{public_keys::{IvpkM, NpkM, OvpkM, Point, PublicKeys, TpkM}, traits::ToField},
-    test::helpers::{cheatcodes, test_environment::TestEnvironment},
+    note::{
+        constants::MAX_NOTES_PER_PAGE, note_getter::view_notes, note_interface::NoteProperties,
+        note_viewer_options::NoteViewerOptions,
+    },
+    oracle::get_contract_instance::get_contract_instance,
+    protocol_types::{
+        address::AztecAddress,
+        contract_instance::ContractInstance,
+        point::Point,
+        public_keys::{IvpkM, NpkM, OvpkM, PublicKeys, TpkM},
+        traits::ToField,
+    },
+    state_vars::private_set::PrivateSet,
+    test::helpers::{test_environment::TestEnvironment, txe_oracles as cheatcodes},
     utils::comparison::Comparator,
 };
+use escrow_standard::test::utils as escrow_utils;
+use escrow_standard::types::escrow_details_event::MasterSecretKeys;
 use token::test::utils as token_utils;
 use token::Token;
 
@@ -18,14 +29,14 @@ pub unconstrained fn setup(
     // Setup env, generate keys
     let mut env = TestEnvironment::new();
     let (owner, user1, user2) = if with_account_contracts {
-        let owner = env.create_account_contract(1);
-        let user1 = env.create_account_contract(2);
-        let user2 = env.create_account_contract(3);
+        let owner = env.create_contract_account();
+        let user1 = env.create_contract_account();
+        let user2 = env.create_contract_account();
         (owner, user1, user2)
     } else {
-        let owner = env.create_account(1);
-        let user1 = env.create_account(2);
-        let user2 = env.create_account(3);
+        let owner = env.create_light_account();
+        let user1 = env.create_light_account();
+        let user2 = env.create_light_account();
         (owner, user1, user2)
     };
 
@@ -40,33 +51,22 @@ pub unconstrained fn deploy_linear_vesting_escrow_logic(
     let initializer_call_interface =
         LinearVestingEscrowLogic::interface().constructor(contract_class_id);
     let logic_instance = env
-        .deploy("./@linear_vesting_escrow", "LinearVestingEscrowLogic")
-        .with_public_void_initializer(owner, initializer_call_interface);
-    env.advance_block_by(1);
+        .deploy("./@linear_vesting_escrow/LinearVestingEscrowLogic")
+        .with_public_initializer(owner, initializer_call_interface);
 
-    logic_instance.to_address()
-}
-
-pub unconstrained fn deploy_escrow_with_secret(
-    env: &mut TestEnvironment,
-    escrow_secret: Field,
-) -> (AztecAddress, Field) {
-    let escrow_instance = env
-        .deploy_with_public_keys("./@escrow_contract", "Escrow", escrow_secret)
-        .without_initializer();
-    env.advance_block_by(1);
-
-    (escrow_instance.to_address(), escrow_instance.contract_class_id.to_field())
+    logic_instance
 }
 
 pub unconstrained fn deploy_and_create_escrow(
     with_account_contracts: bool,
     amount: u128,
     duration: u64,
-) -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
+    ) -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
     let (env, owner, recipient, reclaimer) = setup(with_account_contracts);
 
-    let (escrow_contract_address, contract_class_id) = deploy_escrow_with_secret(env, 1);
+    let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1);
+    let escrow_instance: ContractInstance = get_contract_instance(escrow_contract_address);
+    let contract_class_id = escrow_instance.contract_class_id.to_field();
     let logic_contract_address = deploy_linear_vesting_escrow_logic(env, owner, contract_class_id);
 
     let (_, vector_secret_keys_1, _, _) = get_test_vector();
@@ -75,76 +75,87 @@ pub unconstrained fn deploy_and_create_escrow(
     let token_contract_address =
         token_utils::deploy_token_with_initial_supply(env, owner, amount, owner);
 
-    env.impersonate(owner);
-    Token::at(token_contract_address)
-        .transfer_public_to_private(owner, escrow_contract_address, amount, 0)
-        .call(&mut env.private());
-    env.advance_block_by(1);
+    env.call_private(
+        owner,
+        Token::at(token_contract_address).transfer_public_to_private(
+            owner,
+            escrow_contract_address,
+            amount,
+            0,
+        ),
+    );
 
-    env.impersonate(owner);
-    LinearVestingEscrowLogic::at(logic_contract_address)
-        .setup_linear_vesting_escrow(
+    env.call_private(
+        owner,
+        LinearVestingEscrowLogic::at(logic_contract_address).setup_linear_vesting_escrow(
             escrow_contract_address,
             recipient,
             reclaimer,
             token_contract_address,
-            env.committed_timestamp(),
+            env.last_block_timestamp(),
             duration,
             amount,
-            vector_secret_keys_1[0],
-            vector_secret_keys_1[1],
-            vector_secret_keys_1[2],
-            vector_secret_keys_1[3],
-        )
-        .call(&mut env.private());
-    env.advance_block_by(1);
+            vector_secret_keys_1,
+        ),
+    );
 
-    (env, owner, recipient, logic_contract_address, escrow_contract_address, token_contract_address)
+    (
+        env, owner, recipient, reclaimer, logic_contract_address, escrow_contract_address,
+        token_contract_address,
+    )
 }
 
 pub unconstrained fn get_vesting_schedule_note(
+    env: TestEnvironment,
     logic_contract_address: AztecAddress,
     escrow: AztecAddress,
 ) -> VestingScheduleNote {
-    let current_contract_address = get_contract_address();
-    cheatcodes::set_contract_address(logic_contract_address);
-    let options = NoteViewerOptions::new()
-        .select(VestingScheduleNote::properties().escrow, Comparator.EQ, escrow)
-        .set_limit(1);
-    let vesting_schedule_slot = LinearVestingEscrowLogic::storage_layout().escrows.slot;
-    let notes: BoundedVec<VestingScheduleNote, MAX_NOTES_PER_PAGE> =
-        view_notes(vesting_schedule_slot, options);
-    cheatcodes::set_contract_address(current_contract_address);
+    let offset = 0;
+    let notes = env.utility_context_at(logic_contract_address, |context| {
+        let mut options = NoteViewerOptions::new()
+            .select(VestingScheduleNote::properties().escrow, Comparator.EQ, escrow)
+            .set_limit(1);
+        let vesting_schedule_slot = LinearVestingEscrowLogic::storage_layout().escrows.slot;
+        let set = PrivateSet::new(context, vesting_schedule_slot);
+        let notes: BoundedVec<VestingScheduleNote, MAX_NOTES_PER_PAGE> =
+            set.view_notes(options.set_offset(offset));
+        notes
+    });
+
     // We revert if there is no note in the filter so we can probably unwrap directly
-    let unwrapped_note = notes.get_unchecked(0);
-    unwrapped_note
+    notes.get_unchecked(0)
 }
 
 pub unconstrained fn get_released_amount_note(
+    env: TestEnvironment,
     logic_contract_address: AztecAddress,
     escrow: AztecAddress,
 ) -> ReleasedAmountNote {
-    let current_contract_address = get_contract_address();
-    cheatcodes::set_contract_address(logic_contract_address);
-    let options = NoteViewerOptions::new()
-        .select(ReleasedAmountNote::properties().escrow, Comparator.EQ, escrow)
-        .set_limit(1);
-    let released_notes_slot = LinearVestingEscrowLogic::storage_layout().released_notes.slot;
-    let notes: BoundedVec<ReleasedAmountNote, MAX_NOTES_PER_PAGE> =
-        view_notes(released_notes_slot, options);
-    cheatcodes::set_contract_address(current_contract_address);
+    let offset = 0;
+    let notes = env.utility_context_at(logic_contract_address, |context| {
+        let mut options = NoteViewerOptions::new()
+            .select(ReleasedAmountNote::properties().escrow, Comparator.EQ, escrow)
+            .set_limit(1);
+        let released_notes_slot = LinearVestingEscrowLogic::storage_layout().released_notes.slot;
+        let set = PrivateSet::new(context, released_notes_slot);
+        let notes: BoundedVec<ReleasedAmountNote, MAX_NOTES_PER_PAGE> =
+            set.view_notes(options.set_offset(offset));
+        notes
+    });
+
     // We revert if there is no note in the filter so we can probably unwrap directly
-    let unwrapped_note = notes.get_unchecked(0);
-    unwrapped_note
+    notes.get_unchecked(0)
 }
 
 // TODO: import from aztec-standards logic library utils
-pub unconstrained fn get_test_vector() -> (PublicKeys, [Field; 4], PublicKeys, [Field; 4]) {
+pub unconstrained fn get_test_vector() -> (PublicKeys, MasterSecretKeys, PublicKeys, MasterSecretKeys) {
     // secret keys derived using 1 as the seed
-    let nsk_m_1: Field = 0x1c46232974b84af1ea0f3f8e02d68b205fa0fd765839bdd298d270c6f4d87190;
-    let ivsk_m_1: Field = 0x23077d282aa597e7a1c6ffb4a1069cffd9743e861451076740cf42cb632fec84;
-    let ovsk_m_1: Field = 0x0fd5dc80151e24e20e402fa82437be7483431347ca4aabde674cdb12598d0fc0;
-    let tsk_m_1: Field = 0x0d104e3f086a9c3127b4152bac929180c21c06f9539b62843f4971753dd4ecf9;
+    let master_secret_keys_1 = MasterSecretKeys {
+        nsk_m: 0x1c46232974b84af1ea0f3f8e02d68b205fa0fd765839bdd298d270c6f4d87190,
+        ivsk_m: 0x23077d282aa597e7a1c6ffb4a1069cffd9743e861451076740cf42cb632fec84,
+        ovsk_m: 0x0fd5dc80151e24e20e402fa82437be7483431347ca4aabde674cdb12598d0fc0,
+        tsk_m: 0x0d104e3f086a9c3127b4152bac929180c21c06f9539b62843f4971753dd4ecf9,
+    };
 
     let npk_x_1: Field = 0x0b6111daac402252e041933aad127a26c9851acb11ced405d8563435bb33e0b8;
     let npk_y_1: Field = 0x0ecf620002229630f89c4f06638c3155f7e331a98e3304d92f2b7e213250d3f6;
@@ -164,10 +175,12 @@ pub unconstrained fn get_test_vector() -> (PublicKeys, [Field; 4], PublicKeys, [
 
     // secret keys derived using string "RANDOM_SECRET_KEY" left-padded to 32 bytes with spaces as the seed:
     // 0x20202020202020202020202020202052414e444f4d5f5345435245545f4b4559
-    let nsk_m_2: Field = 0x0e9600b209142cfe453ee5082e0eb5916b381f81a1967556afe1049c87cbb2ae;
-    let ivsk_m_2: Field = 0x01243994b0481f12305a17f6f12ed689e38c62d116efa1e2ff61718459f1d9b3;
-    let ovsk_m_2: Field = 0x14958e327b2cbdfd7c18add0d5fc376e533f9ee47f18f47259c862a0429deaa4;
-    let tsk_m_2: Field = 0x23c16c7e7fba57703aaf07ba75076c74d93747f2610e28689350b5e2f9061417;
+    let master_secret_keys_2 = MasterSecretKeys {
+        nsk_m: 0x0e9600b209142cfe453ee5082e0eb5916b381f81a1967556afe1049c87cbb2ae,
+        ivsk_m: 0x01243994b0481f12305a17f6f12ed689e38c62d116efa1e2ff61718459f1d9b3,
+        ovsk_m: 0x14958e327b2cbdfd7c18add0d5fc376e533f9ee47f18f47259c862a0429deaa4,
+        tsk_m: 0x23c16c7e7fba57703aaf07ba75076c74d93747f2610e28689350b5e2f9061417,
+    };
 
     let npk_x_2: Field = 0x00ecf1384fa9a5acdaddcf0ca577d12d80309aab813dcf96ea79fad43f3daad9;
     let npk_y_2: Field = 0x24c81884aece11096a3058433339dd0180756c44b4372951f169c939f569f4fb;
@@ -185,8 +198,5 @@ pub unconstrained fn get_test_vector() -> (PublicKeys, [Field; 4], PublicKeys, [
         tpk_m: TpkM { inner: Point { x: tpk_x_2, y: tpk_y_2, is_infinite: false } },
     };
 
-    (
-        public_keys_1, [nsk_m_1, ivsk_m_1, ovsk_m_1, tsk_m_1], public_keys_2,
-        [nsk_m_2, ivsk_m_2, ovsk_m_2, tsk_m_2],
-    )
+    (public_keys_1, master_secret_keys_1, public_keys_2, master_secret_keys_2)
 }

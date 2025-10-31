@@ -45,6 +45,10 @@ export const setupPXE = async (suffix?: string) => {
     dataDirectory: storeDir,
     dataStoreMapSizeKB: 1e6,
   });
+  await store.transaction(async () => {
+    // Clear PXE store to avoid leftover state between runs
+    await store.clear();
+  });
   const pxe = await createPXEService(node, fullConfig, { store });
   await waitForPXE(pxe);
   return { pxe, store };
@@ -81,12 +85,16 @@ export const expectTokenBalances = async (
     throw new Error("Unsupported type for balance");
   };
 
-  expect(await t.methods.balance_of_public(aztecAddress).simulate()).toBe(
-    toBigInt(publicBalance),
-  );
-  expect(await t.methods.balance_of_private(aztecAddress).simulate()).toBe(
-    toBigInt(privateBalance),
-  );
+  expect(
+    await t.methods
+      .balance_of_public(aztecAddress)
+      .simulate({ from: aztecAddress }),
+  ).toBe(toBigInt(publicBalance));
+  expect(
+    await t.methods
+      .balance_of_private(aztecAddress)
+      .simulate({ from: aztecAddress }),
+  ).toBe(toBigInt(privateBalance));
 };
 
 export const AMOUNT = 1000n;
@@ -108,7 +116,7 @@ export async function deployTokenWithMinter(
     ["PrivateToken", "PT", 18, deployer.getAddress(), AztecAddress.ZERO],
     "constructor_with_minter",
   )
-    .send(options)
+    .send({ ...options, from: deployer.getAddress() })
     .deployed();
   return contract;
 }
@@ -120,7 +128,7 @@ export async function deployTokenWithInitialSupply(deployer: AccountWallet) {
     ["PrivateToken", "PT", 18, 0, deployer.getAddress(), deployer.getAddress()],
     "constructor_with_initial_supply",
   )
-    .send()
+    .send({ from: deployer.getAddress() })
     .deployed();
   return contract;
 }
@@ -140,7 +148,7 @@ export async function deployNFTWithMinter(
     ["NFT", "NFT", deployer.getAddress(), deployer.getAddress()],
     "constructor_with_minter",
   )
-    .send(options)
+    .send({ ...options, from: deployer.getAddress() })
     .deployed();
   return contract;
 }
@@ -159,7 +167,7 @@ export async function deployVaultAndAssetWithMinter(
     ["PrivateToken", "PT", 6, deployer.getAddress(), AztecAddress.ZERO],
     "constructor_with_minter",
   )
-    .send()
+    .send({ from: deployer.getAddress() })
     .deployed();
 
   const vaultContract = await Contract.deploy(
@@ -168,7 +176,7 @@ export async function deployVaultAndAssetWithMinter(
     ["VaultToken", "VT", 6, assetContract.address, AztecAddress.ZERO],
     "constructor_with_asset",
   )
-    .send()
+    .send({ from: deployer.getAddress() })
     .deployed();
 
   return [vaultContract, assetContract];
@@ -177,7 +185,7 @@ export async function deployVaultAndAssetWithMinter(
 export async function setPrivateAuthWit(
   caller: AztecAddress | { getAddress: () => AztecAddress },
   action: ContractFunctionInteraction,
-  deployer: AccountWallet,
+  account: AccountWallet,
 ): Promise<AuthWitness> {
   const callerAddress =
     caller instanceof AztecAddress ? caller : caller.getAddress();
@@ -186,13 +194,13 @@ export async function setPrivateAuthWit(
     caller: callerAddress,
     action: action,
   };
-  return deployer.createAuthWit(intent);
+  return account.createAuthWit(intent);
 }
 
 export async function setPublicAuthWit(
   caller: AztecAddress | { getAddress: () => AztecAddress },
   action: ContractFunctionInteraction,
-  deployer: AccountWallet,
+  account: AccountWallet,
 ) {
   const callerAddress =
     caller instanceof AztecAddress ? caller : caller.getAddress();
@@ -201,8 +209,10 @@ export async function setPublicAuthWit(
     caller: callerAddress,
     action: action,
   };
-  await deployer.createAuthWit(intent);
-  await (await deployer.setPublicAuthWit(intent, true)).send().wait();
+  await account.createAuthWit(intent);
+  await (await account.setPublicAuthWit(intent, true))
+    .send({ from: account.getAddress() })
+    .wait();
 }
 
 /**
@@ -223,7 +233,7 @@ export async function deployLinearVestingEscrow(
     [escrowClassId],
     "constructor",
   )
-    .send(options)
+    .send({ ...options, from: deployer.getAddress() })
     .deployed();
   return contract as LinearVestingEscrowLogicContract;
 }
@@ -246,7 +256,7 @@ export async function deployClawbackEscrow(
     [escrowClassId],
     "constructor",
   )
-    .send(options)
+    .send({ ...options, from: deployer.getAddress() })
     .deployed();
   return contract as ClawbackEscrowLogicContract;
 }
@@ -272,7 +282,11 @@ export async function deployEscrowWithPublicKeysAndSalt(
     args,
     constructor,
   )
-    .send({ contractAddressSalt: salt, universalDeploy: true })
+    .send({
+      contractAddressSalt: salt,
+      universalDeploy: true,
+      from: deployer.getAddress(),
+    })
     .deployed();
   return contract as EscrowContract;
 }
@@ -293,8 +307,10 @@ export async function assertOwnsPrivateNFT(
   owner: AztecAddress,
   caller?: AccountWallet,
 ) {
-  const n = caller ? nft.withWallet(caller) : nft;
-  const [nfts, _] = await n.methods.get_private_nfts(owner, 0).simulate();
+  const from = caller ? caller.getAddress() : owner;
+  const [nfts, _] = await nft.methods
+    .get_private_nfts(owner, 0)
+    .simulate({ from });
   const hasNFT = nfts.some((id: bigint) => id === tokenId);
   expect(hasNFT).toBe(true);
 }

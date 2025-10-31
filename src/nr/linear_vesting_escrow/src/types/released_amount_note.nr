@@ -3,12 +3,11 @@ use aztec::{
     macros::notes::custom_note,
     note::note_interface::NoteHash,
     oracle::random::random,
-    prelude::AztecAddress,
     protocol_types::{
+        address::AztecAddress,
         constants::{GENERATOR_INDEX__NOTE_HASH, GENERATOR_INDEX__NOTE_NULLIFIER},
         hash::poseidon2_hash_with_separator,
         traits::{Packable, Serialize, ToField},
-        utils::arrays::array_concat,
     },
 };
 
@@ -16,10 +15,11 @@ use aztec::{
 /// @param released_amount The released amount of tokens
 /// @param claim_completed Whether the final claim is done
 /// @param randomness The randomness used to create the note
+#[derive(Packable)]
 #[custom_note]
 #[derive(Serialize, Eq)]
 pub struct ReleasedAmountNote {
-    escrow: AztecAddress,
+    pub escrow: AztecAddress,
     pub released_amount: u128,
     pub claim_completed: bool,
     randomness: Field,
@@ -42,7 +42,7 @@ impl NoteHash for ReleasedAmountNote {
 
     fn compute_note_hash(self, storage_slot: Field) -> Field {
         poseidon2_hash_with_separator(
-            array_concat(self.pack(), [storage_slot]),
+            self.pack().concat([storage_slot]),
             GENERATOR_INDEX__NOTE_HASH,
         )
     }
