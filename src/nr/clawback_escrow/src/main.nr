@@ -8,12 +8,8 @@ pub contract ClawbackEscrowLogic {
     use crate::types::clawback_escrow_note::ClawbackEscrowNote;
     use aztec::{
         context::PrivateContext,
-        macros::{
-            events::event,
-            functions::{initializer, private, public, utility},
-            storage::storage,
-        },
-        messages::logs::note::encode_and_encrypt_note,
+        macros::{events::event, functions::{external, initializer}, storage::storage},
+        messages::message_delivery::MessageDelivery,
         note::{note_getter_options::NoteGetterOptions, note_interface::NoteProperties},
         protocol_types::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
         state_vars::{private_set::PrivateSet, public_immutable::PublicImmutable},
@@ -44,7 +40,7 @@ pub contract ClawbackEscrowLogic {
 
     /// @dev Initialize the contract
     /// @param escrow_class_id The contract class id of the escrow contract
-    #[public]
+    #[external("public")]
     #[initializer]
     fn constructor(escrow_class_id: Field) {
         storage.escrow_class_id.initialize(escrow_class_id);
@@ -59,7 +55,7 @@ pub contract ClawbackEscrowLogic {
     /// @param reclaimer The address that can clawback tokens after deadline
     /// @param deadline The timestamp after which owner can clawback
     /// @param master_secret_keys The master secret keys
-    #[private]
+    #[external("private")]
     fn setup_clawback_escrow(
         escrow: AztecAddress,
         recipient: AztecAddress,
@@ -79,7 +75,7 @@ pub contract ClawbackEscrowLogic {
         // Create and emit note with gating logic parameters
         let note = ClawbackEscrowNote::new(escrow, recipient, reclaimer, deadline);
         let note_insertion = storage.escrows.insert(note);
-        note_insertion.emit(encode_and_encrypt_note(&mut context, escrow));
+        note_insertion.emit(escrow, MessageDelivery.CONSTRAINED_ONCHAIN);
 
         // Check that a clawback escrow has not been created for the provided escrow
         let nullifier = std::hash::pedersen_hash([escrow.to_field()]);
@@ -90,7 +86,7 @@ pub contract ClawbackEscrowLogic {
     /// @param escrow The address of the escrow
     /// @param token The address of the token
     /// @param amount The amount of tokens to withdraw from the escrow
-    #[private]
+    #[external("private")]
     fn claim(escrow: AztecAddress, token: AztecAddress, amount: u128) {
         // There should only be one note per escrow
         let note = _find_clawback_note(storage, escrow);
@@ -103,7 +99,7 @@ pub contract ClawbackEscrowLogic {
     /// @param escrow The address of the escrow
     /// @param nft The address of the NFT contract
     /// @param token_id The id of the token to withdraw from the escrow
-    #[private]
+    #[external("private")]
     fn claim_nft(escrow: AztecAddress, nft: AztecAddress, token_id: Field) {
         // There should only be one note per escrow
         let note = _find_clawback_note(storage, escrow);
@@ -116,7 +112,7 @@ pub contract ClawbackEscrowLogic {
     /// @param escrow The address of the escrow
     /// @param token The address of the token
     /// @param amount The amount of tokens to withdraw from the escrow
-    #[private]
+    #[external("private")]
     fn clawback(escrow: AztecAddress, token: AztecAddress, amount: u128) {
         // There should only be one note per escrow
         let note = _find_clawback_note(storage, escrow);
@@ -132,7 +128,7 @@ pub contract ClawbackEscrowLogic {
     /// @param escrow The address of the escrow
     /// @param nft The address of the NFT contract
     /// @param token_id The id of the token to withdraw from the escrow
-    #[private]
+    #[external("private")]
     fn clawback_nft(escrow: AztecAddress, nft: AztecAddress, token_id: Field) {
         // There should only be one note per escrow
         let note = _find_clawback_note(storage, escrow);
@@ -151,7 +147,7 @@ pub contract ClawbackEscrowLogic {
     /// @notice Derives public keys from secret keys.
     /// @param master_secret_keys The master secret keys
     /// @return PublicKeys containing the derived public keys.
-    #[utility]
+    #[external("utility")]
     unconstrained fn secret_keys_to_public_keys(
         master_secret_keys: MasterSecretKeys,
     ) -> pub PublicKeys {
