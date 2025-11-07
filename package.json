@@ -27,7 +27,8 @@
     "@aztec/aztec.js": "3.0.0-devnet.2",
     "@aztec/noir-contracts.js": "3.0.0-devnet.2",
     "@aztec/pxe": "3.0.0-devnet.2",
-    "@defi-wonderland/aztec-benchmark": "2.0.0"
+    "@aztec/test-wallet": "3.0.0-devnet.2",
+    "@defi-wonderland/aztec-benchmark": "3.0.0-devnet.2"
   },
   "devDependencies": {
     "@commitlint/cli": "19.8.1",
