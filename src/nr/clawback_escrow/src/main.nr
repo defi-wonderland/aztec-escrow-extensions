@@ -30,9 +30,11 @@ pub contract ClawbackEscrowLogic {
 
     /// @notice Data privately emitted to an account that will use the escrow
     /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
+    /// @dev #[allow(dead_code)] added because is used because EscrowDetailsLogContent is defined for logging but not directly instantiated.
     /// @param escrow The address of the escrow
     /// @param master_secret_keys The master secret keys
     #[event]
+    #[allow(dead_code)]
     struct EscrowDetailsLogContent {
         escrow: AztecAddress,
         master_secret_keys: MasterSecretKeys,

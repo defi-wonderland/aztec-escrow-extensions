@@ -9,7 +9,7 @@ unconstrained fn clawback_nft_success() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let timeout = 10;
     let amount: u128 = 100;
-    let (env, owner, recipient, logic_contract_address, escrow_contract_address, _, nft_contract_address) =
+    let (env, owner, _, logic_contract_address, escrow_contract_address, _, nft_contract_address) =
         utils::deploy_and_create_escrow(false, amount, timeout);
 
     nft_utils::assert_owns_private_nft(*env, nft_contract_address, escrow_contract_address, 1);
@@ -34,7 +34,7 @@ unconstrained fn clawback_nft_fails_before_deadline() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let timeout = 10;
     let amount: u128 = 100;
-    let (env, owner, recipient, logic_contract_address, escrow_contract_address, _, nft_contract_address) =
+    let (env, owner, _, logic_contract_address, escrow_contract_address, _, nft_contract_address) =
         utils::deploy_and_create_escrow(false, amount, timeout);
 
     env.set_next_block_timestamp(env.last_block_timestamp() + timeout);

@@ -9,7 +9,7 @@ unconstrained fn claim_tokens_success() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let timeout = 10;
     let amount: u128 = 100;
-    let (env, owner, recipient, logic_contract_address, escrow_contract_address, token_contract_address, _) =
+    let (env, _, recipient, logic_contract_address, escrow_contract_address, token_contract_address, _) =
         utils::deploy_and_create_escrow(false, amount, timeout);
 
     token_utils::check_private_balance(
@@ -41,7 +41,7 @@ unconstrained fn claim_tokens_fails_after_deadline() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let timeout = 10;
     let amount: u128 = 100;
-    let (env, owner, recipient, logic_contract_address, escrow_contract_address, token_contract_address, _) =
+    let (env, _, recipient, logic_contract_address, escrow_contract_address, token_contract_address, _) =
         utils::deploy_and_create_escrow(false, amount, timeout);
 
     env.set_next_block_timestamp(env.last_block_timestamp() + timeout + 1);

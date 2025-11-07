@@ -35,9 +35,11 @@ pub contract LinearVestingEscrowLogic {
 
     /// @notice Data privately emitted to an account that will use the escrow
     /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
+    /// @dev #[allow(dead_code)] added because is used because EscrowDetailsLogContent is defined for logging but not directly instantiated.
     /// @param escrow The address of the escrow
     /// @param master_secret_keys The master secret keys
     #[event]
+    #[allow(dead_code)]
     struct EscrowDetailsLogContent {
         escrow: AztecAddress,
         master_secret_keys: MasterSecretKeys,
@@ -95,7 +97,6 @@ pub contract LinearVestingEscrowLogic {
 
         // Create and emit linear vesting schedule note
         _create_vesting_schedule_note(
-            &mut context,
             storage,
             escrow,
             recipient,
@@ -108,7 +109,7 @@ pub contract LinearVestingEscrowLogic {
         );
 
         // Create and emit released amount note with zero released amount and claim completed set to false
-        _create_released_amount_note(&mut context, storage, escrow, 0, false);
+        _create_released_amount_note(storage, escrow, 0, false);
 
         // Check that a linear vesting escrow has not been created for the provided escrow
         let nullifier = std::hash::pedersen_hash([escrow.to_field()]);
@@ -167,13 +168,7 @@ pub contract LinearVestingEscrowLogic {
         let updated_released_amount = released_amount_note.released_amount + claim_amount;
 
         // We create and emit a new released amount note
-        _create_released_amount_note(
-            &mut context,
-            storage,
-            escrow,
-            updated_released_amount,
-            claim_completed,
-        );
+        _create_released_amount_note(storage, escrow, updated_released_amount, claim_completed);
 
         // Withdraw claim_amount tokens
         _withdraw(
@@ -207,7 +202,6 @@ pub contract LinearVestingEscrowLogic {
 
         // Create a new one that is not active
         _create_vesting_schedule_note(
-            &mut context,
             storage,
             escrow,
             vesting_schedule_note.recipient,
@@ -329,7 +323,6 @@ pub contract LinearVestingEscrowLogic {
     /// @param stop_timestamp The timestamp at which the vesting will stop (zero if not stopped)
     #[contract_library_method]
     fn _create_vesting_schedule_note(
-        context: &mut PrivateContext,
         storage: Storage<&mut PrivateContext>,
         escrow: AztecAddress,
         recipient: AztecAddress,
@@ -362,7 +355,6 @@ pub contract LinearVestingEscrowLogic {
     /// @param claim_completed Whether the final claim is done
     #[contract_library_method]
     fn _create_released_amount_note(
-        context: &mut PrivateContext,
         storage: Storage<&mut PrivateContext>,
         escrow: AztecAddress,
         released_amount: u128,

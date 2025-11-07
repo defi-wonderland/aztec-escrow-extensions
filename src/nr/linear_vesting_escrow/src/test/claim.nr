@@ -139,7 +139,7 @@ unconstrained fn claim_after_stop_vesting_success() {
     let stop_timestamp = env.last_block_timestamp() + duration / 2;
     env.set_next_block_timestamp(stop_timestamp);
 
-    let (releasable_amount, vested_amount) = env.simulate_utility(LinearVestingEscrowLogic::at(
+    let (releasable_amount, _) = env.simulate_utility(LinearVestingEscrowLogic::at(
         logic_contract_address,
     )
         .releasable_and_vested_amounts(escrow_contract_address, stop_timestamp));

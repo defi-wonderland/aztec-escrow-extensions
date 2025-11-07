@@ -2,19 +2,16 @@ use crate::ClawbackEscrowLogic;
 use crate::types::clawback_escrow_note::ClawbackEscrowNote;
 use aztec::{
     note::{
-        constants::MAX_NOTES_PER_PAGE, note_getter::view_notes, note_interface::NoteProperties,
+        constants::MAX_NOTES_PER_PAGE, note_interface::NoteProperties,
         note_viewer_options::NoteViewerOptions,
     },
-    oracle::get_contract_instance::get_contract_instance,
     protocol_types::{
         address::AztecAddress,
-        contract_instance::ContractInstance,
         point::Point,
         public_keys::{IvpkM, NpkM, OvpkM, PublicKeys, TpkM},
-        traits::ToField,
     },
     state_vars::private_set::PrivateSet,
-    test::helpers::{test_environment::TestEnvironment, txe_oracles as cheatcodes},
+    test::helpers::test_environment::TestEnvironment,
     utils::comparison::Comparator,
 };
 use escrow_standard::test::utils as escrow_utils;
@@ -49,9 +46,10 @@ pub unconstrained fn deploy_clawback_logic(
 ) -> AztecAddress {
     let initializer_call_interface =
         ClawbackEscrowLogic::interface().constructor(contract_class_id);
-    let logic_instance = env
-        .deploy("./@clawback_escrow/ClawbackEscrowLogic")
-        .with_public_initializer(owner, initializer_call_interface);
+    let logic_instance = env.deploy("@clawback_escrow/ClawbackEscrowLogic").with_public_initializer(
+        owner,
+        initializer_call_interface,
+    );
 
     logic_instance
 }
@@ -64,12 +62,10 @@ pub unconstrained fn deploy_and_create_escrow(
     let (env, owner, recipient) = setup(with_account_contracts);
 
     let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1);
-    let escrow_instance: ContractInstance = get_contract_instance(escrow_contract_address);
-    let contract_class_id = escrow_instance.contract_class_id.to_field();
-    let logic_contract_address = deploy_clawback_logic(env, owner, contract_class_id);
+    let escrow_class_id = escrow_utils::get_escrow_class_id();
+    let logic_contract_address = deploy_clawback_logic(env, owner, escrow_class_id);
 
-    let (vector_public_keys_1, vector_secret_keys_1, vector_public_keys_2, vector_secret_keys_2) =
-        get_test_vector();
+    let (_, vector_secret_keys_1, _, _) = get_test_vector();
 
     env.call_private(
         owner,

@@ -1,9 +1,5 @@
 use crate::LinearVestingEscrowLogic;
 use crate::test::utils;
-use aztec::{
-    oracle::get_contract_instance::get_contract_instance,
-    protocol_types::{contract_instance::ContractInstance, traits::ToField},
-};
 use escrow_standard::test::utils as escrow_utils;
 use token::test::utils as token_utils;
 
@@ -14,10 +10,9 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
     let (env, owner, recipient, reclaimer) = utils::setup(false);
 
     let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1);
-    let escrow_instance: ContractInstance = get_contract_instance(escrow_contract_address);
-    let contract_class_id = escrow_instance.contract_class_id.to_field();
+    let escrow_class_id = escrow_utils::get_escrow_class_id();
     let logic_contract_address =
-        utils::deploy_linear_vesting_escrow_logic(env, owner, contract_class_id);
+        utils::deploy_linear_vesting_escrow_logic(env, owner, escrow_class_id);
 
     let (_, vector_secret_keys_1, _, _) = utils::get_test_vector();
 
@@ -64,10 +59,9 @@ unconstrained fn create_linear_vesting_escrow_success() {
     let (env, owner, recipient, reclaimer) = utils::setup(false);
 
     let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1);
-    let escrow_instance: ContractInstance = get_contract_instance(escrow_contract_address);
-    let contract_class_id = escrow_instance.contract_class_id.to_field();
+    let escrow_class_id = escrow_utils::get_escrow_class_id();
     let logic_contract_address =
-        utils::deploy_linear_vesting_escrow_logic(env, owner, contract_class_id);
+        utils::deploy_linear_vesting_escrow_logic(env, owner, escrow_class_id);
 
     let (_, vector_secret_keys_1, _, _) = utils::get_test_vector();
 
