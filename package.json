@@ -1,6 +1,6 @@
 {
   "name": "aztec-escrow-extensions",
-  "version": "0.0.0",
+  "version": "3.0.0-devnet.2",
   "repository": "https://github.com/defi-wonderland/aztec-escrow-extensions.git",
   "author": "Wonderland",
   "license": "MIT",
@@ -16,7 +16,7 @@
     "build": "yarn compile && yarn codegen -f",
     "prepare": "husky",
     "ccc": "yarn clean && yarn compile && yarn codegen && yarn build-aztec-standards",
-    "build-aztec-standards": "npx tsx scripts/build-aztec-standards.ts origin/dev",
+    "build-aztec-standards": "npx tsx scripts/build-aztec-standards.ts origin/chore/v3.0.0-devnet.2",
     "bench": "NODE_NO_WARNINGS=1 aztec-benchmark --suffix _base"
   },
   "lint-staged": {
