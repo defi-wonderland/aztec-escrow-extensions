@@ -1,4 +1,3 @@
-import { type PXE } from "@aztec/pxe/server";
 import { siloNullifier } from "@aztec/stdlib/hash";
 import { FieldsOf } from "@aztec/foundation/types";
 import { type AztecNode } from "@aztec/aztec.js/node";
@@ -38,8 +37,7 @@ import {
   deriveContractAddress,
 } from "./utils.js";
 
-describe("Linear Vesting Escrow - Single PXE", () => {
-  let pxe: PXE;
+describe("Linear Vesting Escrow", () => {
   let node: AztecNode;
   let store: AztecLMDBStoreV2;
 
@@ -84,7 +82,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
   const AZTEC_SLOT_TIME = 36n; // seconds
 
   async function setup() {
-    ({ pxe, store, node, wallet, accounts } = await setupTestSuite(
+    ({ store, node, wallet, accounts } = await setupTestSuite(
       "linear-vesting-escrow",
     ));
 
@@ -196,7 +194,7 @@ describe("Linear Vesting Escrow - Single PXE", () => {
 
       const receiptAfterMined = await tx.wait({ wallet });
 
-      const contractMetadata = await pxe.getContractMetadata(
+      const contractMetadata = await wallet.getContractMetadata(
         deploymentData.address,
       );
       expect(contractMetadata).toBeDefined();
@@ -1994,8 +1992,6 @@ describe("Linear Vesting Escrow - Single PXE", () => {
     });
 
     it("releasable and vested amount should be correct with multiple claims", async () => {
-      const bobPXE = pxe;
-
       const tx = await linearVestingEscrow
         .withWallet(wallet)
         .methods.setup_linear_vesting_escrow(

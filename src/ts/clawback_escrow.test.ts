@@ -1,4 +1,3 @@
-import { type PXE } from "@aztec/pxe/server";
 import { siloNullifier } from "@aztec/stdlib/hash";
 import { FieldsOf } from "@aztec/foundation/types";
 import { type AztecNode } from "@aztec/aztec.js/node";
@@ -34,10 +33,9 @@ import { EscrowContractArtifact, EscrowContract } from "../artifacts/Escrow.js";
 import { TokenContract } from "../artifacts/Token.js";
 import { NFTContract } from "../artifacts/NFT.js";
 
-describe("Clawback Escrow - Single PXE", () => {
+describe("Clawback Escrow", () => {
   const AZTEC_SLOT_TIME = 36n; // seconds
 
-  let pxe: PXE;
   let node: AztecNode;
   let store: AztecLMDBStoreV2;
 
@@ -77,7 +75,7 @@ describe("Clawback Escrow - Single PXE", () => {
   let deadline: bigint;
 
   async function setup() {
-    ({ pxe, store, node, wallet, accounts } =
+    ({ store, node, wallet, accounts } =
       await setupTestSuite("clawback-escrow"));
 
     [alice, bob, carl] = accounts;
