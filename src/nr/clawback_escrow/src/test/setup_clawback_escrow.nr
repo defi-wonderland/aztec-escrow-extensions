@@ -17,7 +17,6 @@ unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
     env.call_private(
         owner,
         ClawbackEscrowLogic::at(logic_contract_address).setup_clawback_escrow(
-            escrow_contract_address,
             recipient,
             owner,
             env.last_block_timestamp() + 10,
@@ -28,7 +27,6 @@ unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
     env.call_private(
         owner,
         ClawbackEscrowLogic::at(logic_contract_address).setup_clawback_escrow(
-            escrow_contract_address,
             recipient,
             owner,
             env.last_block_timestamp() + 10,
@@ -53,7 +51,6 @@ unconstrained fn setup_clawback_escrow_success() {
     env.call_private(
         owner,
         ClawbackEscrowLogic::at(logic_contract_address).setup_clawback_escrow(
-            escrow_contract_address,
             recipient,
             owner,
             deadline,

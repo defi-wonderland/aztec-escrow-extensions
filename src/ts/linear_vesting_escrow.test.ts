@@ -240,7 +240,6 @@ describe("Linear Vesting Escrow", () => {
         tx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -351,7 +350,6 @@ describe("Linear Vesting Escrow", () => {
         await expect(
           linearVestingEscrow.methods
             .setup_linear_vesting_escrow(
-              escrow.address,
               carl,
               alice,
               token.address,
@@ -383,7 +381,6 @@ describe("Linear Vesting Escrow", () => {
         await expect(
           linearVestingEscrow.methods
             .setup_linear_vesting_escrow(
-              escrow.address,
               bob,
               alice,
               token.address,
@@ -411,7 +408,6 @@ describe("Linear Vesting Escrow", () => {
         await expect(
           linearVestingEscrow.methods
             .setup_linear_vesting_escrow(
-              escrow.address,
               bob,
               alice,
               token.address,
@@ -436,7 +432,6 @@ describe("Linear Vesting Escrow", () => {
         await expect(
           linearVestingEscrow.methods
             .setup_linear_vesting_escrow(
-              escrow.address,
               bob,
               alice,
               token.address,
@@ -462,7 +457,6 @@ describe("Linear Vesting Escrow", () => {
         await expect(
           linearVestingEscrow.methods
             .setup_linear_vesting_escrow(
-              escrow.address,
               bob,
               alice,
               token.address,
@@ -492,7 +486,6 @@ describe("Linear Vesting Escrow", () => {
         const tx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -549,7 +542,6 @@ describe("Linear Vesting Escrow", () => {
         const tx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -655,7 +647,6 @@ describe("Linear Vesting Escrow", () => {
         const setupTx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             newToken.address,
@@ -809,7 +800,6 @@ describe("Linear Vesting Escrow", () => {
         const tx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -857,7 +847,6 @@ describe("Linear Vesting Escrow", () => {
         tx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -1067,7 +1056,6 @@ describe("Linear Vesting Escrow", () => {
       it("final claim should transfer the tokens to the recipient and emit corresponding notes", async () => {
         const setupTx = await linearVestingEscrow.methods
           .setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -1141,7 +1129,6 @@ describe("Linear Vesting Escrow", () => {
         const amount = AMOUNT * 2n;
         const setupTx = await linearVestingEscrow.methods
           .setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -1213,7 +1200,6 @@ describe("Linear Vesting Escrow", () => {
       it("final claim should fail if the caller is not the recipient", async () => {
         const setupTx = await linearVestingEscrow.methods
           .setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -1256,7 +1242,6 @@ describe("Linear Vesting Escrow", () => {
       it("final claim should fail if amount is greater than releasable amount", async () => {
         const setupTx = await linearVestingEscrow.methods
           .setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -1309,7 +1294,6 @@ describe("Linear Vesting Escrow", () => {
     beforeEach(async () => {
       tx = await linearVestingEscrow.methods
         .setup_linear_vesting_escrow(
-          escrow.address,
           bob,
           alice,
           token.address,
@@ -1443,7 +1427,6 @@ describe("Linear Vesting Escrow", () => {
         tx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -1713,7 +1696,6 @@ describe("Linear Vesting Escrow", () => {
         const tx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -1762,7 +1744,6 @@ describe("Linear Vesting Escrow", () => {
       it("clawback successfully: escrow is not fully funded, releasable amount > 0", async () => {
         const setupTx = await linearVestingEscrow.methods
           .setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -1831,7 +1812,6 @@ describe("Linear Vesting Escrow", () => {
       it("clawback successfully: escrow is not fully funded, releasable amount == 0", async () => {
         const setupTx = await linearVestingEscrow.methods
           .setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -1922,7 +1902,6 @@ describe("Linear Vesting Escrow", () => {
       it("claiming after clawback should fail", async () => {
         const setupTx = await linearVestingEscrow.methods
           .setup_linear_vesting_escrow(
-            escrow.address,
             bob,
             alice,
             token.address,
@@ -1995,7 +1974,6 @@ describe("Linear Vesting Escrow", () => {
       const tx = await linearVestingEscrow
         .withWallet(wallet)
         .methods.setup_linear_vesting_escrow(
-          escrow.address,
           bob,
           alice,
           token.address,

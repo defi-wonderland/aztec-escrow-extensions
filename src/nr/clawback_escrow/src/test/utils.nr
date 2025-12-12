@@ -70,7 +70,6 @@ pub unconstrained fn deploy_and_create_escrow(
     env.call_private(
         owner,
         ClawbackEscrowLogic::at(logic_contract_address).setup_clawback_escrow(
-            escrow_contract_address,
             recipient,
             owner,
             env.last_block_timestamp() + timeout,

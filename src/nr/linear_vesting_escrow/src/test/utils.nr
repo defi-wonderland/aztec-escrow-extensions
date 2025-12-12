@@ -84,7 +84,6 @@ pub unconstrained fn deploy_and_create_escrow(
     env.call_private(
         owner,
         LinearVestingEscrowLogic::at(logic_contract_address).setup_linear_vesting_escrow(
-            escrow_contract_address,
             recipient,
             reclaimer,
             token_contract_address,

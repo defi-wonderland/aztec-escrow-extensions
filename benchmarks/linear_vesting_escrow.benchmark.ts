@@ -163,7 +163,6 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     await linearVestingEscrowContract
       .withWallet(wallet)
       .methods.setup_linear_vesting_escrow(
-        escrows[1].contract.address,
         bob,
         alice,
         tokenContract.address,
@@ -197,7 +196,6 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     await linearVestingEscrowContract
       .withWallet(wallet)
       .methods.setup_linear_vesting_escrow(
-        escrows[2].contract.address,
         bob,
         alice,
         tokenContract.address,
@@ -293,7 +291,6 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
           action: linearVestingEscrowContract
             .withWallet(wallet)
             .methods.setup_linear_vesting_escrow(
-              escrows[0].contract.address,
               bob,
               alice,
               tokenContract.address,

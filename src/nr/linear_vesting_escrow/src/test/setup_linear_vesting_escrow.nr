@@ -26,7 +26,6 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
     env.call_private(
         owner,
         LinearVestingEscrowLogic::at(logic_contract_address).setup_linear_vesting_escrow(
-            escrow_contract_address,
             recipient,
             reclaimer,
             token_contract_address,
@@ -40,7 +39,6 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
     env.call_private(
         owner,
         LinearVestingEscrowLogic::at(logic_contract_address).setup_linear_vesting_escrow(
-            escrow_contract_address,
             recipient,
             reclaimer,
             token_contract_address,
@@ -54,7 +52,7 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
 // #[test]
-#[test(should_fail_with = "Escrow salt mismatch")]
+#[test(should_fail_with = "Note: escrow address mismatch")]
 unconstrained fn create_linear_vesting_escrow_success() {
     let (env, owner, recipient, reclaimer) = utils::setup(false);
 
@@ -76,7 +74,6 @@ unconstrained fn create_linear_vesting_escrow_success() {
     env.call_private(
         owner,
         LinearVestingEscrowLogic::at(logic_contract_address).setup_linear_vesting_escrow(
-            escrow_contract_address,
             recipient,
             reclaimer,
             token_contract_address,

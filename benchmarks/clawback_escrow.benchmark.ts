@@ -151,7 +151,6 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
     await clawbackEscrowContract
       .withWallet(wallet)
       .methods.setup_clawback_escrow(
-        escrows[0].contract.address,
         bob,
         alice,
         pastDeadline,
@@ -205,7 +204,6 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
           action: clawbackEscrowContract
             .withWallet(wallet)
             .methods.setup_clawback_escrow(
-              escrows[1].contract.address,
               bob,
               alice,
               futureDeadline,

@@ -8,7 +8,7 @@ pub contract ClawbackEscrowLogic {
     use crate::types::clawback_escrow_note::ClawbackEscrowNote;
     use aztec::{
         context::PrivateContext,
-        macros::{events::event, functions::{external, initializer}, storage::storage},
+        macros::{events::event, functions::{external, initializer, view}, storage::storage},
         messages::message_delivery::MessageDelivery,
         note::{note_getter_options::NoteGetterOptions, note_interface::NoteProperties},
         protocol_types::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
@@ -16,7 +16,7 @@ pub contract ClawbackEscrowLogic {
         utils::comparison::Comparator,
     };
     use escrow_standard::library::logic::{
-        _check_escrow, _secret_keys_to_public_keys, _share_escrow, _withdraw, _withdraw_nft,
+        _get_escrow, _secret_keys_to_public_keys, _share_escrow, _withdraw, _withdraw_nft,
     };
     use escrow_standard::types::escrow_details_event::MasterSecretKeys;
     use router::utils::privately_check_timestamp;
@@ -48,26 +48,23 @@ pub contract ClawbackEscrowLogic {
         storage.escrow_class_id.initialize(escrow_class_id);
     }
 
-    /// @notice Verifies that the keys correspond to the escrow address and that the escrow
-    ///         instance data is correct, shares the escrow data with the recipient and the
-    ///         reclaimer, and nullifies the escrow address to prevent future reuse.
-    /// @dev Reverts if the data is not correct.
-    /// @param escrow The address of the escrow
+    /// @notice Computes the escrow address from the given master secret keys and
+    ///         shares the escrow data with the recipient and the reclaimer. The
+    ///         escrow address is nullified to prevent future reuse.
+    /// @dev Reverts if master_secret_keys was already used.
     /// @param recipient The address that can claim tokens before deadline
     /// @param reclaimer The address that can clawback tokens after deadline
     /// @param deadline The timestamp after which owner can clawback
     /// @param master_secret_keys The master secret keys
     #[external("private")]
     fn setup_clawback_escrow(
-        escrow: AztecAddress,
         recipient: AztecAddress,
         reclaimer: AztecAddress,
         deadline: u64,
         master_secret_keys: MasterSecretKeys,
     ) {
-        _check_escrow(
+        let escrow = _get_escrow(
             &mut context,
-            escrow,
             storage.escrow_class_id.read(),
             master_secret_keys,
         );
@@ -140,6 +137,21 @@ pub contract ClawbackEscrowLogic {
         // that the deadline has passed. Pros: more efficient and no public execution. Cons:
         // reclaimer would have to wait until the deadline block is mined.
         privately_check_timestamp(Comparator.GT, note.deadline, &mut context);
+    }
+
+    /// @notice Returns the escrow address that corresponds to the given master secret keys and class ID.
+    /// @param master_secret_keys The master secret keys
+    /// @return AztecAddress of the escrow.    
+    #[external("private")]
+    #[view]
+    fn get_escrow(
+        master_secret_keys: MasterSecretKeys,
+    ) -> pub AztecAddress {
+        _get_escrow(
+            &mut context,
+            storage.escrow_class_id.read(),
+            master_secret_keys,
+        )
     }
 
     /** ==========================================================
