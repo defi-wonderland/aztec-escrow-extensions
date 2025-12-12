@@ -270,12 +270,10 @@ pub contract LinearVestingEscrowLogic {
 
     /// @notice Returns the escrow address that corresponds to the given master secret keys and class ID.
     /// @param master_secret_keys The master secret keys
-    /// @return AztecAddress of the escrow.    
+    /// @return AztecAddress of the escrow.
     #[external("private")]
     #[view]
-    fn get_escrow(
-        master_secret_keys: MasterSecretKeys,
-    ) -> pub AztecAddress {
+    fn get_escrow(master_secret_keys: MasterSecretKeys) -> pub AztecAddress {
         _get_escrow(
             &mut context,
             storage.escrow_class_id.read(),
