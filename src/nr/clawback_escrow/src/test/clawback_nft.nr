@@ -4,7 +4,7 @@ use nft::test::utils as nft_utils;
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
 // #[test]
-#[test(should_fail_with = "Escrow salt mismatch")]
+#[test(should_fail_with = "Incorrect escrow deployment")]
 unconstrained fn clawback_nft_success() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let timeout = 10;
@@ -29,7 +29,7 @@ unconstrained fn clawback_nft_success() {
 
 // TODO: cannot deploy escrow contract with custom salt. This should fail trying to claim after deadline.
 // #[test(should_fail_with = "Timestamp mismatch")]
-#[test(should_fail_with = "Escrow salt mismatch")]
+#[test(should_fail_with = "Incorrect escrow deployment")]
 unconstrained fn clawback_nft_fails_before_deadline() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let timeout = 10;
