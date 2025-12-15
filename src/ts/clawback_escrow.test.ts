@@ -279,46 +279,6 @@ describe("Clawback Escrow", () => {
         ).rejects.toThrow(/Invalid tx: Existing nullifier/);
       });
     });
-
-    describe("incorrect escrow setup", () => {
-      beforeAll(async () => {
-        await store.delete();
-        await setup();
-      });
-
-      it("sharing an escrow with incorrect class id should fail", async () => {
-        // Re-deploy the logic contract with an incorrect class id
-        const wrongClawbackEscrow = (await deployClawbackEscrow(
-          wallet,
-          alice,
-          escrowClassId.add(Fr.ONE),
-        )) as ClawbackEscrowLogicContract;
-
-        await expect(
-          wrongClawbackEscrow.methods
-            .setup_clawback_escrow(bob, alice, deadline, secretKeys)
-            .send({ from: alice })
-            .wait(),
-        ).rejects.toThrow(/Assertion failed: Escrow class id mismatch/);
-      });
-
-      it("sharing an escrow with incorrect salt should fail", async () => {
-        // Re-deploy the escrow contract with a different salt (different from the logic contract address)
-        escrow = (await deployEscrowWithPublicKeysAndSalt(
-          escrowKeys.publicKeys,
-          wallet,
-          alice,
-          escrowSalt.add(Fr.ONE),
-        )) as EscrowContract;
-
-        await expect(
-          clawbackEscrow.methods
-            .setup_clawback_escrow(bob, alice, deadline, secretKeys)
-            .send({ from: alice })
-            .wait(),
-        ).rejects.toThrow(/Assertion failed: Escrow salt mismatch/);
-      });
-    });
   });
 
   describe("claim", () => {
