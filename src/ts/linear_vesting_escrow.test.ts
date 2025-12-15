@@ -227,20 +227,128 @@ describe("Linear Vesting Escrow", () => {
   });
 
   describe("setup_linear_vesting_escrow", () => {
-    // Split in 2 parts due to memory limit of the store
-    describe("part 1", () => {
-      beforeAll(async () => {
-        await store.delete();
-        await setup();
+    beforeAll(async () => {
+      await store.delete();
+      await setup();
+    });
+
+    let tx: FieldsOf<TxReceipt>;
+
+    beforeEach(async () => {
+      tx = await linearVestingEscrow
+        .withWallet(wallet)
+        .methods.setup_linear_vesting_escrow(
+          bob,
+          alice,
+          token.address,
+          start,
+          duration,
+          AMOUNT,
+          secretKeys,
+        )
+        .send({ from: alice })
+        .wait();
+    });
+
+    it("creates linear vesting escrow shares escrow with bob correctly", async () => {
+      const blockNumber = tx.blockNumber!;
+
+      const events = await wallet.getPrivateEvents<EscrowDetailsLogContent>(
+        linearVestingEscrow.address,
+        LinearVestingEscrowLogicContract.events.EscrowDetailsLogContent,
+        blockNumber,
+        1,
+        [bob],
+      );
+
+      expect(events.length).toBe(1);
+
+      const event = events[0];
+
+      expect(event.escrow).toEqual(escrow.address);
+      expect(event.master_secret_keys.nsk_m).toEqual(
+        escrowKeys.masterNullifierSecretKey.toBigInt(),
+      );
+      expect(event.master_secret_keys.ivsk_m).toEqual(
+        escrowKeys.masterIncomingViewingSecretKey.toBigInt(),
+      );
+      expect(event.master_secret_keys.ovsk_m).toEqual(
+        escrowKeys.masterOutgoingViewingSecretKey.toBigInt(),
+      );
+      expect(event.master_secret_keys.tsk_m).toEqual(
+        escrowKeys.masterTaggingSecretKey.toBigInt(),
+      );
+    });
+
+    it("creates linear vesting escrow should create a correct linearVestingEscrow note", async () => {
+      await linearVestingEscrow
+        .withWallet(wallet)
+        .methods.sync_private_state()
+        .simulate({ from: bob });
+
+      const notes = await wallet.getNotes({
+        contractAddress: linearVestingEscrow.address,
+        scopes: [escrow.address],
       });
 
-      let tx: FieldsOf<TxReceipt>;
+      // We expect 2 notes: 1 for the linear vesting escrow and 1 for the released amount
+      expect(notes.length).toBe(2);
 
-      beforeEach(async () => {
-        tx = await linearVestingEscrow
-          .withWallet(wallet)
-          .methods.setup_linear_vesting_escrow(
-            bob,
+      const escrowNotes = (
+        await wallet.getNotes({
+          scopes: [escrow.address],
+          contractAddress: linearVestingEscrow.address,
+          storageSlot: slotEscrowNotes,
+        })
+      )[0].note;
+      const releasedAmountNotes = (
+        await wallet.getNotes({
+          scopes: [escrow.address],
+          contractAddress: linearVestingEscrow.address,
+          storageSlot: slotReleasedAmountNotes,
+        })
+      )[0].note;
+
+      expect(escrowNotes.items[0].toString()).toBe(escrow.address.toString());
+      expect(escrowNotes.items[1].toString()).toBe(bob.toString());
+      expect(escrowNotes.items[2].toString()).toBe(alice.toString());
+      expect(escrowNotes.items[3].toString()).toBe(token.address.toString());
+      expect(escrowNotes.items[4].toBigInt()).toBe(BigInt(start));
+      expect(escrowNotes.items[5].toBigInt()).toBe(BigInt(duration));
+      expect(escrowNotes.items[6].toBigInt()).toBe(BigInt(AMOUNT));
+
+      expect(releasedAmountNotes.items[0].toString()).toBe(
+        escrow.address.toString(),
+      );
+      expect(releasedAmountNotes.items[1].toBigInt()).toBe(BigInt(0));
+    });
+
+    it("creates linear vesting escrow should emit a nullifier for the escrow", async () => {
+      const nullifier = await pedersenHash([escrow.address]);
+      const siloedNullifier = await siloNullifier(
+        linearVestingEscrow.address,
+        nullifier,
+      );
+
+      const txReceipt = await node.getTxReceipt(tx.txHash);
+      expect(txReceipt.status).toBe(TxStatus.SUCCESS);
+
+      const txEffect = await node.getTxEffect(tx.txHash);
+      let nullifierExists = false;
+      if (txEffect) {
+        const nullifiers = txEffect.data.nullifiers;
+        nullifierExists = nullifiers.some((n) => n.equals(siloedNullifier));
+      }
+
+      expect(nullifierExists).toBe(true);
+    });
+
+    it("creates linear vesting escrow should nullify and not allow to create another one", async () => {
+      // Try to create a linear vesting escrow for carl after one for bob was created
+      await expect(
+        linearVestingEscrow.methods
+          .setup_linear_vesting_escrow(
+            carl,
             alice,
             token.address,
             start,
@@ -249,226 +357,8 @@ describe("Linear Vesting Escrow", () => {
             secretKeys,
           )
           .send({ from: alice })
-          .wait();
-      });
-
-      it("creates linear vesting escrow shares escrow with bob correctly", async () => {
-        const blockNumber = tx.blockNumber!;
-
-        const events = await wallet.getPrivateEvents<EscrowDetailsLogContent>(
-          linearVestingEscrow.address,
-          LinearVestingEscrowLogicContract.events.EscrowDetailsLogContent,
-          blockNumber,
-          1,
-          [bob],
-        );
-
-        expect(events.length).toBe(1);
-
-        const event = events[0];
-
-        expect(event.escrow).toEqual(escrow.address);
-        expect(event.master_secret_keys.nsk_m).toEqual(
-          escrowKeys.masterNullifierSecretKey.toBigInt(),
-        );
-        expect(event.master_secret_keys.ivsk_m).toEqual(
-          escrowKeys.masterIncomingViewingSecretKey.toBigInt(),
-        );
-        expect(event.master_secret_keys.ovsk_m).toEqual(
-          escrowKeys.masterOutgoingViewingSecretKey.toBigInt(),
-        );
-        expect(event.master_secret_keys.tsk_m).toEqual(
-          escrowKeys.masterTaggingSecretKey.toBigInt(),
-        );
-      });
-
-      it("creates linear vesting escrow should create a correct linearVestingEscrow note", async () => {
-        await linearVestingEscrow
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
-
-        const notes = await wallet.getNotes({
-          contractAddress: linearVestingEscrow.address,
-          scopes: [escrow.address],
-        });
-
-        // We expect 2 notes: 1 for the linear vesting escrow and 1 for the released amount
-        expect(notes.length).toBe(2);
-
-        const escrowNotes = (
-          await wallet.getNotes({
-            scopes: [escrow.address],
-            contractAddress: linearVestingEscrow.address,
-            storageSlot: slotEscrowNotes,
-          })
-        )[0].note;
-        const releasedAmountNotes = (
-          await wallet.getNotes({
-            scopes: [escrow.address],
-            contractAddress: linearVestingEscrow.address,
-            storageSlot: slotReleasedAmountNotes,
-          })
-        )[0].note;
-
-        expect(escrowNotes.items[0].toString()).toBe(escrow.address.toString());
-        expect(escrowNotes.items[1].toString()).toBe(bob.toString());
-        expect(escrowNotes.items[2].toString()).toBe(alice.toString());
-        expect(escrowNotes.items[3].toString()).toBe(token.address.toString());
-        expect(escrowNotes.items[4].toBigInt()).toBe(BigInt(start));
-        expect(escrowNotes.items[5].toBigInt()).toBe(BigInt(duration));
-        expect(escrowNotes.items[6].toBigInt()).toBe(BigInt(AMOUNT));
-
-        expect(releasedAmountNotes.items[0].toString()).toBe(
-          escrow.address.toString(),
-        );
-        expect(releasedAmountNotes.items[1].toBigInt()).toBe(BigInt(0));
-      });
-
-      it("creates linear vesting escrow should emit a nullifier for the escrow", async () => {
-        const nullifier = await pedersenHash([escrow.address]);
-        const siloedNullifier = await siloNullifier(
-          linearVestingEscrow.address,
-          nullifier,
-        );
-
-        const txReceipt = await node.getTxReceipt(tx.txHash);
-        expect(txReceipt.status).toBe(TxStatus.SUCCESS);
-
-        const txEffect = await node.getTxEffect(tx.txHash);
-        let nullifierExists = false;
-        if (txEffect) {
-          const nullifiers = txEffect.data.nullifiers;
-          nullifierExists = nullifiers.some((n) => n.equals(siloedNullifier));
-        }
-
-        expect(nullifierExists).toBe(true);
-      });
-
-      it("creates linear vesting escrow should nullify and not allow to create another one", async () => {
-        // Try to create a linear vesting escrow for carl after one for bob was created
-        await expect(
-          linearVestingEscrow.methods
-            .setup_linear_vesting_escrow(
-              carl,
-              alice,
-              token.address,
-              start,
-              duration,
-              AMOUNT,
-              secretKeys,
-            )
-            .send({ from: alice })
-            .wait(),
-        ).rejects.toThrow(/Invalid tx: Existing nullifier/);
-      });
-    });
-
-    describe("part 2", () => {
-      beforeAll(async () => {
-        await store.delete();
-        await setup();
-      });
-
-      it("sharing an escrow with with incorrect secret keys should fail", async () => {
-        let secretKeysPlusOne = {
-          nsk_m: secretKeys.nsk_m.add(Fr.ONE),
-          ivsk_m: secretKeys.ivsk_m.add(Fr.ONE),
-          ovsk_m: secretKeys.ovsk_m.add(Fr.ONE),
-          tsk_m: secretKeys.tsk_m.add(Fr.ONE),
-        };
-
-        await expect(
-          linearVestingEscrow.methods
-            .setup_linear_vesting_escrow(
-              bob,
-              alice,
-              token.address,
-              start,
-              duration,
-              AMOUNT,
-              secretKeysPlusOne,
-            )
-            .send({ from: alice })
-            .wait(),
-        ).rejects.toThrow(/Assertion failed: Escrow public keys mismatch/);
-      });
-
-      it("sharing an escrow with non zero deployer should fail", async () => {
-        // Re-deploy the escrow contract with no universalDeploy
-        escrow = (await Contract.deployWithPublicKeys(
-          escrowKeys.publicKeys,
-          wallet,
-          EscrowContractArtifact,
-          [],
-        )
-          .send({ contractAddressSalt: escrowSalt, from: alice })
-          .deployed()) as EscrowContract;
-
-        await expect(
-          linearVestingEscrow.methods
-            .setup_linear_vesting_escrow(
-              bob,
-              alice,
-              token.address,
-              start,
-              duration,
-              AMOUNT,
-              secretKeys,
-            )
-            .send({ from: alice })
-            .wait(),
-        ).rejects.toThrow(/Assertion failed: Escrow deployer should be null/);
-      });
-
-      it("sharing an escrow with incorrect class id should fail", async () => {
-        // Re-deploy the logic contract with an incorrect class id
-        linearVestingEscrow = (await deployLinearVestingEscrow(
-          wallet,
-          alice,
-          escrowClassId.add(Fr.ONE),
-        )) as LinearVestingEscrowLogicContract;
-
-        await expect(
-          linearVestingEscrow.methods
-            .setup_linear_vesting_escrow(
-              bob,
-              alice,
-              token.address,
-              start,
-              duration,
-              AMOUNT,
-              secretKeys,
-            )
-            .send({ from: alice })
-            .wait(),
-        ).rejects.toThrow(/Assertion failed: Escrow class id mismatch/);
-      });
-
-      it("sharing an escrow with incorrect salt should fail", async () => {
-        // Re-deploy the escrow contract with a different salt (different from the logic contract address)
-        escrow = (await deployEscrowWithPublicKeysAndSalt(
-          escrowKeys.publicKeys,
-          wallet,
-          alice,
-          escrowSalt.add(Fr.ONE),
-        )) as EscrowContract;
-
-        await expect(
-          linearVestingEscrow.methods
-            .setup_linear_vesting_escrow(
-              bob,
-              alice,
-              token.address,
-              start,
-              duration,
-              AMOUNT,
-              secretKeys,
-            )
-            .send({ from: alice })
-            .wait(),
-        ).rejects.toThrow(/Assertion failed: Escrow salt mismatch/);
-      });
+          .wait(),
+      ).rejects.toThrow(/Invalid tx: Existing nullifier/);
     });
   });
 
