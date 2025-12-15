@@ -4,7 +4,7 @@ use token::test::utils as token_utils;
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
 // #[test]
-#[test(should_fail_with = "Escrow salt mismatch")]
+#[test(should_fail_with = "Incorrect escrow deployment")]
 unconstrained fn clawback_success() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let duration = 10;
@@ -55,7 +55,7 @@ unconstrained fn clawback_success() {
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
 // #[test]
-#[test(should_fail_with = "Escrow salt mismatch")]
+#[test(should_fail_with = "Incorrect escrow deployment")]
 unconstrained fn clawback_after_claim_success() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let duration = 10;

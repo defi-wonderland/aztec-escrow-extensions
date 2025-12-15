@@ -81,6 +81,10 @@ pub unconstrained fn deploy_and_create_escrow(
         ),
     );
 
+    let expected_escrow_address = env.view_private(LinearVestingEscrowLogic::at(
+        logic_contract_address,
+    )
+        .get_escrow(vector_secret_keys_1));
     env.call_private(
         owner,
         LinearVestingEscrowLogic::at(logic_contract_address).setup_linear_vesting_escrow(
@@ -93,6 +97,7 @@ pub unconstrained fn deploy_and_create_escrow(
             vector_secret_keys_1,
         ),
     );
+    assert_eq(escrow_contract_address, expected_escrow_address, "Incorrect escrow deployment");
 
     (
         env, owner, recipient, reclaimer, logic_contract_address, escrow_contract_address,

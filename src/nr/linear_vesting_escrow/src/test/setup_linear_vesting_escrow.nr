@@ -3,13 +3,10 @@ use crate::test::utils;
 use escrow_standard::test::utils as escrow_utils;
 use token::test::utils as token_utils;
 
-// TODO: cannot deploy escrow contract with custom salt. This should fail trying to push the same nullifier twice.
-// #[test(should_fail_with = "Rejecting tx for emitting duplicate nullifiers")]
-#[test(should_fail_with = "Escrow salt mismatch")]
+#[test(should_fail_with = "failed with duplicate nullifiers")]
 unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
     let (env, owner, recipient, reclaimer) = utils::setup(false);
 
-    let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1);
     let escrow_class_id = escrow_utils::get_escrow_class_id();
     let logic_contract_address =
         utils::deploy_linear_vesting_escrow_logic(env, owner, escrow_class_id);
