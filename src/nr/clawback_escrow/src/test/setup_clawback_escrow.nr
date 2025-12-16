@@ -1,9 +1,5 @@
 use crate::ClawbackEscrowLogic;
 use crate::test::utils;
-use aztec::{
-    oracle::get_contract_instance::get_contract_instance,
-    protocol_types::{contract_instance::ContractInstance, traits::ToField},
-};
 use escrow_standard::test::utils as escrow_utils;
 
 // TODO: cannot deploy escrow contract with custom salt. This should fail trying to push the same nullifier twice.
@@ -13,12 +9,10 @@ unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
     let (env, owner, recipient) = utils::setup(false);
 
     let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1);
-    let escrow_instance: ContractInstance = get_contract_instance(escrow_contract_address);
-    let contract_class_id = escrow_instance.contract_class_id.to_field();
-    let logic_contract_address = utils::deploy_clawback_logic(env, owner, contract_class_id);
+    let escrow_class_id = escrow_utils::get_escrow_class_id();
+    let logic_contract_address = utils::deploy_clawback_logic(env, owner, escrow_class_id);
 
-    let (vector_public_keys_1, vector_secret_keys_1, vector_public_keys_2, vector_secret_keys_2) =
-        utils::get_test_vector();
+    let (_, vector_secret_keys_1, _, _) = utils::get_test_vector();
 
     env.call_private(
         owner,
@@ -50,12 +44,10 @@ unconstrained fn setup_clawback_escrow_success() {
     let (env, owner, recipient) = utils::setup(false);
 
     let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1);
-    let escrow_instance: ContractInstance = get_contract_instance(escrow_contract_address);
-    let contract_class_id = escrow_instance.contract_class_id.to_field();
-    let logic_contract_address = utils::deploy_clawback_logic(env, owner, contract_class_id);
+    let escrow_class_id = escrow_utils::get_escrow_class_id();
+    let logic_contract_address = utils::deploy_clawback_logic(env, owner, escrow_class_id);
 
-    let (vector_public_keys_1, vector_secret_keys_1, vector_public_keys_2, vector_secret_keys_2) =
-        utils::get_test_vector();
+    let (_, vector_secret_keys_1, _, _) = utils::get_test_vector();
 
     let deadline = env.last_block_timestamp() + 10;
     env.call_private(

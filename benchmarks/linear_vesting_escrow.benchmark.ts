@@ -1,13 +1,10 @@
-import {
-  type AccountWallet,
-  type ContractFunctionInteraction,
-  type PXE,
-  getContractClassFromArtifact,
-  Fr,
-} from "@aztec/aztec.js";
-import { getInitialTestAccountsManagers } from "@aztec/accounts/testing";
+import { Fr } from "@aztec/aztec.js/fields";
 import { deriveKeys } from "@aztec/stdlib/keys";
-import { type AztecLmdbStore } from "@aztec/kv-store/lmdb";
+import type { Wallet } from "@aztec/aztec.js/wallet";
+import { AztecAddress } from "@aztec/aztec.js/addresses";
+import { type AztecLMDBStoreV2 } from "@aztec/kv-store/lmdb-v2";
+import { getContractClassFromArtifact } from "@aztec/stdlib/contract";
+import type { ContractFunctionInteractionCallIntent } from "@aztec/aztec.js/authorization";
 
 // Import the new Benchmark base class and context
 import { Benchmark, BenchmarkContext } from "@defi-wonderland/aztec-benchmark";
@@ -19,8 +16,8 @@ import {
   deployEscrowWithPublicKeysAndSalt,
   deployLinearVestingEscrow,
   deployTokenWithMinter,
-  setupPXE,
   grumpkinScalarToFr,
+  setupTestSuite,
 } from "../src/ts/utils.js";
 
 import { LinearVestingEscrowLogicContract } from "../src/artifacts/LinearVestingEscrowLogic.js";
@@ -34,8 +31,8 @@ let escrowKeyCounter = 1000n;
 const AZTEC_SLOT_TIME = 36n;
 
 async function deployEscrow(
-  pxe: PXE,
-  deployer: AccountWallet,
+  wallet: Wallet,
+  deployer: AztecAddress,
   linearVestingEscrowContract: LinearVestingEscrowLogicContract,
 ) {
   const escrowSk = new Fr(escrowKeyCounter);
@@ -45,12 +42,16 @@ async function deployEscrow(
 
   const escrowContract = (await deployEscrowWithPublicKeysAndSalt(
     escrowKeys.publicKeys,
+    wallet,
     deployer,
     escrowSalt,
   )) as EscrowContract;
 
-  const partialAddressEscrow = await escrowContract.partialAddress;
-  await pxe.registerAccount(escrowSk, partialAddressEscrow);
+  await wallet.registerContract(
+    escrowContract.instance,
+    EscrowContractArtifact,
+    escrowSk,
+  );
 
   const secretKeys = {
     nsk_m: grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
@@ -64,10 +65,10 @@ async function deployEscrow(
 
 // Extend the BenchmarkContext from the new package
 interface LinearVestingEscrowBenchmarkContext extends BenchmarkContext {
-  pxe: PXE;
-  store: AztecLmdbStore;
-  deployer: AccountWallet;
-  accounts: AccountWallet[];
+  store: AztecLMDBStoreV2;
+  deployer: AztecAddress;
+  wallet: Wallet;
+  accounts: AztecAddress[];
   linearVestingEscrowContract: LinearVestingEscrowLogicContract;
   escrows: {
     contract: EscrowContract;
@@ -89,19 +90,20 @@ interface LinearVestingEscrowBenchmarkContext extends BenchmarkContext {
 export default class LinearVestingEscrowContractBenchmark extends Benchmark {
   /**
    * Sets up the benchmark environment for the LinearVestingEscrowContract.
-   * Creates PXE client, gets accounts, and deploys the contract.
+   * Gets accounts, and deploys the contract.
    */
 
   async setup(): Promise<LinearVestingEscrowBenchmarkContext> {
-    const { pxe, store } = await setupPXE("bench-linear-vesting");
-    const managers = await getInitialTestAccountsManagers(pxe);
-    const accounts = await Promise.all(managers.map((acc) => acc.register()));
+    const { store, node, wallet, accounts } = await setupTestSuite(
+      "bench-linear-vesting",
+    );
     const [deployer] = accounts;
 
     const escrowClassId = (
       await getContractClassFromArtifact(EscrowContractArtifact)
     ).id;
     const linearVestingEscrowContract = await deployLinearVestingEscrow(
+      wallet,
       deployer,
       escrowClassId,
     );
@@ -111,11 +113,11 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     // 1 - [Create] Stop vesting and clawback (withdraw to recipient)
     // 3 - [Create and stop vesting] Final claim and clawback (no withdraw to recipient)
     const { escrowContract: escrowContract_1, secretKeys: secretKeys_1 } =
-      await deployEscrow(pxe, deployer, linearVestingEscrowContract);
+      await deployEscrow(wallet, deployer, linearVestingEscrowContract);
     const { escrowContract: escrowContract_2, secretKeys: secretKeys_2 } =
-      await deployEscrow(pxe, deployer, linearVestingEscrowContract);
+      await deployEscrow(wallet, deployer, linearVestingEscrowContract);
     const { escrowContract: escrowContract_3, secretKeys: secretKeys_3 } =
-      await deployEscrow(pxe, deployer, linearVestingEscrowContract);
+      await deployEscrow(wallet, deployer, linearVestingEscrowContract);
 
     const escrows = [
       { contract: escrowContract_1, secretKeys: secretKeys_1 },
@@ -125,26 +127,27 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
 
     // Deploy a token contract and fund the escrows
     const tokenContract = (await deployTokenWithMinter(
+      wallet,
       deployer,
     )) as TokenContract;
     await tokenContract
-      .withWallet(deployer)
+      .withWallet(wallet)
       .methods.mint_to_private(escrowContract_1.address, AMOUNT)
-      .send({ from: deployer.getAddress() })
+      .send({ from: deployer })
       .wait();
     await tokenContract
-      .withWallet(deployer)
+      .withWallet(wallet)
       .methods.mint_to_private(escrowContract_2.address, AMOUNT)
-      .send({ from: deployer.getAddress() })
+      .send({ from: deployer })
       .wait();
     await tokenContract
-      .withWallet(deployer)
+      .withWallet(wallet)
       .methods.mint_to_private(escrowContract_3.address, AMOUNT)
-      .send({ from: deployer.getAddress() })
+      .send({ from: deployer })
       .wait();
 
-    const currentBlockNumber = await pxe.getBlockNumber();
-    const currentBlock = await pxe.getBlock(currentBlockNumber);
+    const currentBlockNumber = await node.getBlockNumber();
+    const currentBlock = await node.getBlock(currentBlockNumber);
     const currentTimestamp = currentBlock!.header.globalVariables.timestamp;
 
     // Second escrow: Stop vesting and clawback (withdraw to recipient)
@@ -158,28 +161,28 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     const stopTimestamp_2 = start_2 + AZTEC_SLOT_TIME * 5n;
     // Setup the second escrow
     await linearVestingEscrowContract
-      .withWallet(alice)
+      .withWallet(wallet)
       .methods.setup_linear_vesting_escrow(
         escrows[1].contract.address,
-        bob.getAddress(),
-        alice.getAddress(),
+        bob,
+        alice,
         tokenContract.address,
         start_2,
         duration_2,
         AMOUNT,
         escrows[1].secretKeys,
       )
-      .send({ from: alice.getAddress() })
+      .send({ from: alice })
       .wait();
 
     // Get the releasable amount of the second escrow
     const [_, vestedAmount_2] = await linearVestingEscrowContract
-      .withWallet(alice)
+      .withWallet(wallet)
       .methods.releasable_and_vested_amounts(
         escrows[1].contract.address,
         stopTimestamp_2,
       )
-      .simulate({ from: alice.getAddress() });
+      .simulate({ from: alice });
 
     const clawbackAmount_2 = AMOUNT - vestedAmount_2;
 
@@ -192,46 +195,46 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
 
     // Third escrow: Create and stop vesting
     await linearVestingEscrowContract
-      .withWallet(alice)
+      .withWallet(wallet)
       .methods.setup_linear_vesting_escrow(
         escrows[2].contract.address,
-        bob.getAddress(),
-        alice.getAddress(),
+        bob,
+        alice,
         tokenContract.address,
         start_3,
         duration_3,
         AMOUNT,
         escrows[2].secretKeys,
       )
-      .send({ from: alice.getAddress() })
+      .send({ from: alice })
       .wait();
 
     // Get the releasable amount of the third escrow
     const [releasableAmount_3, vestedAmount_3] =
       await linearVestingEscrowContract
-        .withWallet(alice)
+        .withWallet(wallet)
         .methods.releasable_and_vested_amounts(
           escrows[2].contract.address,
           stopTimestamp_3,
         )
-        .simulate({ from: alice.getAddress() });
+        .simulate({ from: alice });
     const clawbackAmount_3 = AMOUNT - vestedAmount_3;
 
     // Sync to get linear vesting escrow note
     await linearVestingEscrowContract
-      .withWallet(alice)
+      .withWallet(wallet)
       .methods.sync_private_state()
-      .simulate({ from: alice.getAddress() });
+      .simulate({ from: alice });
 
     await linearVestingEscrowContract
-      .withWallet(alice)
+      .withWallet(wallet)
       .methods.stop_vesting(escrows[2].contract.address, stopTimestamp_3)
-      .send({ from: alice.getAddress() })
+      .send({ from: alice })
       .wait();
 
     // Get the start timestamp of the first escrow
-    const blockNumber = await pxe.getBlockNumber();
-    const block = await pxe.getBlock(blockNumber);
+    const blockNumber = await node.getBlockNumber();
+    const block = await node.getBlock(blockNumber);
     const start_1 = block!.header.globalVariables.timestamp;
     // We set the duration so that the first claim is one AZTEC_SLOT_TIME after the start, hence partially claimable
     // The second claim is fully claimable because is exactly two AZTEC_SLOT_TIME after the start, it claims the remaining amount
@@ -248,9 +251,9 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     };
 
     return {
-      pxe,
       store,
       deployer,
+      wallet,
       accounts,
       linearVestingEscrowContract,
       escrows,
@@ -264,9 +267,12 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
    */
   getMethods(
     context: LinearVestingEscrowBenchmarkContext,
-  ): Array<NamedBenchmarkedInteraction | ContractFunctionInteraction> {
+  ): Array<
+    NamedBenchmarkedInteraction | ContractFunctionInteractionCallIntent
+  > {
     const {
       linearVestingEscrowContract,
+      wallet,
       accounts,
       escrows,
       tokenContract,
@@ -277,77 +283,98 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
 
     // The order of the methods is important because some of them depend on the previous ones and timestamps are involved.
     const methods: Array<
-      NamedBenchmarkedInteraction | ContractFunctionInteraction
+      NamedBenchmarkedInteraction | ContractFunctionInteractionCallIntent
     > = [
       // Setup linear vesting escrow
       {
         name: "setup_linear_vesting_escrow",
-        interaction: linearVestingEscrowContract
-          .withWallet(alice)
-          .methods.setup_linear_vesting_escrow(
-            escrows[0].contract.address,
-            bob.getAddress(),
-            alice.getAddress(),
-            tokenContract.address,
-            additionalData.start_1,
-            additionalData.duration_1,
-            AMOUNT,
-            escrows[0].secretKeys,
-          ),
+        interaction: {
+          caller: alice,
+          action: linearVestingEscrowContract
+            .withWallet(wallet)
+            .methods.setup_linear_vesting_escrow(
+              escrows[0].contract.address,
+              bob,
+              alice,
+              tokenContract.address,
+              additionalData.start_1,
+              additionalData.duration_1,
+              AMOUNT,
+              escrows[0].secretKeys,
+            ),
+        },
       },
       // Partial claim (emits released amount note)
       {
         name: "claim (partial)",
-        interaction: linearVestingEscrowContract
-          .withWallet(bob)
-          .methods.claim(escrows[0].contract.address, AMOUNT / 2n),
+        interaction: {
+          caller: bob,
+          action: linearVestingEscrowContract
+            .withWallet(wallet)
+            .methods.claim(escrows[0].contract.address, AMOUNT / 2n),
+        },
       },
       // Claim the remaining amount (does not emit released amount note)
       {
         name: "claim (full)",
-        interaction: linearVestingEscrowContract
-          .withWallet(bob)
-          .methods.claim(escrows[0].contract.address, AMOUNT / 2n),
+        interaction: {
+          caller: bob,
+          action: linearVestingEscrowContract
+            .withWallet(wallet)
+            .methods.claim(escrows[0].contract.address, AMOUNT / 2n),
+        },
       },
       // Stop vesting
       {
         name: "stop_vesting",
-        interaction: linearVestingEscrowContract
-          .withWallet(alice)
-          .methods.stop_vesting(
-            escrows[1].contract.address,
-            additionalData.stop_timestamp_2,
-          ),
+        interaction: {
+          caller: alice,
+          action: linearVestingEscrowContract
+            .withWallet(wallet)
+            .methods.stop_vesting(
+              escrows[1].contract.address,
+              additionalData.stop_timestamp_2,
+            ),
+        },
       },
       // Clawback the second escrow
       {
         name: "clawback",
-        interaction: linearVestingEscrowContract
-          .withWallet(alice)
-          .methods.clawback(
-            escrows[1].contract.address,
-            additionalData.clawbackAmount_2,
-          ),
+        interaction: {
+          caller: alice,
+          action: linearVestingEscrowContract
+            .withWallet(wallet)
+            .methods.clawback(
+              escrows[1].contract.address,
+              additionalData.clawbackAmount_2,
+            ),
+        },
       },
       // Claim after stop vesting
       {
         name: "claim (final)",
-        interaction: linearVestingEscrowContract
-          .withWallet(bob)
-          .methods.claim(
-            escrows[2].contract.address,
-            additionalData.releasableAmount_3,
-          ),
+        interaction: {
+          caller: bob,
+          action: linearVestingEscrowContract
+            .withWallet(wallet)
+            .methods.claim(
+              escrows[2].contract.address,
+              additionalData.releasableAmount_3,
+            ),
+        },
       },
       // Clawback without withdrawing to recipient
       {
         name: "clawback (only to reclaimer)",
-        interaction: linearVestingEscrowContract
-          .withWallet(alice)
-          .methods.clawback(
-            escrows[2].contract.address,
-            additionalData.clawbackAmount_3,
-          ),
+        interaction: {
+          caller: alice,
+          action: linearVestingEscrowContract
+            .withWallet(wallet)
+            .methods.clawback(
+              escrows[2].contract.address,
+              additionalData.clawbackAmount_3,
+            ),
+        },
       },
     ];
 
