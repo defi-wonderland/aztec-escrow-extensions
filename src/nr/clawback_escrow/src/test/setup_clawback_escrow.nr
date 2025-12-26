@@ -2,13 +2,10 @@ use crate::ClawbackEscrowLogic;
 use crate::test::utils;
 use escrow_standard::test::utils as escrow_utils;
 
-// TODO: cannot deploy escrow contract with custom salt. This should fail trying to push the same nullifier twice.
-// #[test(should_fail_with = "Rejecting tx for emitting duplicate nullifiers")]
-#[test(should_fail_with = "Escrow salt mismatch")]
+#[test(should_fail_with = "failed with duplicate nullifiers")]
 unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
     let (env, owner, recipient) = utils::setup(false);
 
-    let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1);
     let escrow_class_id = escrow_utils::get_escrow_class_id();
     let logic_contract_address = utils::deploy_clawback_logic(env, owner, escrow_class_id);
 
@@ -17,7 +14,6 @@ unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
     env.call_private(
         owner,
         ClawbackEscrowLogic::at(logic_contract_address).setup_clawback_escrow(
-            escrow_contract_address,
             recipient,
             owner,
             env.last_block_timestamp() + 10,
@@ -28,7 +24,6 @@ unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
     env.call_private(
         owner,
         ClawbackEscrowLogic::at(logic_contract_address).setup_clawback_escrow(
-            escrow_contract_address,
             recipient,
             owner,
             env.last_block_timestamp() + 10,
@@ -39,7 +34,7 @@ unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
 // #[test]
-#[test(should_fail_with = "Escrow salt mismatch")]
+#[test(should_fail_with = "Note: escrow address mismatch")]
 unconstrained fn setup_clawback_escrow_success() {
     let (env, owner, recipient) = utils::setup(false);
 
@@ -53,7 +48,6 @@ unconstrained fn setup_clawback_escrow_success() {
     env.call_private(
         owner,
         ClawbackEscrowLogic::at(logic_contract_address).setup_clawback_escrow(
-            escrow_contract_address,
             recipient,
             owner,
             deadline,

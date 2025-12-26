@@ -70,13 +70,15 @@ pub unconstrained fn deploy_and_create_escrow(
     env.call_private(
         owner,
         ClawbackEscrowLogic::at(logic_contract_address).setup_clawback_escrow(
-            escrow_contract_address,
             recipient,
             owner,
             env.last_block_timestamp() + timeout,
             vector_secret_keys_1,
         ),
     );
+    let expected_escrow_address = env.view_private(ClawbackEscrowLogic::at(logic_contract_address)
+        .get_escrow(vector_secret_keys_1));
+    assert_eq(escrow_contract_address, expected_escrow_address, "Incorrect escrow deployment");
 
     // Deploy and mint tokens
     let token_contract_address =

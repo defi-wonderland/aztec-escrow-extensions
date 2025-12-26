@@ -7,7 +7,7 @@ pub contract LinearVestingEscrowLogic {
     // aztec library
     use aztec::{
         context::{PrivateContext, UtilityContext},
-        macros::{events::event, functions::{external, initializer}, storage::storage},
+        macros::{events::event, functions::{external, initializer, view}, storage::storage},
         messages::message_delivery::MessageDelivery,
         note::{
             note_getter_options::NoteGetterOptions, note_interface::NoteProperties,
@@ -21,7 +21,7 @@ pub contract LinearVestingEscrowLogic {
     use std::field::bn254::assert_lt;
     // escrow standard library
     use escrow_standard::library::logic::{
-        _check_escrow, _secret_keys_to_public_keys, _share_escrow, _withdraw,
+        _get_escrow, _secret_keys_to_public_keys, _share_escrow, _withdraw,
     };
     use escrow_standard::types::escrow_details_event::MasterSecretKeys;
     // vesting schedule, released amount, final claim note types
@@ -65,7 +65,6 @@ pub contract LinearVestingEscrowLogic {
     }
 
     /// @notice Creates a linear vesting escrow for the provided recipient.
-    /// @param escrow The address of the escrow
     /// @param recipient The address of the recipient
     /// @param reclaimer The address of the reclaimer
     /// @param token The address of the token
@@ -75,7 +74,6 @@ pub contract LinearVestingEscrowLogic {
     /// @param master_secret_keys The master secret keys
     #[external("private")]
     fn setup_linear_vesting_escrow(
-        escrow: AztecAddress,
         recipient: AztecAddress,
         reclaimer: AztecAddress,
         token: AztecAddress,
@@ -84,9 +82,8 @@ pub contract LinearVestingEscrowLogic {
         amount: u128,
         master_secret_keys: MasterSecretKeys,
     ) {
-        _check_escrow(
+        let escrow = _get_escrow(
             &mut context,
-            escrow,
             storage.escrow_class_id.read(),
             master_secret_keys,
         );
@@ -269,6 +266,19 @@ pub contract LinearVestingEscrowLogic {
             vesting_schedule_note.token,
             reclaimer_amount,
         );
+    }
+
+    /// @notice Returns the escrow address that corresponds to the given master secret keys and class ID.
+    /// @param master_secret_keys The master secret keys
+    /// @return AztecAddress of the escrow.
+    #[external("private")]
+    #[view]
+    fn get_escrow(master_secret_keys: MasterSecretKeys) -> pub AztecAddress {
+        _get_escrow(
+            &mut context,
+            storage.escrow_class_id.read(),
+            master_secret_keys,
+        )
     }
 
     /** ==========================================================

@@ -4,7 +4,7 @@ use token::test::utils as token_utils;
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
 // #[test]
-#[test(should_fail_with = "Escrow salt mismatch")]
+#[test(should_fail_with = "Incorrect escrow deployment")]
 unconstrained fn clawback_tokens_success() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let timeout = 10;
@@ -36,7 +36,7 @@ unconstrained fn clawback_tokens_success() {
 
 // TODO: cannot deploy escrow contract with custom salt. This should fail trying to claim after deadline.
 // #[test(should_fail_with = "Timestamp mismatch")]
-#[test(should_fail_with = "Escrow salt mismatch")]
+#[test(should_fail_with = "Incorrect escrow deployment")]
 unconstrained fn clawback_tokens_fails_before_deadline() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let timeout = 10;
@@ -57,7 +57,7 @@ unconstrained fn clawback_tokens_fails_before_deadline() {
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
 // #[test]
-#[test(should_fail_with = "Escrow salt mismatch")]
+#[test(should_fail_with = "Incorrect escrow deployment")]
 unconstrained fn clawback_tokens_after_half_claim_success() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let timeout = 10;
