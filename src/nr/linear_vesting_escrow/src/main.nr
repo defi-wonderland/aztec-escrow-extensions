@@ -218,6 +218,8 @@ pub contract LinearVestingEscrowLogic {
     /// @notice It only makes sense to call this method if the reclaimer has something to claim
     /// in which case the recipient should receive what's left for him first
     /// @dev The clawback is only possible if the vesting schedule is not active
+    /// @dev On first clawback, any releasable amount is sent to the recipient and claim_completed is set to true
+    /// @dev The reclaimer can call clawback multiple times to recover funds incrementally
     /// @param escrow The address of the escrow
     /// @param reclaimer_amount The amount of tokens to clawback from the escrow
     #[external("private")]
