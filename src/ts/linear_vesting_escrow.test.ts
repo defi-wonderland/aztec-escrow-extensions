@@ -1834,23 +1834,250 @@ describe("Linear Vesting Escrow", () => {
           .send({ from: alice })
           .wait();
 
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: alice });
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
-
-        // Claiming after clawback should fail
+        // Claiming after clawback should fail because claim completed is true
         await expect(
           linearVestingEscrow
             .withWallet(wallet)
             .methods.claim(escrow.address, 1n)
             .send({ from: bob })
             .wait(),
-        ).rejects.toThrow(/released amount note not found/);
+        ).rejects.toThrow(/Claim already completed/);
+      });
+    });
+
+    describe("multiple clawbacks", () => {
+      beforeAll(async () => {
+        await setup();
+      });
+
+      let tx: FieldsOf<TxReceipt>;
+      beforeEach(async () => {
+        tx = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.setup_linear_vesting_escrow(
+            bob,
+            alice,
+            token.address,
+            start,
+            duration,
+            AMOUNT,
+            secretKeys,
+          )
+          .send({ from: alice })
+          .wait();
+
+        // Assert initial balances
+        await expectTokenBalances(token, alice, wad(0), wad(0));
+        await expectTokenBalances(token, bob, wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT, bob);
+      });
+
+      it("release amount note is correctly created and emitted", async () => {
+        const block = await node.getBlock(tx.blockNumber!);
+        const stopTimestamp =
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+
+        // Stop vesting
+        await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.stop_vesting(escrow.address, stopTimestamp)
+          .send({ from: alice })
+          .wait();
+
+        const [_, vestedAmount] = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.releasable_and_vested_amounts(escrow.address, stopTimestamp)
+          .simulate({ from: alice });
+
+        const clawbackAmount = AMOUNT - vestedAmount;
+
+        // Clawback
+        const clawbackTx = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.clawback(escrow.address, clawbackAmount)
+          .send({ from: alice })
+          .wait();
+
+        // Assert released amount note
+        const releasedAmountNote = (
+          await wallet.getNotes({
+            scopes: [escrow.address],
+            contractAddress: linearVestingEscrow.address,
+            storageSlot: slotReleasedAmountNotes,
+          })
+        ).filter((note) => note.txHash.equals(clawbackTx.txHash))[0].note;
+
+        // Assert released amount is vested amount and claim completed is true
+        expect(releasedAmountNote.items[1].toBigInt()).toBe(vestedAmount);
+        expect(releasedAmountNote.items[2].toBigInt()).toBe(1n);
+      });
+
+      it("reclaimer can split clawback amount across multiple transactions", async () => {
+        const block = await node.getBlock(tx.blockNumber!);
+        const stopTimestamp =
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+
+        // Stop vesting
+        await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.stop_vesting(escrow.address, stopTimestamp)
+          .send({ from: alice })
+          .wait();
+
+        const [releasableAmount, vestedAmount] = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.releasable_and_vested_amounts(escrow.address, stopTimestamp)
+          .simulate({ from: alice });
+
+        const totalClawbackAmount = AMOUNT - vestedAmount;
+
+        // Assert initial balances
+        await expectTokenBalances(token, alice, wad(0), wad(0));
+        await expectTokenBalances(token, bob, wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT, bob);
+
+        // First clawback - claim half of the reclaimer's amount
+        const firstClawbackAmount = totalClawbackAmount / 2n;
+        const clawbackTx1 = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.clawback(escrow.address, firstClawbackAmount)
+          .send({ from: alice })
+          .wait();
+
+        // Assert released amount note
+        const releasedAmountNote = (
+          await wallet.getNotes({
+            scopes: [escrow.address],
+            contractAddress: linearVestingEscrow.address,
+            storageSlot: slotReleasedAmountNotes,
+          })
+        ).filter((note) => note.txHash.equals(clawbackTx1.txHash))[0].note;
+
+        expect(releasedAmountNote.items[1].toBigInt()).toBe(vestedAmount);
+        expect(releasedAmountNote.items[2].toBigInt()).toBe(1n);
+
+        // After first clawback: alice got firstClawbackAmount, bob got releasableAmount
+        await expectTokenBalances(token, alice, wad(0), firstClawbackAmount);
+        await expectTokenBalances(token, bob, wad(0), releasableAmount);
+        await expectTokenBalances(
+          token,
+          escrow.address,
+          wad(0),
+          AMOUNT - firstClawbackAmount - releasableAmount,
+          bob,
+        );
+
+        // Second clawback - claim the remaining amount
+        const secondClawbackAmount = totalClawbackAmount - firstClawbackAmount;
+        const clawbackTx2 = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.clawback(escrow.address, secondClawbackAmount)
+          .send({ from: alice })
+          .wait();
+
+        // Assert released amount note
+        const releasedAmountNote2 = (
+          await wallet.getNotes({
+            scopes: [escrow.address],
+            contractAddress: linearVestingEscrow.address,
+            storageSlot: slotReleasedAmountNotes,
+          })
+        ).filter((note) => note.txHash.equals(clawbackTx2.txHash))[0].note;
+
+        expect(releasedAmountNote2.items[1].toBigInt()).toBe(vestedAmount);
+        expect(releasedAmountNote2.items[2].toBigInt()).toBe(1n);
+
+        // Assert final balances - alice has full clawback amount, bob has releasable amount
+        await expectTokenBalances(token, alice, wad(0), totalClawbackAmount);
+        await expectTokenBalances(token, bob, wad(0), releasableAmount);
+        await expectTokenBalances(token, escrow.address, wad(0), wad(0), bob);
+      });
+
+      it("reclaimer can do multiple clawbacks after recipient has already claimed", async () => {
+        const block = await node.getBlock(tx.blockNumber!);
+        const stopTimestamp =
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+
+        // Stop vesting
+        await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.stop_vesting(escrow.address, stopTimestamp)
+          .send({ from: alice })
+          .wait();
+
+        const [releasableAmount, vestedAmount] = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.releasable_and_vested_amounts(escrow.address, stopTimestamp)
+          .simulate({ from: alice });
+
+        // Bob claims his releasable amount first
+        await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.claim(escrow.address, releasableAmount)
+          .send({ from: bob })
+          .wait();
+
+        const totalClawbackAmount = AMOUNT - vestedAmount;
+
+        // Assert post-claim balances
+        await expectTokenBalances(token, alice, wad(0), wad(0));
+        await expectTokenBalances(token, bob, wad(0), releasableAmount);
+        await expectTokenBalances(
+          token,
+          escrow.address,
+          wad(0),
+          AMOUNT - releasableAmount,
+          bob,
+        );
+
+        // First clawback - claim 1/2 of the reclaimer's amount
+        const firstClawbackAmount = totalClawbackAmount / 2n;
+        await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.clawback(escrow.address, firstClawbackAmount)
+          .send({ from: alice })
+          .wait();
+
+        await expectTokenBalances(token, alice, wad(0), firstClawbackAmount);
+        await expectTokenBalances(
+          token,
+          escrow.address,
+          wad(0),
+          AMOUNT - releasableAmount - firstClawbackAmount,
+          bob,
+        );
+
+        // Second clawback - claim another 1/2
+        const secondClawbackAmount = totalClawbackAmount / 2n;
+        const clawbackTx2 = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.clawback(escrow.address, secondClawbackAmount)
+          .send({ from: alice })
+          .wait();
+
+        await expectTokenBalances(
+          token,
+          alice,
+          wad(0),
+          firstClawbackAmount + secondClawbackAmount,
+        );
+
+        // Assert final balances
+        await expectTokenBalances(token, alice, wad(0), totalClawbackAmount);
+        await expectTokenBalances(token, bob, wad(0), releasableAmount);
+        await expectTokenBalances(token, escrow.address, wad(0), wad(0), bob);
+
+        // Assert released amount note
+        const releasedAmountNote2 = (
+          await wallet.getNotes({
+            scopes: [escrow.address],
+            contractAddress: linearVestingEscrow.address,
+            storageSlot: slotReleasedAmountNotes,
+          })
+        ).filter((note) => note.txHash.equals(clawbackTx2.txHash))[0].note;
+
+        expect(releasedAmountNote2.items[1].toBigInt()).toBe(vestedAmount);
+        expect(releasedAmountNote2.items[2].toBigInt()).toBe(1n);
       });
     });
   });
