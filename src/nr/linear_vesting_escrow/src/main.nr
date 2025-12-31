@@ -501,7 +501,7 @@ pub contract LinearVestingEscrowLogic {
         // elapsed < duration always, then quotient < total_amount
         assert_lt(quotient_field, total_amount_field);
 
-        assert(quotient_field * divisor_field + remainder_field == numerator);
+        assert(quotient_field * duration_field + remainder_field == numerator);
 
         quotient_field
     }
