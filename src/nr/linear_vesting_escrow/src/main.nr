@@ -464,7 +464,7 @@ pub contract LinearVestingEscrowLogic {
 
             // Operate on BigNum to avoid overflow of total_amount * elapsed
             // vested_amount fits in u128 because elapsed < duration, and total_amount < u128
-            let vested_amount_field = calculate_vested_amount(total_amount, elapsed, duration);
+            let vested_amount_field = _calculate_vested_amount(total_amount, elapsed, duration);
             vested_amount = vested_amount_field as u128;
         }
 
@@ -483,7 +483,7 @@ pub contract LinearVestingEscrowLogic {
     /// @param duration Divisor (u64)
     /// @return Result as Field
     #[contract_library_method]
-    fn calculate_vested_amount(total_amount: u128, elapsed: u64, duration: u64) -> Field {
+    fn _calculate_vested_amount(total_amount: u128, elapsed: u64, duration: u64) -> Field {
         // (total_amount * elapsed) / duration <-> numerator / divisor
         let duration_field = duration as Field;
         let total_amount_field = total_amount as Field;
