@@ -54,7 +54,7 @@ Once stopped, the recipient can finish claiming or the reclaimer can clawback. A
 
 Claiming after a stopped vesting is the _last claim possible_, only executable by the recipient, which finalizes the claims by setting `claim_completed` to `true`.
 
-The reclaimer can clawback the escrow after the last claim or before. By doing so, it first withdraws any releasable amount remaining to the recipient (only on the first clawback), and then receives the amount specified in the call. After the first clawback, `claim_completed` is set to `true`, preventing any further claims by the recipient. The reclaimer can perform multiple clawbacks to recover funds incrementally across multiple transactions.
+The reclaimer can clawback the escrow after the recipient's last claim or before. By doing so, it first withdraws any releasable amount remaining to the recipient, and then receives the amount specified in the call. After the first clawback, `claim_completed` is set to `true`, preventing any further claims by the recipient. The reclaimer can perform multiple clawbacks to recover funds across multiple transactions if needed.
 
 ## Storage Fields
 - `escrow_class_id: Field`: Contract Class ID of the escrow contract that the logic contract supports.
