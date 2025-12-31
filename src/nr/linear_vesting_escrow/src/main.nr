@@ -82,6 +82,9 @@ pub contract LinearVestingEscrowLogic {
         amount: u128,
         master_secret_keys: MasterSecretKeys,
     ) {
+        // We check that start + duration does not overflow
+        let _ = start + duration;
+
         let escrow = _get_escrow(
             &mut context,
             storage.escrow_class_id.read(),
