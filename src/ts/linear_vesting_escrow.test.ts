@@ -1195,6 +1195,310 @@ describe("Linear Vesting Escrow", () => {
         ).rejects.toThrow(/claim amount too high/);
       });
     });
+
+    describe("timelock (duration = 0)", () => {
+      beforeAll(async () => {
+        await setup();
+      });
+
+      beforeEach(async () => {
+        // Set duration to 0 for timelock-like behavior
+        duration = 0n;
+      });
+
+      it("claim before start time should transfer zero tokens", async () => {
+        // Set start time in the future
+        const blockNumber = await node.getBlockNumber();
+        const block = await node.getBlock(blockNumber);
+        start = block!.header.globalVariables.timestamp + 10000n;
+
+        const tx = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.setup_linear_vesting_escrow(
+            bob,
+            alice,
+            token.address,
+            start,
+            duration,
+            AMOUNT,
+            secretKeys,
+          )
+          .send({ from: alice })
+          .wait();
+
+        // Assert initial balances
+        await expectTokenBalances(token, bob, wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT, bob);
+
+        // Get timestamp from setup tx (before start time)
+        const setupBlock = await node.getBlock(tx.blockNumber!);
+        const claimTimestamp = setupBlock!.header.globalVariables.timestamp;
+
+        // Verify claim timestamp is before start
+        expect(claimTimestamp).toBeLessThan(start);
+
+        // Get releasable amount (should be 0)
+        const [releasableAmount] = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.releasable_and_vested_amounts(escrow.address, claimTimestamp)
+          .simulate({ from: bob });
+
+        expect(releasableAmount).toBe(0n);
+
+        // Claim with 0 amount
+        await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.claim(escrow.address, 0n)
+          .send({ from: bob })
+          .wait();
+
+        // Assert balances unchanged
+        await expectTokenBalances(token, bob, wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT, bob);
+      });
+
+      it("claim at start time should transfer full amount immediately", async () => {
+        const tx = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.setup_linear_vesting_escrow(
+            bob,
+            alice,
+            token.address,
+            start,
+            duration,
+            AMOUNT,
+            secretKeys,
+          )
+          .send({ from: alice })
+          .wait();
+
+        // Assert initial balances
+        await expectTokenBalances(token, bob, wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT, bob);
+
+        // Get timestamp from setup tx
+        const setupBlock = await node.getBlock(tx.blockNumber!);
+        const claimTimestamp = setupBlock!.header.globalVariables.timestamp;
+
+        // Verify claim timestamp is at or after start (duration = 0 means immediate unlock at start)
+        expect(claimTimestamp).toBeGreaterThanOrEqual(start);
+
+        // Get releasable amount (should be full AMOUNT since duration = 0)
+        const [releasableAmount, vestedAmount] = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.releasable_and_vested_amounts(escrow.address, claimTimestamp)
+          .simulate({ from: bob });
+
+        expect(releasableAmount).toBe(AMOUNT);
+        expect(vestedAmount).toBe(AMOUNT);
+
+        // Claim full amount
+        await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.claim(escrow.address, AMOUNT)
+          .send({ from: bob })
+          .wait();
+
+        // Assert bob received the note
+        const notes = await wallet.getNotes({
+          scopes: [bob],
+          contractAddress: token.address,
+        });
+        expect(notes.length).toBe(1);
+        expectUintNote(notes[0], AMOUNT, bob);
+
+        // Assert final balances
+        await expectTokenBalances(token, bob, wad(0), AMOUNT);
+        await expectTokenBalances(token, escrow.address, wad(0), wad(0), bob);
+      });
+
+      it("claim after start time should transfer full amount", async () => {
+        // Set start in the past
+        const blockNumber = await node.getBlockNumber();
+        const block = await node.getBlock(blockNumber);
+        start = block!.header.globalVariables.timestamp - 100n;
+
+        const tx = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.setup_linear_vesting_escrow(
+            bob,
+            alice,
+            token.address,
+            start,
+            duration,
+            AMOUNT,
+            secretKeys,
+          )
+          .send({ from: alice })
+          .wait();
+
+        // Assert initial balances
+        await expectTokenBalances(token, bob, wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT, bob);
+
+        // Get timestamp from setup tx
+        const setupBlock = await node.getBlock(tx.blockNumber!);
+        const claimTimestamp = setupBlock!.header.globalVariables.timestamp;
+
+        // Verify claim timestamp is after start
+        expect(claimTimestamp).toBeGreaterThan(start);
+
+        // Get releasable amount (should be full AMOUNT)
+        const [releasableAmount, vestedAmount] = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.releasable_and_vested_amounts(escrow.address, claimTimestamp)
+          .simulate({ from: bob });
+
+        expect(releasableAmount).toBe(AMOUNT);
+        expect(vestedAmount).toBe(AMOUNT);
+
+        // Claim full amount
+        await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.claim(escrow.address, AMOUNT)
+          .send({ from: bob })
+          .wait();
+
+        // Assert final balances
+        await expectTokenBalances(token, bob, wad(0), AMOUNT);
+        await expectTokenBalances(token, escrow.address, wad(0), wad(0), bob);
+      });
+
+      it("stop vesting and clawback with duration = 0 should work correctly", async () => {
+        // Set start in the future so nothing is claimable yet
+        const blockNumber = await node.getBlockNumber();
+        const block = await node.getBlock(blockNumber);
+        start = block!.header.globalVariables.timestamp + 10000n;
+
+        const tx = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.setup_linear_vesting_escrow(
+            bob,
+            alice,
+            token.address,
+            start,
+            duration,
+            AMOUNT,
+            secretKeys,
+          )
+          .send({ from: alice })
+          .wait();
+
+        // Assert initial balances
+        await expectTokenBalances(token, alice, wad(0), wad(0));
+        await expectTokenBalances(token, bob, wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT, bob);
+
+        const setupBlock = await node.getBlock(tx.blockNumber!);
+        // Stop timestamp is before start, so vested amount should be 0
+        const stopTimestamp =
+          setupBlock!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+
+        // Stop vesting
+        await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.stop_vesting(escrow.address, stopTimestamp)
+          .send({ from: alice })
+          .wait();
+
+        // Get releasable and vested amounts at stop timestamp
+        const [releasableAmount, vestedAmount] = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.releasable_and_vested_amounts(escrow.address, stopTimestamp)
+          .simulate({ from: alice });
+
+        // Since stop timestamp is before start, vested and releasable should be 0
+        expect(vestedAmount).toBe(0n);
+        expect(releasableAmount).toBe(0n);
+
+        // Clawback full amount (reclaimer gets everything since nothing vested)
+        const clawbackTx = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.clawback(escrow.address, AMOUNT)
+          .send({ from: alice })
+          .wait();
+
+        // Assert token notes - 1 note (alice's clawback, no recipient withdrawal since releasable = 0)
+        const notes = (
+          await wallet.getNotes({
+            contractAddress: token.address,
+          })
+        ).filter((note) => note.txHash.equals(clawbackTx.txHash));
+        expect(notes.length).toBe(1);
+
+        // Assert final balances - alice gets everything
+        await expectTokenBalances(token, alice, wad(0), AMOUNT);
+        await expectTokenBalances(token, bob, wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), wad(0), bob);
+      });
+
+      it("stop vesting after start with duration = 0 should vest full amount", async () => {
+        // Set start in the past so everything is immediately vested
+        const blockNumber = await node.getBlockNumber();
+        const block = await node.getBlock(blockNumber);
+        start = block!.header.globalVariables.timestamp - 100n;
+
+        const tx = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.setup_linear_vesting_escrow(
+            bob,
+            alice,
+            token.address,
+            start,
+            duration,
+            AMOUNT,
+            secretKeys,
+          )
+          .send({ from: alice })
+          .wait();
+
+        // Assert initial balances
+        await expectTokenBalances(token, alice, wad(0), wad(0));
+        await expectTokenBalances(token, bob, wad(0), wad(0));
+        await expectTokenBalances(token, escrow.address, wad(0), AMOUNT, bob);
+
+        const setupBlock = await node.getBlock(tx.blockNumber!);
+        const stopTimestamp =
+          setupBlock!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+
+        // Stop vesting
+        await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.stop_vesting(escrow.address, stopTimestamp)
+          .send({ from: alice })
+          .wait();
+
+        // Get releasable and vested amounts at stop timestamp
+        const [releasableAmount, vestedAmount] = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.releasable_and_vested_amounts(escrow.address, stopTimestamp)
+          .simulate({ from: alice });
+
+        // Since stop timestamp is after start and duration = 0, everything is vested
+        expect(vestedAmount).toBe(AMOUNT);
+        expect(releasableAmount).toBe(AMOUNT);
+
+        // Clawback with 0 reclaimer amount (recipient gets everything)
+        const clawbackTx = await linearVestingEscrow
+          .withWallet(wallet)
+          .methods.clawback(escrow.address, 0n)
+          .send({ from: alice })
+          .wait();
+
+        // Assert token notes - 1 note (bob's releasable, no reclaimer withdrawal)
+        const notes = (
+          await wallet.getNotes({
+            contractAddress: token.address,
+          })
+        ).filter((note) => note.txHash.equals(clawbackTx.txHash));
+        expect(notes.length).toBe(1);
+
+        // Assert final balances - bob gets everything
+        await expectTokenBalances(token, alice, wad(0), wad(0));
+        await expectTokenBalances(token, bob, wad(0), AMOUNT);
+        await expectTokenBalances(token, escrow.address, wad(0), wad(0), bob);
+      });
+    });
   });
 
   describe("stop_vesting", () => {
