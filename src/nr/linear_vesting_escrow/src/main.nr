@@ -221,6 +221,8 @@ pub contract LinearVestingEscrowLogic {
     /// @notice It only makes sense to call this method if the reclaimer has something to claim
     /// in which case the recipient should receive what's left for him first
     /// @dev The clawback is only possible if the vesting schedule is not active
+    /// @dev On first clawback, any releasable amount is sent to the recipient and claim_completed is set to true
+    /// @dev The reclaimer can call clawback multiple times to recover funds incrementally
     /// @param escrow The address of the escrow
     /// @param reclaimer_amount The amount of tokens to clawback from the escrow
     #[external("private")]
@@ -237,17 +239,20 @@ pub contract LinearVestingEscrowLogic {
         // We assert that the vesting schedule is not active
         assert(vesting_schedule_note.stop_timestamp > 0, "Vesting schedule is active");
 
-        // Fetch and remove a released amount note (prevents any future claims or clawbacks)
+        // Fetch and remove a released amount note
         let released_amount_note = _pop_released_amount_note(storage, escrow);
 
         // Get releasable amount and vested amount
-        let (releasable_amount, _) = _calculate_releasable_and_vested_amounts(
+        let (releasable_amount, vested_amount) = _calculate_releasable_and_vested_amounts(
             vesting_schedule_note.start,
             vesting_schedule_note.duration,
             vesting_schedule_note.total_amount,
             released_amount_note.released_amount,
             vesting_schedule_note.stop_timestamp,
         );
+
+        // The total released amount at stop timestamp is vested amount and the claim is completed (the recipient cannot claim anymore)
+        _create_released_amount_note(storage, escrow, vested_amount, true);
 
         // releasable_amount can be 0 if the recipient already claimed the total amount
         if releasable_amount > 0 {

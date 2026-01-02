@@ -38,20 +38,23 @@ stateDiagram-v2
     %% Stopped splits via a choice node (fans out cleanly)
     state Stopped <<choice>>
 
-    Stopped --> Finished.Clawback: &nbspclawback()&nbsp<br>&nbsp(reclaimer)&nbsp
+    Stopped --> Clawback: &nbspclawback()&nbsp<br>&nbsp(reclaimer)&nbsp
     Stopped --> Finished.FinalClaim: &nbspclaim()&nbsp<br>&nbsp(recipient)&nbsp
-    Finished.FinalClaim --> Finished.Clawback: &nbspclawback()&nbsp<br>&nbsp(reclaimer)&nbsp
-    Finished.Clawback --> Finished
+    Finished.FinalClaim --> Clawback: &nbspclawback()&nbsp<br>&nbsp(reclaimer)&nbsp
+    
+    %% Clawback can be repeated multiple times
     Finished.FinalClaim --> Finished
+    Clawback --> Finished: &nbsp(escrow empty)&nbsp
+    Clawback --> Clawback: &nbspclawback()&nbsp<br>&nbsp(reclaimer)&nbsp
 
     Finished --> [*]
 ```
 
 Once stopped, the recipient can finish claiming or the reclaimer can clawback. A race condition exists because the recipient must be able to claim even after the vesting has been stopped, without relying on the reclaimer to call clawback, which may be delayed indefinitely or never occur.
 
-Claiming after a stopped vesting is the _last claim possible_, only executable by the recipient, which finalizes the claims by setting `claim_complete` to `true`.
+Claiming after a stopped vesting is the _last claim possible_, only executable by the recipient, which finalizes the claims by setting `claim_completed` to `true`.
 
-The reclaimer can clawback the escrow after the last claim or before. By doing so, it first withdraws any releasable amount remaining to the recipient, and then receives the amount specified in the call.
+The reclaimer can clawback the escrow after the recipient's last claim or before. By doing so, it first withdraws any releasable amount remaining to the recipient, and then receives the amount specified in the call. After the first clawback, `claim_completed` is set to `true`, preventing any further claims by the recipient. The reclaimer can perform multiple clawbacks to recover funds across multiple transactions if needed.
 
 ## Storage Fields
 - `escrow_class_id: Field`: Contract Class ID of the escrow contract that the logic contract supports.
@@ -124,6 +127,8 @@ fn stop_vesting(escrow: AztecAddress, stop_timestamp: u64) { /* ... */ }
 /// @notice It only makes sense to call this method if the reclaimer has something to claim
 /// in which case the recipient should receive what's left for him first
 /// @dev The clawback is only possible if the vesting schedule is not active
+/// @dev On first clawback, any releasable amount is sent to the recipient and claim_completed is set to true
+/// @dev The reclaimer can call clawback multiple times to recover funds incrementally
 /// @param escrow The address of the escrow
 /// @param reclaimer_amount The amount of tokens to clawback from the escrow
 #[private]
