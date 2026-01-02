@@ -472,7 +472,7 @@ pub contract LinearVestingEscrowLogic {
 
             // Operate on BigNum to avoid overflow of total_amount * elapsed
             // vested_amount fits in u128 because elapsed < duration, and total_amount < u128
-            let vested_amount_field = u256_muldiv(total_amount, elapsed, duration);
+            let vested_amount_field = _calculate_vested_amount(total_amount, elapsed, duration);
             vested_amount = vested_amount_field as u128;
         }
 
@@ -483,18 +483,21 @@ pub contract LinearVestingEscrowLogic {
         (releasable_amount, vested_amount)
     }
 
-    /// @notice Performs safe multiplication and division: (a * b) / c
-    /// @param a First operand (u128)
-    /// @param b Second operand (u64)
-    /// @param divisor Divisor (u64)
+    /// @notice Performs safe multiplication and division for vested amount: (total_amount * elapsed) / duration
+    /// @dev We operate on BigNum to avoid overflow of total_amount * elapsed
+    /// @dev This function is specifically designed for this contract and is not a general purpose multiplication and division function
+    /// @param total_amount First operand (u128)
+    /// @param elapsed Second operand (u64)
+    /// @param duration Divisor (u64)
     /// @return Result as Field
     #[contract_library_method]
-    fn u256_muldiv(a: u128, b: u64, divisor: u64) -> Field {
-        let divisor_field = divisor as Field;
-        let a_field = a as Field;
-        let numerator = a_field * (b as Field);
+    fn _calculate_vested_amount(total_amount: u128, elapsed: u64, duration: u64) -> Field {
+        // (total_amount * elapsed) / duration <-> numerator / divisor
+        let duration_field = duration as Field;
+        let total_amount_field = total_amount as Field;
+        let numerator = total_amount_field * (elapsed as Field);
         let numerator_u256 = U256::from(numerator);
-        let divisor_u256 = U256::from(divisor_field);
+        let divisor_u256 = U256::from(duration_field);
 
         // Safety: __udiv_mod is unconstrained, we then constrain the quotient and remainder to be less than a and divisor, respectively
         let (quotient, remainder) = unsafe { numerator_u256.__udiv_mod(divisor_u256) };
@@ -502,11 +505,11 @@ pub contract LinearVestingEscrowLogic {
         let quotient_field = to_field(quotient);
         let remainder_field = to_field(remainder);
 
-        assert_lt(remainder_field, divisor_field);
-        // b < divisor always, then quotient < a
-        assert_lt(quotient_field, a_field);
+        assert_lt(remainder_field, duration_field);
+        // elapsed < duration always, then quotient < total_amount
+        assert_lt(quotient_field, total_amount_field);
 
-        assert(quotient_field * divisor_field + remainder_field == numerator);
+        assert(quotient_field * duration_field + remainder_field == numerator);
 
         quotient_field
     }
