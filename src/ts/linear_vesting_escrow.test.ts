@@ -80,6 +80,7 @@ describe("Linear Vesting Escrow", () => {
     LinearVestingEscrowLogicContract.storage.released_notes.slot;
 
   const AZTEC_SLOT_TIME = 36n; // seconds
+  const MAX_U64_VALUE = (1n << 64n) - 1n;
 
   async function setup() {
     ({ store, node, wallet, accounts } = await setupTestSuite(
@@ -359,6 +360,28 @@ describe("Linear Vesting Escrow", () => {
           .send({ from: alice })
           .wait(),
       ).rejects.toThrow(/Invalid tx: Existing nullifier/);
+    });
+
+    it("creates linear vesting escrow should fail if start + duration overflows", async () => {
+      start = MAX_U64_VALUE;
+      duration = MAX_U64_VALUE;
+
+      await expect(
+        linearVestingEscrow.methods
+          .setup_linear_vesting_escrow(
+            carl,
+            alice,
+            token.address,
+            start,
+            duration,
+            AMOUNT,
+            secretKeys,
+          )
+          .send({ from: alice })
+          .wait(),
+      ).rejects.toThrow(
+        "Assertion failed: attempt to add with overflow 'start + duration'",
+      );
     });
   });
 
