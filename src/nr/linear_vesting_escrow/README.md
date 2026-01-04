@@ -8,7 +8,7 @@ The `LinearVestingEscrowLogic` should be used with escrow instances of the [stan
 
 > ⚠️ **WARNING — Private Balance Loss**
 >
-> any tokens transferred to the Linear Vesting Escrow Logic's private balance will be lost forever, as the contract doesn't have keys to spend a private balance nor any recovery mechanism. Tokens must be sent to the Escrow contract.
+> any tokens transferred to the Linear Vesting Escrow Logic's private balance will be lost forever, as the contract doesn't have keys to spend a private balance nor any recovery mechanism. Tokens must be sent to the Escrow contract private balance. Tokens sent to the Escrow's public balance will be lost as well.
 
 ## Design
 
@@ -55,6 +55,18 @@ Once stopped, the recipient can finish claiming or the reclaimer can clawback. A
 Claiming after a stopped vesting is the _last claim possible_, only executable by the recipient, which finalizes the claims by setting `claim_completed` to `true`.
 
 The reclaimer can clawback the escrow after the recipient's last claim or before. By doing so, it first withdraws any releasable amount remaining to the recipient, and then receives the amount specified in the call. After the first clawback, `claim_completed` is set to `true`, preventing any further claims by the recipient. The reclaimer can perform multiple clawbacks to recover funds across multiple transactions if needed.
+
+### Usage
+
+Before using a linear vesting escrow make sure to have the following considerations.
+
+- **Setup:** Always check that both the vesting schedule setup and the escrow contract setup is correct before funding it. In particular make sure the escrow contract is deployed with its salt equal to the linear vesting contract address.
+- **Stopping vesting:** The reclaimer must call `stop_vesting` with a `stop_timestamp` greater than the current timestamp. This allows the recipient to immediately claim all tokens vested up to `stop_timestamp`. 
+- **Final claim:** Once the vesting is stopped, the recipient can call `claim` one last time to get any tokens vested yet unreleased. If the `claim_amount` used in this final call is smaller than the tokens available to claim, any unclaimed tokens might be lost. The reclaimer might be able to forward unclaimed tokens to the recipient, but this is not guarantee. To understand whether a `claim` call will be final, check if `stop_timestamp` in the vesting schedule note is greater than 0.
+- **Permissioning:** Except for the final claim, the `claim` function is permissionless. Anyone holding the escrow keys can trigger claims to the recipient. If this is undesirable, consider gating the `claim` function to just the recipient by asserting `context.msg_sender()`.
+    - Note that calling `claim` very frequently might be a way to grief, as the recipient will have to consolidate many tiny token notes to use them, which can be costly. Anyway, the reclaimer, who also has the escrow keys, can simply stop the vesting at any point, so he probably does not have incentives to grief this way.
+- **Timelock mode:** Set `duration` to 0 to make the contract behave as a timelock escrow. However, consider using an escrow implementation specifically meant for timelocks, which will likely be more efficient.
+- **Disabling clawback:** Set `reclaimer` to a dead address to disable clawback features. Note that the recipient can only claim `total_amount`, so in this case any tokens sent in excess to the escrow will be irrecoverable.
 
 ## Storage Fields
 - `escrow_class_id: Field`: Contract Class ID of the escrow contract that the logic contract supports.
