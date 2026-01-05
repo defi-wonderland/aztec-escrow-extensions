@@ -6,6 +6,10 @@ The `ClawbackEscrowLogic` address can be publicly known and multiple independent
 
 The `ClawbackEscrowLogic` should be used with escrow instances of the [standardized escrow implementation]( https://github.com/defi-wonderland/aztec-standards/tree/dev).
 
+> ⚠️ **WARNING — Private Balance Loss**
+>
+> any tokens transferred to the Clawback Escrow Logic's private balance will be lost forever, as the contract doesn't have keys to spend a private balance nor any recovery mechanism. Tokens must be sent to the Escrow contract private balance. Tokens sent to the Escrow's public balance will be lost as well.
+
 ## Storage Fields
 
 - `escrow_class_id: Field`: Contract Class ID of the escrow contract that the logic contract supports.
