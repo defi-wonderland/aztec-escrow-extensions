@@ -16,7 +16,7 @@
     "build": "yarn compile && yarn codegen -f",
     "prepare": "husky",
     "ccc": "yarn clean && yarn compile && yarn codegen && yarn build-aztec-standards",
-    "build-aztec-standards": "npx tsx scripts/build-aztec-standards.ts feat/escrow-address-getter",
+    "build-aztec-standards": "npx tsx scripts/build-aztec-standards.ts feat/escrow-v3.0.0-devnet.2",
     "bench": "NODE_NO_WARNINGS=1 aztec-benchmark --suffix _base"
   },
   "lint-staged": {
