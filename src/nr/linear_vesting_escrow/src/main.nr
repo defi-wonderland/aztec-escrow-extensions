@@ -82,6 +82,9 @@ pub contract LinearVestingEscrowLogic {
         amount: u128,
         master_secret_keys: MasterSecretKeys,
     ) {
+        // We check that start + duration does not overflow
+        let _ = start + duration;
+
         let escrow = _get_escrow(
             &mut context,
             storage.escrow_class_id.read(),
@@ -218,6 +221,8 @@ pub contract LinearVestingEscrowLogic {
     /// @notice It only makes sense to call this method if the reclaimer has something to claim
     /// in which case the recipient should receive what's left for him first
     /// @dev The clawback is only possible if the vesting schedule is not active
+    /// @dev On first clawback, any releasable amount is sent to the recipient and claim_completed is set to true
+    /// @dev The reclaimer can call clawback multiple times to recover funds incrementally
     /// @param escrow The address of the escrow
     /// @param reclaimer_amount The amount of tokens to clawback from the escrow
     #[external("private")]
@@ -234,17 +239,20 @@ pub contract LinearVestingEscrowLogic {
         // We assert that the vesting schedule is not active
         assert(vesting_schedule_note.stop_timestamp > 0, "Vesting schedule is active");
 
-        // Fetch and remove a released amount note (prevents any future claims or clawbacks)
+        // Fetch and remove a released amount note
         let released_amount_note = _pop_released_amount_note(storage, escrow);
 
         // Get releasable amount and vested amount
-        let (releasable_amount, _) = _calculate_releasable_and_vested_amounts(
+        let (releasable_amount, vested_amount) = _calculate_releasable_and_vested_amounts(
             vesting_schedule_note.start,
             vesting_schedule_note.duration,
             vesting_schedule_note.total_amount,
             released_amount_note.released_amount,
             vesting_schedule_note.stop_timestamp,
         );
+
+        // The total released amount at stop timestamp is vested amount and the claim is completed (the recipient cannot claim anymore)
+        _create_released_amount_note(storage, escrow, vested_amount, true);
 
         // releasable_amount can be 0 if the recipient already claimed the total amount
         if releasable_amount > 0 {
@@ -464,7 +472,7 @@ pub contract LinearVestingEscrowLogic {
 
             // Operate on BigNum to avoid overflow of total_amount * elapsed
             // vested_amount fits in u128 because elapsed < duration, and total_amount < u128
-            let vested_amount_field = u256_muldiv(total_amount, elapsed, duration);
+            let vested_amount_field = _calculate_vested_amount(total_amount, elapsed, duration);
             vested_amount = vested_amount_field as u128;
         }
 
@@ -475,18 +483,21 @@ pub contract LinearVestingEscrowLogic {
         (releasable_amount, vested_amount)
     }
 
-    /// @notice Performs safe multiplication and division: (a * b) / c
-    /// @param a First operand (u128)
-    /// @param b Second operand (u64)
-    /// @param divisor Divisor (u64)
+    /// @notice Performs safe multiplication and division for vested amount: (total_amount * elapsed) / duration
+    /// @dev We operate on BigNum to avoid overflow of total_amount * elapsed
+    /// @dev This function is specifically designed for this contract and is not a general purpose multiplication and division function
+    /// @param total_amount First operand (u128)
+    /// @param elapsed Second operand (u64)
+    /// @param duration Divisor (u64)
     /// @return Result as Field
     #[contract_library_method]
-    fn u256_muldiv(a: u128, b: u64, divisor: u64) -> Field {
-        let divisor_field = divisor as Field;
-        let a_field = a as Field;
-        let numerator = a_field * (b as Field);
+    fn _calculate_vested_amount(total_amount: u128, elapsed: u64, duration: u64) -> Field {
+        // (total_amount * elapsed) / duration <-> numerator / divisor
+        let duration_field = duration as Field;
+        let total_amount_field = total_amount as Field;
+        let numerator = total_amount_field * (elapsed as Field);
         let numerator_u256 = U256::from(numerator);
-        let divisor_u256 = U256::from(divisor_field);
+        let divisor_u256 = U256::from(duration_field);
 
         // Safety: __udiv_mod is unconstrained, we then constrain the quotient and remainder to be less than a and divisor, respectively
         let (quotient, remainder) = unsafe { numerator_u256.__udiv_mod(divisor_u256) };
@@ -494,11 +505,11 @@ pub contract LinearVestingEscrowLogic {
         let quotient_field = to_field(quotient);
         let remainder_field = to_field(remainder);
 
-        assert_lt(remainder_field, divisor_field);
-        // b < divisor always, then quotient < a
-        assert_lt(quotient_field, a_field);
+        assert_lt(remainder_field, duration_field);
+        // elapsed < duration always, then quotient < total_amount
+        assert_lt(quotient_field, total_amount_field);
 
-        assert(quotient_field * divisor_field + remainder_field == numerator);
+        assert(quotient_field * duration_field + remainder_field == numerator);
 
         quotient_field
     }
