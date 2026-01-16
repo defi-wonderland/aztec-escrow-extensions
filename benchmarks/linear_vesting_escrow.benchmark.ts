@@ -104,6 +104,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
   async setup(): Promise<LinearVestingEscrowBenchmarkContext> {
     const { store, node, wallet, accounts } = await setupTestSuite(
       "bench-linear-vesting",
+      true,
     );
     const [deployer] = accounts;
 

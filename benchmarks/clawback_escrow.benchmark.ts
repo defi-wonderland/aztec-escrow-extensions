@@ -95,8 +95,10 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
    */
 
   async setup(): Promise<ClawbackEscrowBenchmarkContext> {
-    const { store, node, wallet, accounts } =
-      await setupTestSuite("bench-clawback");
+    const { store, node, wallet, accounts } = await setupTestSuite(
+      "bench-clawback",
+      true,
+    );
     const [deployer] = accounts;
 
     const escrowClassId = (

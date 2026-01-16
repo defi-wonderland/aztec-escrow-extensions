@@ -10,6 +10,7 @@ concurrency:
 permissions:
   contents: read
   pull-requests: write
+  issues: write
 
 env:
   BENCH_DIR: ./benchmarks
@@ -69,9 +70,9 @@ jobs:
         os: [ubuntu-latest-m]
         threads: [12]
 
-    runs-on: 
+    runs-on:
       labels: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       # ──────────────────────────────────────────────────────────────
@@ -116,8 +117,8 @@ jobs:
         run: |
           VERSION=${{ steps.basever.outputs.ver }} aztec-up
 
-      - name: Start sandbox (BASE, background)
-        run: aztec start --sandbox &
+      - name: Start local network (BASE, background)
+        run: aztec start --local-network &
 
       - name: Start PXE node (BASE, background)
         run: |
@@ -182,8 +183,8 @@ jobs:
       - name: Kill BASE services
         if: steps.prver.outputs.ver_diff == 'true'
         run: |
-          pkill -f "aztec.*--sandbox" || true                   
-          pkill -f "aztec.*--pxe.*8081" || true                   
+          pkill -f "aztec.*--local-network" || true
+          pkill -f "aztec.*--pxe.*8081" || true
           sleep 5      
 
       - name: Switch CLI to PR version
@@ -191,9 +192,9 @@ jobs:
         run: |
           VERSION=${{ steps.prver.outputs.ver }} aztec-up
 
-      - name: Start sandbox (PR, background)
+      - name: Start local network (PR, background)
         if: steps.prver.outputs.ver_diff == 'true'
-        run: aztec start --sandbox &
+        run: aztec start --local-network &
 
       - name: Start PXE node (PR, background)
         if: steps.prver.outputs.ver_diff == 'true'
