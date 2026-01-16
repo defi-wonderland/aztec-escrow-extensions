@@ -1,9 +1,11 @@
 import { Fr } from "@aztec/aztec.js/fields";
 import { deriveKeys } from "@aztec/stdlib/keys";
 import type { Wallet } from "@aztec/aztec.js/wallet";
+import type { AztecNode } from "@aztec/aztec.js/node";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { type AztecLMDBStoreV2 } from "@aztec/kv-store/lmdb-v2";
 import { getContractClassFromArtifact } from "@aztec/stdlib/contract";
+import type { ContractInstanceWithAddress } from "@aztec/aztec.js/contracts";
 import type { ContractFunctionInteractionCallIntent } from "@aztec/aztec.js/authorization";
 
 // Import the new Benchmark base class and context
@@ -32,6 +34,7 @@ let escrowKeyCounter = 2n;
 
 async function deployEscrow(
   wallet: Wallet,
+  node: AztecNode,
   deployer: AztecAddress,
   clawbackEscrowContract: ClawbackEscrowLogicContract,
 ) {
@@ -47,11 +50,16 @@ async function deployEscrow(
     escrowSalt,
   )) as EscrowContract;
 
-  await wallet.registerContract(
-    escrowContract.instance,
-    EscrowContractArtifact,
-    escrowSk,
-  );
+  const escrowInstance = (await node.getContract(
+    escrowContract.address,
+  )) as ContractInstanceWithAddress;
+  if (escrowInstance) {
+    await wallet.registerContract(
+      escrowInstance,
+      EscrowContractArtifact,
+      escrowSk,
+    );
+  }
 
   const secretKeys = {
     nsk_m: grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
@@ -101,9 +109,9 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
     );
 
     const { escrowContract: escrowContract_1, secretKeys: secretKeys_1 } =
-      await deployEscrow(wallet, deployer, clawbackEscrowContract);
+      await deployEscrow(wallet, node, deployer, clawbackEscrowContract);
     const { escrowContract: escrowContract_2, secretKeys: secretKeys_2 } =
-      await deployEscrow(wallet, deployer, clawbackEscrowContract);
+      await deployEscrow(wallet, node, deployer, clawbackEscrowContract);
 
     const escrows = [
       { contract: escrowContract_1, secretKeys: secretKeys_1 },

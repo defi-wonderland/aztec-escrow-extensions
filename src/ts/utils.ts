@@ -1,30 +1,29 @@
-import { type PXE } from "@aztec/pxe/server";
+import { Note } from "@aztec/aztec.js/note";
 import { PublicKeys } from "@aztec/stdlib/keys";
-import { UniqueNote } from "@aztec/aztec.js/note";
 import { createLogger } from "@aztec/aztec.js/log";
 import { type Wallet } from "@aztec/aztec.js/wallet";
 import { createStore } from "@aztec/kv-store/lmdb-v2";
 import { getDefaultInitializer } from "@aztec/stdlib/abi";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
-import { createPXE, getPXEConfig } from "@aztec/pxe/server";
+import { getPXEConfig } from "@aztec/pxe/server";
 import { type AztecLMDBStoreV2 } from "@aztec/kv-store/lmdb-v2";
 import { Fr, type GrumpkinScalar } from "@aztec/aztec.js/fields";
 import { createAztecNodeClient, waitForNode } from "@aztec/aztec.js/node";
 import {
-  registerInitialSandboxAccountsInWallet,
+  registerInitialLocalNetworkAccountsInWallet,
   TestWallet,
 } from "@aztec/test-wallet/server";
 import {
   Contract,
   DeployOptions,
   ContractFunctionInteraction,
+  getContractClassFromArtifact,
 } from "@aztec/aztec.js/contracts";
 import {
   AuthWitness,
   type ContractFunctionInteractionCallIntent,
 } from "@aztec/aztec.js/authorization";
 import {
-  getContractClassFromArtifact,
   computeInitializationHash,
   computeSaltedInitializationHash,
   computeContractAddressFromInstance,
@@ -51,38 +50,42 @@ const { PXE_VERSION = "2" } = process.env;
 const pxeVersion = parseInt(PXE_VERSION);
 const l1Contracts = await node.getL1ContractAddresses();
 const config = getPXEConfig();
-const fullConfig = { ...config, l1Contracts };
-fullConfig.proverEnabled = false;
+let fullConfig = { ...config, l1Contracts };
 
 /**
- * Setup the PXE and the store
+ * Setup the store, node, wallet and accounts
  * @param suffix - optional - The suffix to use for the store directory.
- * @returns The PXE and the store
+ * @param proverEnabled - optional - Whether to enable the prover, used for benchmarking.
+ * @returns The store, node, wallet and accounts
  */
-export const setupPXE = async (suffix?: string) => {
+export const setupTestSuite = async (
+  suffix?: string,
+  proverEnabled: boolean = false,
+) => {
   const storeDir = suffix ? `store-${suffix}` : "store";
-  const store: AztecLMDBStoreV2 = await createStore("pxe", pxeVersion, {
+
+  fullConfig = {
+    ...fullConfig,
+    dataDirectory: storeDir,
+    dataStoreMapSizeKb: 1e6,
+  };
+
+  // Create the store for manual cleanups
+  const store: AztecLMDBStoreV2 = await createStore("pxe_data", pxeVersion, {
     dataDirectory: storeDir,
     dataStoreMapSizeKb: 1e6,
   });
-  const pxe: PXE = await createPXE(node, fullConfig, { store });
-  return { pxe, store, node };
-};
 
-/**
- * Setup the PXE, the store and the wallet
- * @param suffix - optional - The suffix to use for the store directory.
- * @returns The PXE, the store, the wallet and the accounts
- */
-export const setupTestSuite = async (suffix?: string) => {
-  const { pxe, store, node } = await setupPXE(suffix);
-  const aztecNode = createAztecNodeClient(NODE_URL);
-  const wallet: TestWallet = await TestWallet.create(aztecNode);
+  const wallet: TestWallet = await TestWallet.create(
+    node,
+    { ...fullConfig, proverEnabled },
+    { store },
+  );
+
   const accounts: AztecAddress[] =
-    await registerInitialSandboxAccountsInWallet(wallet);
+    await registerInitialLocalNetworkAccountsInWallet(wallet);
 
   return {
-    pxe,
     store,
     node,
     wallet,
@@ -93,12 +96,11 @@ export const setupTestSuite = async (suffix?: string) => {
 // --- Token Utils ---
 
 export const expectUintNote = (
-  note: UniqueNote,
+  note: Note,
   amount: bigint,
   owner: AztecAddress,
 ) => {
-  expect(note.note.items[0]).toEqual(new Fr(owner.toBigInt()));
-  expect(note.note.items[2]).toEqual(new Fr(amount));
+  expect(note.items[0]).toEqual(new Fr(amount));
 };
 
 export const expectTokenBalances = async (
@@ -346,13 +348,8 @@ export async function assertOwnsPrivateNFT(
   expect(hasNFT).toBe(expectToBeTrue);
 }
 
-export const expectNFTNote = (
-  note: UniqueNote,
-  tokenId: bigint,
-  owner: AztecAddress,
-) => {
-  expect(note.note.items[0]).toEqual(new Fr(owner.toBigInt()));
-  expect(note.note.items[2]).toEqual(new Fr(tokenId));
+export const expectNFTNote = (note: Note, tokenId: bigint) => {
+  expect(note.items[0]).toEqual(new Fr(tokenId));
 };
 
 // --- General Utils ---

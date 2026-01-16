@@ -9,8 +9,9 @@ use aztec::{
         address::AztecAddress,
         point::Point,
         public_keys::{IvpkM, NpkM, OvpkM, PublicKeys, TpkM},
+        traits::Packable,
     },
-    state_vars::private_set::PrivateSet,
+    state_vars::{owned_state_variable::OwnedStateVariable, private_set::PrivateSet},
     test::helpers::test_environment::TestEnvironment,
     utils::comparison::Comparator,
 };
@@ -169,13 +170,13 @@ pub unconstrained fn get_escrow_note(
 ) -> ClawbackEscrowNote {
     let offset = 0;
     let notes = env.utility_context_at(logic_contract_address, |context| {
-        let mut options = NoteViewerOptions::new()
+        let options = NoteViewerOptions::<ClawbackEscrowNote, <ClawbackEscrowNote as Packable>::N>::new()
             .select(ClawbackEscrowNote::properties().escrow, Comparator.EQ, escrow)
-            .set_limit(1);
+            .set_limit(1)
+            .set_offset(offset);
         let escrows_slot = ClawbackEscrowLogic::storage_layout().escrows.slot;
-        let set = PrivateSet::new(context, escrows_slot);
-        let notes: BoundedVec<ClawbackEscrowNote, MAX_NOTES_PER_PAGE> =
-            set.view_notes(options.set_offset(offset));
+        let set: PrivateSet<ClawbackEscrowNote, _> = OwnedStateVariable::new(context, escrows_slot, escrow);
+        let notes: BoundedVec<ClawbackEscrowNote, MAX_NOTES_PER_PAGE> = set.view_notes(options);
         notes
     });
 

@@ -36,24 +36,24 @@ pub struct VestingScheduleNote {
 }
 
 impl NoteHash for VestingScheduleNote {
-    fn compute_nullifier(self, _: &mut PrivateContext, note_hash_for_nullify: Field) -> Field {
-        poseidon2_hash_with_separator(
-            [note_hash_for_nullify, self.escrow.to_field()],
-            GENERATOR_INDEX__NOTE_NULLIFIER as Field,
-        )
-    }
-
-    unconstrained fn compute_nullifier_unconstrained(self, note_hash_for_nullify: Field) -> Field {
-        poseidon2_hash_with_separator(
-            [note_hash_for_nullify, self.escrow.to_field()],
-            GENERATOR_INDEX__NOTE_NULLIFIER as Field,
-        )
-    }
-
-    fn compute_note_hash(self, storage_slot: Field) -> Field {
+    fn compute_note_hash(self, _owner: AztecAddress, storage_slot: Field, _randomness: Field) -> Field {
         poseidon2_hash_with_separator(
             self.pack().concat([storage_slot]),
             GENERATOR_INDEX__NOTE_HASH,
+        )
+    }
+
+    fn compute_nullifier(self, _context: &mut PrivateContext, _owner: AztecAddress, note_hash_for_nullify: Field) -> Field {
+        poseidon2_hash_with_separator(
+            [note_hash_for_nullify, self.escrow.to_field()],
+            GENERATOR_INDEX__NOTE_NULLIFIER as Field,
+        )
+    }
+
+    unconstrained fn compute_nullifier_unconstrained(self, _owner: AztecAddress, note_hash_for_nullify: Field) -> Field {
+        poseidon2_hash_with_separator(
+            [note_hash_for_nullify, self.escrow.to_field()],
+            GENERATOR_INDEX__NOTE_NULLIFIER as Field,
         )
     }
 }

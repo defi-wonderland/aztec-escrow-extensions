@@ -2,7 +2,7 @@ import { siloNullifier } from "@aztec/stdlib/hash";
 import { FieldsOf } from "@aztec/foundation/types";
 import { type AztecNode } from "@aztec/aztec.js/node";
 import { TestWallet } from "@aztec/test-wallet/server";
-import { pedersenHash } from "@aztec/foundation/crypto";
+import { pedersenHash } from "@aztec/foundation/crypto/pedersen";
 import { TxStatus, TxReceipt } from "@aztec/aztec.js/tx";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { deriveKeys, PublicKeys } from "@aztec/stdlib/keys";
@@ -13,6 +13,7 @@ import { getContractClassFromArtifact } from "@aztec/stdlib/contract";
 import {
   Contract,
   getContractInstanceFromInstantiationParams,
+  type ContractInstanceWithAddress,
 } from "@aztec/aztec.js/contracts";
 
 import {
@@ -82,7 +83,8 @@ describe("Linear Vesting Escrow", () => {
   const AZTEC_SLOT_TIME = 36n; // seconds
   const MAX_U64_VALUE = (1n << 64n) - 1n;
 
-  async function setup() {
+  beforeEach(async () => {
+    // Setup test suite
     ({ store, node, wallet, accounts } = await setupTestSuite(
       "linear-vesting-escrow",
     ));
@@ -106,13 +108,7 @@ describe("Linear Vesting Escrow", () => {
       ovsk_m: grumpkinScalarToFr(escrowKeys.masterOutgoingViewingSecretKey),
       tsk_m: grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
     };
-  }
 
-  beforeAll(async () => {
-    await setup();
-  });
-
-  beforeEach(async () => {
     // Logic is deployed with the public keys because it sends encrypted events to the recipient and with the escrow class id
     linearVestingEscrow = (await deployLinearVestingEscrow(
       wallet,
@@ -134,11 +130,17 @@ describe("Linear Vesting Escrow", () => {
     // Deploy a token contract
     token = (await deployTokenWithMinter(wallet, alice)) as TokenContract;
 
-    await wallet.registerContract(
-      escrow.instance,
-      EscrowContractArtifact,
-      escrowSk,
-    );
+    // Register the escrow contract
+    const escrowInstance = (await node.getContract(
+      escrow.address,
+    )) as ContractInstanceWithAddress;
+    if (escrowInstance) {
+      await wallet.registerContract(
+        escrowInstance,
+        EscrowContractArtifact,
+        escrowSk,
+      );
+    }
 
     await token
       .withWallet(wallet)
@@ -152,15 +154,11 @@ describe("Linear Vesting Escrow", () => {
     duration = 200n;
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await store.delete();
   });
 
   describe("Deployment", () => {
-    beforeAll(async () => {
-      await setup();
-    });
-
     it("deploys linear vesting escrow with correct constructor params", async () => {
       const salt = Fr.random();
       const deploymentData = await getContractInstanceFromInstantiationParams(
@@ -221,18 +219,17 @@ describe("Linear Vesting Escrow", () => {
         escrowKeys.publicKeys,
       );
 
+      const escrowInstance = (await node.getContract(
+        escrow.address,
+      )) as ContractInstanceWithAddress;
+
       expect(address).toEqual(escrow.address);
       expect(initializationHash).toEqual(Fr.ZERO);
-      expect(initializationHash).toEqual(escrow.instance.initializationHash);
+      expect(initializationHash).toEqual(escrowInstance.initializationHash);
     });
   });
 
   describe("setup_linear_vesting_escrow", () => {
-    beforeAll(async () => {
-      await store.delete();
-      await setup();
-    });
-
     let tx: FieldsOf<TxReceipt>;
 
     beforeEach(async () => {
@@ -255,16 +252,17 @@ describe("Linear Vesting Escrow", () => {
       const blockNumber = tx.blockNumber!;
 
       const events = await wallet.getPrivateEvents<EscrowDetailsLogContent>(
-        linearVestingEscrow.address,
         LinearVestingEscrowLogicContract.events.EscrowDetailsLogContent,
-        blockNumber,
-        1,
-        [bob],
+        {
+          contractAddress: linearVestingEscrow.address,
+          fromBlock: blockNumber,
+          scopes: [bob],
+        },
       );
 
       expect(events.length).toBe(1);
 
-      const event = events[0];
+      const event = events[0].event;
 
       expect(event.escrow).toEqual(escrow.address);
       expect(event.master_secret_keys.nsk_m).toEqual(
@@ -388,10 +386,6 @@ describe("Linear Vesting Escrow", () => {
   describe("claim", () => {
     // Split in 3 parts due to memory limit of the store
     describe("part 1", () => {
-      beforeAll(async () => {
-        await setup();
-      });
-
       it("claim should transfer the tokens to the recipient and emit one note (token note)", async () => {
         // We set the duration to 1 to make the tokens fully claimable
         duration = 1n;
@@ -441,7 +435,7 @@ describe("Linear Vesting Escrow", () => {
           contractAddress: token.address,
         });
         expect(notes.length).toBe(1);
-        expectUintNote(notes[0], AMOUNT, bob);
+        expectUintNote(notes[0].note, AMOUNT, bob);
 
         // Assert that tokens were effectively transferred
         await expectTokenBalances(token, bob, wad(0), AMOUNT);
@@ -511,7 +505,7 @@ describe("Linear Vesting Escrow", () => {
           contractAddress: token.address,
         });
         expectUintNote(
-          escrowTokenNote[0],
+          escrowTokenNote[0].note,
           AMOUNT - receivedAmount,
           escrow.address,
         );
@@ -529,7 +523,7 @@ describe("Linear Vesting Escrow", () => {
           scopes: [bob],
           contractAddress: token.address,
         });
-        expectUintNote(bobTokenNote[0], receivedAmount, bob);
+        expectUintNote(bobTokenNote[0].note, receivedAmount, bob);
 
         await expectTokenBalances(token, bob, wad(0), receivedAmount);
         await expectTokenBalances(
@@ -662,7 +656,7 @@ describe("Linear Vesting Escrow", () => {
                 contractAddress: newToken.address,
               })
             ).filter((note) => note.txHash.equals(claimTx.txHash));
-            expectUintNote(bobTokenNote[0], receivedAmount, bob);
+            expectUintNote(bobTokenNote[0].note, receivedAmount, bob);
           } else {
             // Partial claim: 2 token notes (escrow change tokens and bob withdrawal tokens)
             expect(notes.length).toBe(2);
@@ -674,7 +668,7 @@ describe("Linear Vesting Escrow", () => {
               })
             ).filter((note) => note.txHash.equals(claimTx.txHash));
             expectUintNote(
-              escrowTokenNote[0],
+              escrowTokenNote[0].note,
               U128_MAX - totalClaimed,
               escrow.address,
             );
@@ -685,7 +679,7 @@ describe("Linear Vesting Escrow", () => {
                 contractAddress: newToken.address,
               })
             ).filter((note) => note.txHash.equals(claimTx.txHash));
-            expectUintNote(bobTokenNote[0], receivedAmount, bob);
+            expectUintNote(bobTokenNote[0].note, receivedAmount, bob);
           }
 
           // Update previousTx to current claim for next iteration
@@ -750,10 +744,6 @@ describe("Linear Vesting Escrow", () => {
     });
 
     describe("part 2", () => {
-      beforeAll(async () => {
-        await setup();
-      });
-
       let tx: FieldsOf<TxReceipt>;
 
       beforeEach(async () => {
@@ -858,7 +848,7 @@ describe("Linear Vesting Escrow", () => {
                 contractAddress: token.address,
               })
             ).filter((note) => note.txHash.equals(claimTx.txHash));
-            expectUintNote(bobTokenNote[0], receivedAmount, bob);
+            expectUintNote(bobTokenNote[0].note, receivedAmount, bob);
           } else {
             // Partial claim: 2 token notes (escrow change tokens and bob withdrawal tokens)
             expect(notes.length).toBe(2);
@@ -868,7 +858,7 @@ describe("Linear Vesting Escrow", () => {
               contractAddress: token.address,
             });
             expectUintNote(
-              escrowTokenNote[0],
+              escrowTokenNote[0].note,
               AMOUNT - totalClaimed,
               escrow.address,
             );
@@ -877,7 +867,7 @@ describe("Linear Vesting Escrow", () => {
               scopes: [bob],
               contractAddress: token.address,
             });
-            expectUintNote(bobTokenNote[0], receivedAmount, bob);
+            expectUintNote(bobTokenNote[0].note, receivedAmount, bob);
           }
 
           // Update previousTx to current claim for next iteration
@@ -957,10 +947,6 @@ describe("Linear Vesting Escrow", () => {
     });
 
     describe("part 3", () => {
-      beforeAll(async () => {
-        await setup();
-      });
-
       beforeEach(async () => {
         // We set the duration to 1000 to make the tokens partially claimable
         duration = 1000n;
@@ -1197,10 +1183,6 @@ describe("Linear Vesting Escrow", () => {
     });
 
     describe("timelock (duration = 0)", () => {
-      beforeAll(async () => {
-        await setup();
-      });
-
       beforeEach(async () => {
         // Set duration to 0 for timelock-like behavior
         duration = 0n;
@@ -1305,7 +1287,7 @@ describe("Linear Vesting Escrow", () => {
           contractAddress: token.address,
         });
         expect(notes.length).toBe(1);
-        expectUintNote(notes[0], AMOUNT, bob);
+        expectUintNote(notes[0].note, AMOUNT, bob);
 
         // Assert final balances
         await expectTokenBalances(token, bob, wad(0), AMOUNT);
@@ -1502,10 +1484,6 @@ describe("Linear Vesting Escrow", () => {
   });
 
   describe("stop_vesting", () => {
-    beforeAll(async () => {
-      await setup();
-    });
-
     let tx: FieldsOf<TxReceipt>;
 
     beforeEach(async () => {
@@ -1635,10 +1613,6 @@ describe("Linear Vesting Escrow", () => {
 
   describe("clawback", () => {
     describe("part 1", () => {
-      beforeAll(async () => {
-        await setup();
-      });
-
       let tx: FieldsOf<TxReceipt>;
       beforeEach(async () => {
         tx = await linearVestingEscrow
@@ -1897,10 +1871,6 @@ describe("Linear Vesting Escrow", () => {
     });
 
     describe("part 2", () => {
-      beforeAll(async () => {
-        await setup();
-      });
-
       let amount: bigint;
       beforeEach(async () => {
         // Increase the duration due to multiple transaction follows
@@ -2173,10 +2143,6 @@ describe("Linear Vesting Escrow", () => {
     });
 
     describe("multiple clawbacks", () => {
-      beforeAll(async () => {
-        await setup();
-      });
-
       let tx: FieldsOf<TxReceipt>;
       beforeEach(async () => {
         tx = await linearVestingEscrow
@@ -2410,10 +2376,6 @@ describe("Linear Vesting Escrow", () => {
   });
 
   describe("releasable and vested amount", () => {
-    beforeAll(async () => {
-      await setup();
-    });
-
     it("releasable and vested amount should be correct with multiple claims", async () => {
       const tx = await linearVestingEscrow
         .withWallet(wallet)
@@ -2511,7 +2473,7 @@ describe("Linear Vesting Escrow", () => {
               contractAddress: token.address,
             })
           ).filter((note) => note.txHash.equals(claimTx.txHash));
-          expectUintNote(bobTokenNote[0], utilityReleasable, bob);
+          expectUintNote(bobTokenNote[0].note, utilityReleasable, bob);
         } else {
           // Partial claim: 2 token notes (escrow change tokens and bob withdrawal tokens)
           expect(notes.length).toBe(2);
@@ -2523,7 +2485,7 @@ describe("Linear Vesting Escrow", () => {
             })
           ).filter((note) => note.txHash.equals(claimTx.txHash));
           expectUintNote(
-            escrowTokenNote[0],
+            escrowTokenNote[0].note,
             AMOUNT - totalClaimed,
             escrow.address,
           );
@@ -2534,7 +2496,7 @@ describe("Linear Vesting Escrow", () => {
               contractAddress: token.address,
             })
           ).filter((note) => note.txHash.equals(claimTx.txHash));
-          expectUintNote(bobTokenNote[0], utilityReleasable, bob);
+          expectUintNote(bobTokenNote[0].note, utilityReleasable, bob);
         }
 
         // Update previousTx to current claim for next iteration
