@@ -58,7 +58,7 @@ jobs:
       - name: Install Aztec CLI
         run: |
           curl -s https://install.aztec.network > tmp.sh
-          bash tmp.sh <<< $'yes\nyes'
+          bash tmp.sh <<< yes "yes"
 
       - name: Update path
         run: echo "/home/runner/.aztec/bin" >> $GITHUB_PATH
@@ -83,6 +83,10 @@ jobs:
 
       - name: Build aztec-standards artifacts
         run: yarn build-aztec-standards
+
+      - name: Start local-network
+        run: |
+          aztec start --local-network &
 
       - name: Start PXE
         run: |
