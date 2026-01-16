@@ -117,7 +117,8 @@ pub unconstrained fn get_vesting_schedule_note(
             .set_limit(1)
             .set_offset(offset);
         let vesting_schedule_slot = LinearVestingEscrowLogic::storage_layout().escrows.slot;
-        let set: PrivateSet<VestingScheduleNote, _> = OwnedStateVariable::new(context, vesting_schedule_slot, escrow);
+        let set: PrivateSet<VestingScheduleNote, _> =
+            OwnedStateVariable::new(context, vesting_schedule_slot, escrow);
         let notes: BoundedVec<VestingScheduleNote, MAX_NOTES_PER_PAGE> = set.view_notes(options);
         notes
     });
@@ -138,7 +139,8 @@ pub unconstrained fn get_released_amount_note(
             .set_limit(1)
             .set_offset(offset);
         let released_notes_slot = LinearVestingEscrowLogic::storage_layout().released_notes.slot;
-        let set: PrivateSet<ReleasedAmountNote, _> = OwnedStateVariable::new(context, released_notes_slot, escrow);
+        let set: PrivateSet<ReleasedAmountNote, _> =
+            OwnedStateVariable::new(context, released_notes_slot, escrow);
         let notes: BoundedVec<ReleasedAmountNote, MAX_NOTES_PER_PAGE> = set.view_notes(options);
         notes
     });

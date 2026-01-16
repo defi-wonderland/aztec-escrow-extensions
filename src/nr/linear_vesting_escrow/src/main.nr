@@ -168,7 +168,12 @@ pub contract LinearVestingEscrowLogic {
         let updated_released_amount = released_amount_note.released_amount + claim_amount;
 
         // We create and emit a new released amount note
-        _create_released_amount_note(self.storage, escrow, updated_released_amount, claim_completed);
+        _create_released_amount_note(
+            self.storage,
+            escrow,
+            updated_released_amount,
+            claim_completed,
+        );
 
         // Withdraw claim_amount tokens
         _withdraw(

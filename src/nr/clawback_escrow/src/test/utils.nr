@@ -175,7 +175,8 @@ pub unconstrained fn get_escrow_note(
             .set_limit(1)
             .set_offset(offset);
         let escrows_slot = ClawbackEscrowLogic::storage_layout().escrows.slot;
-        let set: PrivateSet<ClawbackEscrowNote, _> = OwnedStateVariable::new(context, escrows_slot, escrow);
+        let set: PrivateSet<ClawbackEscrowNote, _> =
+            OwnedStateVariable::new(context, escrows_slot, escrow);
         let notes: BoundedVec<ClawbackEscrowNote, MAX_NOTES_PER_PAGE> = set.view_notes(options);
         notes
     });
