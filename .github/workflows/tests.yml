@@ -84,10 +84,6 @@ jobs:
       - name: Build aztec-standards artifacts
         run: yarn build-aztec-standards
 
-      - name: Start local-network
-        run: |
-          aztec start --local-network &
-
       - name: Start PXE
         run: |
           VERSION=${{ steps.aztec-version.outputs.version }} aztec start --port 8081 --pxe --pxe.nodeUrl=http://localhost:8080/ --pxe.proverEnabled false &

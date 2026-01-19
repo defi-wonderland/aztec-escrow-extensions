@@ -2,11 +2,11 @@ import { spawn, ChildProcess } from "child_process";
 import { EventEmitter } from "events";
 import { createAztecNodeClient } from "@aztec/aztec.js/node";
 
-// Global reference for the active sandbox manager
-let activeSandboxManager: SandboxManager | null = null;
+// Global reference for the active local network manager
+let activeLocalNetworkManager: LocalNetworkManager | null = null;
 let signalHandlersSetup = false;
 
-interface SandboxManagerOptions {
+interface LocalNetworkManagerOptions {
   verbose?: boolean;
 }
 
@@ -23,15 +23,15 @@ function setupSignalHandlers(): void {
   if (signalHandlersSetup) return;
 
   const handleShutdown = async (signal: string): Promise<void> => {
-    // Stop the active sandbox manager if it exists
-    if (activeSandboxManager) {
+    // Stop the active local network manager if it exists
+    if (activeLocalNetworkManager) {
       try {
-        await activeSandboxManager.stop();
-        console.log("✅ Sandbox manager stopped");
+        await activeLocalNetworkManager.stop();
+        console.log("✅ Local network manager stopped");
       } catch (err) {
         console.error("Error stopping manager:", err);
       }
-      activeSandboxManager = null;
+      activeLocalNetworkManager = null;
     }
 
     process.exit(0);
@@ -44,13 +44,13 @@ function setupSignalHandlers(): void {
 }
 
 /**
- * Start the Aztec sandbox and wait for it to be ready
+ * Start the Aztec local network and wait for it to be ready
  */
-class SandboxManager extends EventEmitter {
+class LocalNetworkManager extends EventEmitter {
   public process: ChildProcess | null = null;
   public isReady = false;
-  public isExternalSandbox = false; // Track if we're using external sandbox vs our own process
-  public sandboxTimeout = 180000;
+  public isExternalNetwork = false; // Track if we're using external network vs our own process
+  public networkTimeout = 180000;
   public forceKillTimeout = 5000;
   public maxRetries = 3;
   public verbose: boolean;
@@ -61,13 +61,13 @@ class SandboxManager extends EventEmitter {
   // Capture stderr for error reporting
   private stderrBuffer: string[] = [];
 
-  constructor(options: SandboxManagerOptions = {}) {
+  constructor(options: LocalNetworkManagerOptions = {}) {
     super();
     // Enable verbose mode in CI environments by default
     this.verbose = options.verbose ?? Boolean(process.env.CI);
 
     // Register this manager for signal handling
-    activeSandboxManager = this;
+    activeLocalNetworkManager = this;
     setupSignalHandlers();
   }
 
@@ -130,11 +130,11 @@ class SandboxManager extends EventEmitter {
 
     // Only reset external flag if not preserving it
     if (!preserveExternalFlag) {
-      this.isExternalSandbox = false;
+      this.isExternalNetwork = false;
     }
 
     // Clear global reference
-    activeSandboxManager = null;
+    activeLocalNetworkManager = null;
   }
 
   /**
@@ -162,24 +162,20 @@ class SandboxManager extends EventEmitter {
   }
 
   /**
-   * Spawn the Aztec sandbox process
+   * Spawn the Aztec local network process
    */
-  spawnSandboxProcess(): ChildProcess {
-    // In devnet.2, an L1 RPC URL is required
-    // The sandbox will start its own Anvil instance on the default port
-    const l1RpcUrl = process.env.L1_RPC_URL || "http://127.0.0.1:8545";
-
-    return spawn("aztec", ["start", "--sandbox", "--l1-rpc-urls", l1RpcUrl], {
+  spawnLocalNetworkProcess(): ChildProcess {
+    return spawn("aztec", ["start", "--local-network"], {
       stdio: "pipe",
     });
   }
 
   /**
-   * Setup event handlers for the sandbox process
+   * Setup event handlers for the local network process
    */
   setupProcessHandlers(
     process: ChildProcess,
-    safeResolve: (value: SandboxManager) => void,
+    safeResolve: (value: LocalNetworkManager) => void,
     safeReject: (error: Error) => void,
   ): void {
     // Handle process errors
@@ -192,7 +188,7 @@ class SandboxManager extends EventEmitter {
         );
       } else {
         this.handleError(
-          `Failed to start sandbox: ${error.message}`,
+          `Failed to start local network: ${error.message}`,
           "process-spawn",
           safeReject,
         );
@@ -204,7 +200,7 @@ class SandboxManager extends EventEmitter {
       process.stdout.on("data", (data: Buffer) => {
         const output = data.toString().trim();
         if (output) {
-          console.log(`📡 Sandbox: ${output}`);
+          console.log(`📡 Local network: ${output}`);
         }
       });
     }
@@ -218,33 +214,33 @@ class SandboxManager extends EventEmitter {
           this.stderrBuffer.push(output);
 
           if (this.verbose) {
-            console.log(`🚨 Sandbox error: ${output}`);
+            console.log(`🚨 Local network error: ${output}`);
           }
 
           // Check for port already in use
           if (output.includes("port is already")) {
             this.clearManagedTimer("startupTimeout"); // Clear startup timeout since we're switching to external
             console.log(
-              "ℹ️ Port is already in use, checking if existing sandbox is responsive",
+              "ℹ️ Port is already in use, checking if existing local network is responsive",
             );
 
-            // Clean up our failed spawn process since we'll use external sandbox
+            // Clean up our failed spawn process since we'll use external network
             if (this.process) {
               this.process.kill("SIGTERM");
             }
             this.process = null;
 
-            this.checkSandboxConnectivity()
+            this.checkNetworkConnectivity()
               .then(() => {
-                this.isExternalSandbox = true; // Mark that we're using external sandbox
+                this.isExternalNetwork = true; // Mark that we're using external network
                 this.isReady = true;
-                console.log("✅ Connected to existing external sandbox");
+                console.log("✅ Connected to existing external local network");
                 safeResolve(this);
               })
               .catch(() => {
                 this.handleError(
-                  "Port 8080 is in use but sandbox is not responsive",
-                  "external-sandbox-check",
+                  "Port 8080 is in use but local network is not responsive",
+                  "external-network-check",
                   safeReject,
                 );
               });
@@ -264,13 +260,13 @@ class SandboxManager extends EventEmitter {
 
         if (code === 0) {
           this.handleError(
-            `Sandbox process exited unexpectedly${stderrOutput}`,
+            `Local network process exited unexpectedly${stderrOutput}`,
             "process-exit",
             safeReject,
           );
         } else {
           this.handleError(
-            `Sandbox process exited with code ${code} and signal ${signal}${stderrOutput}`,
+            `Local network process exited with code ${code} and signal ${signal}${stderrOutput}`,
             "process-exit",
             safeReject,
           );
@@ -279,8 +275,8 @@ class SandboxManager extends EventEmitter {
     });
   }
 
-  async checkSandboxConnectivity(): Promise<void> {
-    console.time(`✅ Sandbox ready`);
+  async checkNetworkConnectivity(): Promise<void> {
+    console.time(`✅ Local network ready`);
 
     const maxRetries = 60; // 60 retries
     const retryDelayMs = 3000; // 3 seconds between retries
@@ -297,7 +293,7 @@ class SandboxManager extends EventEmitter {
         // Try to get node info to verify it's responsive
         const nodeInfo = await aztecNode.getNodeInfo();
 
-        console.timeEnd(`✅ Sandbox ready`);
+        console.timeEnd(`✅ Local network ready`);
         console.log(`🔧 Node version: ${nodeInfo.nodeVersion}`);
         return; // Success!
       } catch (error: any) {
@@ -306,7 +302,7 @@ class SandboxManager extends EventEmitter {
         if (attempt < maxRetries) {
           if (this.verbose) {
             console.log(
-              `⏳ Sandbox not ready yet (attempt ${attempt}/${maxRetries}), retrying in ${retryDelayMs / 1000}s...`,
+              `⏳ Local network not ready yet (attempt ${attempt}/${maxRetries}), retrying in ${retryDelayMs / 1000}s...`,
             );
           }
           await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
@@ -316,21 +312,23 @@ class SandboxManager extends EventEmitter {
 
     // If we get here, all retries failed
     throw new Error(
-      `Failed to connect to sandbox after ${maxRetries} attempts: ${lastError?.message}`,
+      `Failed to connect to local network after ${maxRetries} attempts: ${lastError?.message}`,
     );
   }
 
-  async start(): Promise<SandboxManager> {
+  async start(): Promise<LocalNetworkManager> {
     // Validate that we can start
     if (this.isReady || this.process) {
-      throw new Error("Cannot start sandbox - already running or starting");
+      throw new Error(
+        "Cannot start local network - already running or starting",
+      );
     }
 
     return new Promise((resolve, reject) => {
-      console.log("🚀 Starting Aztec sandbox");
+      console.log("🚀 Starting Aztec local network");
       let resolved = false; // Prevent double resolution
 
-      const safeResolve = (value: SandboxManager): void => {
+      const safeResolve = (value: LocalNetworkManager): void => {
         if (!resolved) {
           resolved = true;
           resolve(value);
@@ -349,26 +347,26 @@ class SandboxManager extends EventEmitter {
         () => {
           this.cleanup();
           safeReject(
-            new Error("❌ Sandbox startup timed out after 180 seconds"),
+            new Error("❌ Local network startup timed out after 180 seconds"),
           );
         },
-        this.sandboxTimeout,
+        this.networkTimeout,
         "startupTimeout",
       );
 
       // Start connectivity checking in parallel
-      console.log("🔍 Waiting for sandbox to be ready");
+      console.log("🔍 Waiting for local network to be ready");
       (async () => {
         try {
-          await this.checkSandboxConnectivity();
+          await this.checkNetworkConnectivity();
           this.cleanupTimers();
-          this.isExternalSandbox = false; // Mark that we're using our own process
+          this.isExternalNetwork = false; // Mark that we're using our own process
           this.isReady = true;
-          console.log("✅ Successfully started our own sandbox process");
+          console.log("✅ Successfully started our own local network process");
           safeResolve(this);
         } catch (error: any) {
           this.handleError(
-            `Failed to connect to sandbox: ${error.message}`,
+            `Failed to connect to local network: ${error.message}`,
             "connectivity-check",
             safeReject,
           );
@@ -377,11 +375,11 @@ class SandboxManager extends EventEmitter {
 
       // Spawn and setup process
       try {
-        this.process = this.spawnSandboxProcess();
+        this.process = this.spawnLocalNetworkProcess();
         this.setupProcessHandlers(this.process, safeResolve, safeReject);
       } catch (error: any) {
         this.handleError(
-          `Failed to spawn sandbox process: ${error.message}`,
+          `Failed to spawn local network process: ${error.message}`,
           "process-spawn",
           safeReject,
         );
@@ -395,9 +393,9 @@ class SandboxManager extends EventEmitter {
       return;
     }
 
-    // If using external sandbox, only clean up our state - don't stop external process
-    if (this.isExternalSandbox) {
-      console.log("🔌 Disconnecting from external sandbox");
+    // If using external network, only clean up our state - don't stop external process
+    if (this.isExternalNetwork) {
+      console.log("🔌 Disconnecting from external local network");
       this.resetState();
       return;
     }
@@ -407,14 +405,14 @@ class SandboxManager extends EventEmitter {
       return;
     }
 
-    console.log("🛑 Stopping Aztec sandbox process");
+    console.log("🛑 Stopping Aztec local network process");
 
     return new Promise((resolve) => {
       // Set up force kill timeout
       this.createManagedTimer(
         () => {
           if (this.process) {
-            console.log("🔥 Force killing sandbox process");
+            console.log("🔥 Force killing local network process");
             this.process.kill("SIGKILL");
           }
         },
@@ -434,8 +432,8 @@ class SandboxManager extends EventEmitter {
   }
 
   cleanup(): void {
-    // Only kill process if we own it, not if using external sandbox
-    if (!this.isExternalSandbox && this.process) {
+    // Only kill process if we own it, not if using external network
+    if (!this.isExternalNetwork && this.process) {
       this.process.kill("SIGTERM");
     }
 
@@ -445,16 +443,16 @@ class SandboxManager extends EventEmitter {
 }
 
 /**
- * Start sandbox and return the manager instance
+ * Start local network and return the manager instance
  */
-async function startSandbox(
-  options: SandboxManagerOptions = {},
-): Promise<SandboxManager> {
-  const manager = new SandboxManager(options);
+async function startLocalNetwork(
+  options: LocalNetworkManagerOptions = {},
+): Promise<LocalNetworkManager> {
+  const manager = new LocalNetworkManager(options);
   await manager.start();
   return manager;
 }
 
-// This script is designed for Jest testing only - no standalone CLI execution
+// This script is designed for Vitest testing only - no standalone CLI execution
 
-export { startSandbox, SandboxManager };
+export { startLocalNetwork, LocalNetworkManager };
