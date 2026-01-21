@@ -1,7 +1,4 @@
-use aztec::{
-    macros::notes::note,
-    protocol_types::{address::AztecAddress, traits::{Packable, Serialize}},
-};
+use aztec::{macros::notes::note, protocol_types::traits::{Packable, Serialize}};
 
 /// @param escrow The address of the escrow
 /// @param released_amount The released amount of tokens
@@ -9,7 +6,6 @@ use aztec::{
 #[derive(Eq, Packable, Serialize)]
 #[note]
 pub struct ReleasedAmountNote {
-    pub escrow: AztecAddress,
     pub released_amount: u128,
     pub claim_completed: bool,
 }

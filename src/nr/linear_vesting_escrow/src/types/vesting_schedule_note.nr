@@ -14,7 +14,6 @@ use aztec::{
 #[derive(Eq, Packable, Serialize)]
 #[note]
 pub struct VestingScheduleNote {
-    pub escrow: AztecAddress,
     pub recipient: AztecAddress,
     pub reclaimer: AztecAddress,
     pub token: AztecAddress,

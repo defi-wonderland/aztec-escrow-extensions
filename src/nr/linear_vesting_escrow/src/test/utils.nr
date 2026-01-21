@@ -2,10 +2,7 @@ use crate::LinearVestingEscrowLogic;
 use crate::types::released_amount_note::ReleasedAmountNote;
 use crate::types::vesting_schedule_note::VestingScheduleNote;
 use aztec::{
-    note::{
-        constants::MAX_NOTES_PER_PAGE, note_interface::NoteProperties,
-        note_viewer_options::NoteViewerOptions,
-    },
+    note::{constants::MAX_NOTES_PER_PAGE, note_viewer_options::NoteViewerOptions},
     protocol_types::{
         address::AztecAddress,
         point::Point,
@@ -13,7 +10,6 @@ use aztec::{
     },
     state_vars::{owned_state_variable::OwnedStateVariable, private_set::PrivateSet},
     test::helpers::test_environment::TestEnvironment,
-    utils::comparison::Comparator,
 };
 use escrow_standard::test::utils as escrow_utils;
 use escrow_standard::types::escrow_details_event::MasterSecretKeys;
@@ -112,10 +108,7 @@ pub unconstrained fn get_vesting_schedule_note(
 ) -> VestingScheduleNote {
     let offset = 0;
     let notes = env.utility_context_at(logic_contract_address, |context| {
-        let options = NoteViewerOptions::new()
-            .select(VestingScheduleNote::properties().escrow, Comparator.EQ, escrow)
-            .set_limit(1)
-            .set_offset(offset);
+        let options = NoteViewerOptions::new().set_limit(1).set_offset(offset);
         let vesting_schedule_slot = LinearVestingEscrowLogic::storage_layout().escrows.slot;
         let set: PrivateSet<VestingScheduleNote, _> =
             OwnedStateVariable::new(context, vesting_schedule_slot, escrow);
@@ -134,10 +127,7 @@ pub unconstrained fn get_released_amount_note(
 ) -> ReleasedAmountNote {
     let offset = 0;
     let notes = env.utility_context_at(logic_contract_address, |context| {
-        let options = NoteViewerOptions::new()
-            .select(ReleasedAmountNote::properties().escrow, Comparator.EQ, escrow)
-            .set_limit(1)
-            .set_offset(offset);
+        let options = NoteViewerOptions::new().set_limit(1).set_offset(offset);
         let released_notes_slot = LinearVestingEscrowLogic::storage_layout().released_notes.slot;
         let set: PrivateSet<ReleasedAmountNote, _> =
             OwnedStateVariable::new(context, released_notes_slot, escrow);

@@ -308,18 +308,14 @@ describe("Linear Vesting Escrow", () => {
         })
       )[0].note;
 
-      expect(escrowNotes.items[0].toString()).toBe(escrow.address.toString());
-      expect(escrowNotes.items[1].toString()).toBe(bob.toString());
-      expect(escrowNotes.items[2].toString()).toBe(alice.toString());
-      expect(escrowNotes.items[3].toString()).toBe(token.address.toString());
-      expect(escrowNotes.items[4].toBigInt()).toBe(BigInt(start));
-      expect(escrowNotes.items[5].toBigInt()).toBe(BigInt(duration));
-      expect(escrowNotes.items[6].toBigInt()).toBe(BigInt(AMOUNT));
+      expect(escrowNotes.items[0].toString()).toBe(bob.toString());
+      expect(escrowNotes.items[1].toString()).toBe(alice.toString());
+      expect(escrowNotes.items[2].toString()).toBe(token.address.toString());
+      expect(escrowNotes.items[3].toBigInt()).toBe(BigInt(start));
+      expect(escrowNotes.items[4].toBigInt()).toBe(BigInt(duration));
+      expect(escrowNotes.items[5].toBigInt()).toBe(BigInt(AMOUNT));
 
-      expect(releasedAmountNotes.items[0].toString()).toBe(
-        escrow.address.toString(),
-      );
-      expect(releasedAmountNotes.items[1].toBigInt()).toBe(BigInt(0));
+      expect(releasedAmountNotes.items[0].toBigInt()).toBe(BigInt(0));
     });
 
     it("creates linear vesting escrow should emit a nullifier for the escrow", async () => {
@@ -517,7 +513,7 @@ describe("Linear Vesting Escrow", () => {
             storageSlot: slotReleasedAmountNotes,
           })
         )[0].note;
-        expect(releasedAmountNote.items[1].toBigInt()).toBe(receivedAmount);
+        expect(releasedAmountNote.items[0].toBigInt()).toBe(receivedAmount);
 
         const bobTokenNote = await wallet.getNotes({
           scopes: [bob],
@@ -642,7 +638,7 @@ describe("Linear Vesting Escrow", () => {
               storageSlot: slotReleasedAmountNotes,
             })
           )[0].note;
-          expect(releasedAmountNote.items[1].toBigInt()).toBe(
+          expect(releasedAmountNote.items[0].toBigInt()).toBe(
             cappedVestedAmount,
           );
 
@@ -834,7 +830,7 @@ describe("Linear Vesting Escrow", () => {
               storageSlot: slotReleasedAmountNotes,
             })
           )[0].note;
-          expect(releasedAmountNote.items[1].toBigInt()).toBe(
+          expect(releasedAmountNote.items[0].toBigInt()).toBe(
             cappedVestedAmount,
           );
 
@@ -1008,9 +1004,9 @@ describe("Linear Vesting Escrow", () => {
           })
         )[0].note;
 
-        expect(releasedAmountNote.items[1].toBigInt()).toBe(vestedAmount);
+        expect(releasedAmountNote.items[0].toBigInt()).toBe(vestedAmount);
         // Claim completed
-        expect(releasedAmountNote.items[2].toBigInt()).toBe(1n); // true is 1n in the contract
+        expect(releasedAmountNote.items[1].toBigInt()).toBe(1n); // true is 1n in the contract
 
         // Assert final balances
         await expectTokenBalances(token, bob, wad(0), vestedAmount);
@@ -1081,9 +1077,9 @@ describe("Linear Vesting Escrow", () => {
           })
         )[0].note;
 
-        expect(releasedAmountNote.items[1].toBigInt()).toBe(vestedAmount);
+        expect(releasedAmountNote.items[0].toBigInt()).toBe(vestedAmount);
         // Claim completed
-        expect(releasedAmountNote.items[2].toBigInt()).toBe(1n); // true is 1n in the contract
+        expect(releasedAmountNote.items[1].toBigInt()).toBe(1n); // true is 1n in the contract
 
         // Assert final balances
         await expectTokenBalances(token, bob, wad(0), vestedAmount);
@@ -1557,11 +1553,8 @@ describe("Linear Vesting Escrow", () => {
       expect(setupEscrowNote.items[5].toBigInt()).toBe(
         stopVestingEscrowNote.items[5].toBigInt(),
       );
-      expect(setupEscrowNote.items[6].toBigInt()).toBe(
-        stopVestingEscrowNote.items[6].toBigInt(),
-      );
       // Stop timestamp was set to the stop vesting timestamp
-      expect(stopVestingEscrowNote.items[7].toBigInt()).toBe(
+      expect(stopVestingEscrowNote.items[6].toBigInt()).toBe(
         stopVestingTimestamp,
       );
     });
@@ -2201,8 +2194,8 @@ describe("Linear Vesting Escrow", () => {
         ).filter((note) => note.txHash.equals(clawbackTx.txHash))[0].note;
 
         // Assert released amount is vested amount and claim completed is true
-        expect(releasedAmountNote.items[1].toBigInt()).toBe(vestedAmount);
-        expect(releasedAmountNote.items[2].toBigInt()).toBe(1n);
+        expect(releasedAmountNote.items[0].toBigInt()).toBe(vestedAmount);
+        expect(releasedAmountNote.items[1].toBigInt()).toBe(1n);
       });
 
       it("reclaimer can split clawback amount across multiple transactions", async () => {
@@ -2246,8 +2239,8 @@ describe("Linear Vesting Escrow", () => {
           })
         ).filter((note) => note.txHash.equals(clawbackTx1.txHash))[0].note;
 
-        expect(releasedAmountNote.items[1].toBigInt()).toBe(vestedAmount);
-        expect(releasedAmountNote.items[2].toBigInt()).toBe(1n);
+        expect(releasedAmountNote.items[0].toBigInt()).toBe(vestedAmount);
+        expect(releasedAmountNote.items[1].toBigInt()).toBe(1n);
 
         // After first clawback: alice got firstClawbackAmount, bob got releasableAmount
         await expectTokenBalances(token, alice, wad(0), firstClawbackAmount);
@@ -2277,8 +2270,8 @@ describe("Linear Vesting Escrow", () => {
           })
         ).filter((note) => note.txHash.equals(clawbackTx2.txHash))[0].note;
 
-        expect(releasedAmountNote2.items[1].toBigInt()).toBe(vestedAmount);
-        expect(releasedAmountNote2.items[2].toBigInt()).toBe(1n);
+        expect(releasedAmountNote2.items[0].toBigInt()).toBe(vestedAmount);
+        expect(releasedAmountNote2.items[1].toBigInt()).toBe(1n);
 
         // Assert final balances - alice has full clawback amount, bob has releasable amount
         await expectTokenBalances(token, alice, wad(0), totalClawbackAmount);
@@ -2369,8 +2362,8 @@ describe("Linear Vesting Escrow", () => {
           })
         ).filter((note) => note.txHash.equals(clawbackTx2.txHash))[0].note;
 
-        expect(releasedAmountNote2.items[1].toBigInt()).toBe(vestedAmount);
-        expect(releasedAmountNote2.items[2].toBigInt()).toBe(1n);
+        expect(releasedAmountNote2.items[0].toBigInt()).toBe(vestedAmount);
+        expect(releasedAmountNote2.items[1].toBigInt()).toBe(1n);
       });
     });
   });
@@ -2461,7 +2454,7 @@ describe("Linear Vesting Escrow", () => {
             storageSlot: slotReleasedAmountNotes,
           })
         )[0].note;
-        expect(releasedAmountNote.items[1].toBigInt()).toBe(utilityVested);
+        expect(releasedAmountNote.items[0].toBigInt()).toBe(utilityVested);
 
         if (isVestingComplete) {
           // Final claim: 1 token note to Bob

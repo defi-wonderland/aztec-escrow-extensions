@@ -1,10 +1,7 @@
 use crate::ClawbackEscrowLogic;
 use crate::types::clawback_escrow_note::ClawbackEscrowNote;
 use aztec::{
-    note::{
-        constants::MAX_NOTES_PER_PAGE, note_interface::NoteProperties,
-        note_viewer_options::NoteViewerOptions,
-    },
+    note::{constants::MAX_NOTES_PER_PAGE, note_viewer_options::NoteViewerOptions},
     protocol_types::{
         address::AztecAddress,
         point::Point,
@@ -13,7 +10,6 @@ use aztec::{
     },
     state_vars::{owned_state_variable::OwnedStateVariable, private_set::PrivateSet},
     test::helpers::test_environment::TestEnvironment,
-    utils::comparison::Comparator,
 };
 use escrow_standard::test::utils as escrow_utils;
 use escrow_standard::types::escrow_details_event::MasterSecretKeys;
@@ -171,7 +167,6 @@ pub unconstrained fn get_escrow_note(
     let offset = 0;
     let notes = env.utility_context_at(logic_contract_address, |context| {
         let options = NoteViewerOptions::<ClawbackEscrowNote, <ClawbackEscrowNote as Packable>::N>::new()
-            .select(ClawbackEscrowNote::properties().escrow, Comparator.EQ, escrow)
             .set_limit(1)
             .set_offset(offset);
         let escrows_slot = ClawbackEscrowLogic::storage_layout().escrows.slot;

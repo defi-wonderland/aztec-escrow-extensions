@@ -10,7 +10,7 @@ pub contract ClawbackEscrowLogic {
         context::PrivateContext,
         macros::{events::event, functions::{external, initializer, view}, storage::storage},
         messages::message_delivery::MessageDelivery,
-        note::{note_getter_options::NoteGetterOptions, note_interface::NoteProperties},
+        note::note_getter_options::NoteGetterOptions,
         protocol_types::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
         state_vars::{Owned, private_set::PrivateSet, public_immutable::PublicImmutable},
         utils::comparison::Comparator,
@@ -72,7 +72,7 @@ pub contract ClawbackEscrowLogic {
         _share_escrow(self.context, recipient, escrow, master_secret_keys);
 
         // Create and emit note with gating logic parameters
-        let note = ClawbackEscrowNote { escrow, recipient, reclaimer, deadline };
+        let note = ClawbackEscrowNote { recipient, reclaimer, deadline };
         self.storage.escrows.at(escrow).insert(note).deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
 
         // Check that a clawback escrow has not been created for the provided escrow
@@ -174,9 +174,7 @@ pub contract ClawbackEscrowLogic {
         storage: Storage<&mut PrivateContext>,
         escrow: AztecAddress,
     ) -> ClawbackEscrowNote {
-        let options = NoteGetterOptions::new()
-            .select(ClawbackEscrowNote::properties().escrow, Comparator.EQ, escrow)
-            .set_limit(1);
+        let options = NoteGetterOptions::new().set_limit(1);
         let notes = storage.escrows.at(escrow).get_notes(options);
         assert(notes.len() == 1, "clawback escrow note not found");
 

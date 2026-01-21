@@ -10,7 +10,6 @@ use aztec::{
 #[derive(Eq, Packable, Serialize)]
 #[note]
 pub struct ClawbackEscrowNote {
-    pub escrow: AztecAddress,
     pub recipient: AztecAddress,
     pub reclaimer: AztecAddress,
     pub deadline: u64,

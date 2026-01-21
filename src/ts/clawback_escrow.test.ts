@@ -241,12 +241,9 @@ describe("Clawback Escrow", () => {
         //   storageSlot: slotEscrowNotes,
         // });
 
-        expect(notes[0].note.items[0].toString()).toBe(
-          escrow.address.toString(),
-        );
-        expect(notes[0].note.items[1].toString()).toBe(bob.toString());
-        expect(notes[0].note.items[2].toString()).toBe(alice.toString());
-        expect(notes[0].note.items[3].toBigInt()).toBe(BigInt(deadline));
+        expect(notes[0].note.items[0].toString()).toBe(bob.toString());
+        expect(notes[0].note.items[1].toString()).toBe(alice.toString());
+        expect(notes[0].note.items[2].toBigInt()).toBe(BigInt(deadline));
       });
 
       it("creates clawback escrow should emit a nullifier for the escrow", async () => {

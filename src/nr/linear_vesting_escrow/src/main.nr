@@ -9,10 +9,7 @@ pub contract LinearVestingEscrowLogic {
         context::{PrivateContext, UtilityContext},
         macros::{events::event, functions::{external, initializer, view}, storage::storage},
         messages::message_delivery::MessageDelivery,
-        note::{
-            note_getter_options::NoteGetterOptions, note_interface::NoteProperties,
-            note_viewer_options::NoteViewerOptions,
-        },
+        note::{note_getter_options::NoteGetterOptions, note_viewer_options::NoteViewerOptions},
         protocol_types::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
         state_vars::{Owned, private_set::PrivateSet, public_immutable::PublicImmutable},
         utils::comparison::Comparator,
@@ -357,7 +354,6 @@ pub contract LinearVestingEscrowLogic {
         stop_timestamp: u64,
     ) {
         let note = VestingScheduleNote {
-            escrow,
             recipient,
             reclaimer,
             token,
@@ -383,7 +379,7 @@ pub contract LinearVestingEscrowLogic {
         released_amount: u128,
         claim_completed: bool,
     ) {
-        let note = ReleasedAmountNote { escrow, released_amount, claim_completed };
+        let note = ReleasedAmountNote { released_amount, claim_completed };
         let note_insertion = storage.released_notes.at(escrow).insert(note);
         note_insertion.deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
     }
@@ -397,9 +393,7 @@ pub contract LinearVestingEscrowLogic {
         storage: Storage<&mut PrivateContext>,
         escrow: AztecAddress,
     ) -> VestingScheduleNote {
-        let options = NoteGetterOptions::new()
-            .select(VestingScheduleNote::properties().escrow, Comparator.EQ, escrow)
-            .set_limit(1);
+        let options = NoteGetterOptions::new().set_limit(1);
 
         let notes = storage.escrows.at(escrow).get_notes(options);
         assert(notes.len() == 1, "vesting schedule note not found");
@@ -418,9 +412,7 @@ pub contract LinearVestingEscrowLogic {
         storage: Storage<&mut PrivateContext>,
         escrow: AztecAddress,
     ) -> ReleasedAmountNote {
-        let options = NoteGetterOptions::new()
-            .select(ReleasedAmountNote::properties().escrow, Comparator.EQ, escrow)
-            .set_limit(1);
+        let options = NoteGetterOptions::new().set_limit(1);
 
         let notes = storage.released_notes.at(escrow).pop_notes(options);
         assert(notes.len() == 1, "released amount note not found");
@@ -438,9 +430,7 @@ pub contract LinearVestingEscrowLogic {
         storage: Storage<&mut PrivateContext>,
         escrow: AztecAddress,
     ) -> VestingScheduleNote {
-        let options = NoteGetterOptions::new()
-            .select(VestingScheduleNote::properties().escrow, Comparator.EQ, escrow)
-            .set_limit(1);
+        let options = NoteGetterOptions::new().set_limit(1);
 
         let notes = storage.escrows.at(escrow).pop_notes(options);
         assert(notes.len() == 1, "vesting schedule note not found");
@@ -528,13 +518,10 @@ pub contract LinearVestingEscrowLogic {
         storage: Storage<UtilityContext>,
         escrow: AztecAddress,
     ) -> VestingScheduleNote {
-        let options = NoteViewerOptions::new()
-            .select(VestingScheduleNote::properties().escrow, Comparator.EQ, escrow)
-            .set_limit(1);
+        let options = NoteViewerOptions::new().set_limit(1);
 
         let notes = storage.escrows.at(escrow).view_notes(options);
 
-        // We revert if there is no note in the filter so we can probably unwrap directly
         notes.get_unchecked(0)
     }
 
@@ -547,13 +534,10 @@ pub contract LinearVestingEscrowLogic {
         storage: Storage<UtilityContext>,
         escrow: AztecAddress,
     ) -> ReleasedAmountNote {
-        let options = NoteViewerOptions::new()
-            .select(ReleasedAmountNote::properties().escrow, Comparator.EQ, escrow)
-            .set_limit(1);
+        let options = NoteViewerOptions::new().set_limit(1);
 
         let notes = storage.released_notes.at(escrow).view_notes(options);
 
-        // We revert if there is no note in the filter so we can probably unwrap directly
         notes.get_unchecked(0)
     }
 }
