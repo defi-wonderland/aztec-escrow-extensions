@@ -34,7 +34,7 @@ unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
 // #[test]
-#[test(should_fail_with = "Note: escrow address mismatch")]
+#[test(should_fail_with = "Note: recipient address mismatch")]
 unconstrained fn setup_clawback_escrow_success() {
     let (env, owner, recipient) = utils::setup(false);
 
@@ -56,7 +56,6 @@ unconstrained fn setup_clawback_escrow_success() {
     );
 
     let escrow_note = utils::get_escrow_note(*env, logic_contract_address, escrow_contract_address);
-    assert(escrow_note.escrow == escrow_contract_address, "Note: escrow address mismatch");
     assert(escrow_note.recipient == recipient, "Note: recipient address mismatch");
     assert(escrow_note.reclaimer == owner, "Note: reclaimer address mismatch");
     assert(escrow_note.deadline == deadline, "Note: deadline address mismatch");

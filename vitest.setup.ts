@@ -1,5 +1,5 @@
 import { checkAztecVersion } from "./scripts/check-aztec-version.js";
-import { startSandbox } from "./scripts/start-sandbox.js";
+import { startLocalNetwork } from "./scripts/start-local-network.js";
 
 /**
  * Vitest global setup - runs before all tests
@@ -8,7 +8,7 @@ import { startSandbox } from "./scripts/start-sandbox.js";
 export async function setup() {
   console.log("\n🔧 Setting up Aztec testing environment\n");
 
-  let sandboxManager: any;
+  let localNetworkManager: any;
 
   try {
     // Step 1: Check Aztec CLI version
@@ -16,13 +16,13 @@ export async function setup() {
     await checkAztecVersion();
     console.log("");
 
-    // Step 2: Start sandbox and wait for readiness
-    console.log("Step 2: Starting Aztec sandbox");
-    sandboxManager = await startSandbox();
+    // Step 2: Start local network and wait for readiness
+    console.log("Step 2: Starting Aztec local network");
+    localNetworkManager = await startLocalNetwork();
     console.log("");
 
-    // Store sandbox manager globally for teardown
-    globalThis.__AZTEC_SANDBOX_MANAGER__ = sandboxManager;
+    // Store local network manager globally for teardown
+    globalThis.__AZTEC_LOCAL_NETWORK_MANAGER__ = localNetworkManager;
   } catch (error) {
     console.error(`\n❌ Setup failed: ${error.message}`);
     process.exit(1);
@@ -33,11 +33,11 @@ export async function setup() {
     console.log("\nLast Step: Cleaning up Aztec testing environment");
 
     try {
-      if (sandboxManager) {
-        await sandboxManager.stop();
-        console.log("✅ Sandbox stopped successfully");
+      if (localNetworkManager) {
+        await localNetworkManager.stop();
+        console.log("✅ Local network stopped successfully");
       } else {
-        console.log("ℹ️  No sandbox manager found, skipping cleanup");
+        console.log("ℹ️  No local network manager found, skipping cleanup");
       }
 
       console.log("✅ Aztec testing environment cleanup complete\n");

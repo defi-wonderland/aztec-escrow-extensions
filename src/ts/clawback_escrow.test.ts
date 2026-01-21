@@ -2,13 +2,14 @@ import { siloNullifier } from "@aztec/stdlib/hash";
 import { FieldsOf } from "@aztec/foundation/types";
 import { type AztecNode } from "@aztec/aztec.js/node";
 import { TestWallet } from "@aztec/test-wallet/server";
-import { pedersenHash } from "@aztec/foundation/crypto";
+import { pedersenHash } from "@aztec/foundation/crypto/pedersen";
 import { TxStatus, TxReceipt } from "@aztec/aztec.js/tx";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { deriveKeys, PublicKeys } from "@aztec/stdlib/keys";
 import { type AztecLMDBStoreV2 } from "@aztec/kv-store/lmdb-v2";
 import { Fr, type GrumpkinScalar } from "@aztec/aztec.js/fields";
 import { getContractClassFromArtifact } from "@aztec/stdlib/contract";
+import { type ContractInstanceWithAddress } from "@aztec/aztec.js/contracts";
 
 import {
   setupTestSuite,
@@ -74,7 +75,8 @@ describe("Clawback Escrow", () => {
 
   let deadline: bigint;
 
-  async function setup() {
+  beforeEach(async () => {
+    // Setup test suite
     ({ store, node, wallet, accounts } =
       await setupTestSuite("clawback-escrow"));
 
@@ -97,13 +99,8 @@ describe("Clawback Escrow", () => {
       ovsk_m: grumpkinScalarToFr(escrowKeys.masterOutgoingViewingSecretKey),
       tsk_m: grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
     };
-  }
 
-  beforeAll(async () => {
-    await setup();
-  });
-
-  beforeEach(async () => {
+    // Deploy clawback escrow logic contract
     clawbackEscrow = await deployClawbackEscrow(wallet, alice, escrowClassId);
 
     // Use the logic contract address as the salt for the escrow contract
@@ -117,29 +114,30 @@ describe("Clawback Escrow", () => {
       escrowSalt,
     )) as EscrowContract;
 
-    await wallet.registerContract(
-      escrow.instance,
-      EscrowContractArtifact,
-      escrowSk,
-    );
+    // Register the escrow contract
+    const escrowInstance = (await node.getContract(
+      escrow.address,
+    )) as ContractInstanceWithAddress;
+    if (escrowInstance) {
+      await wallet.registerContract(
+        escrowInstance,
+        EscrowContractArtifact,
+        escrowSk,
+      );
+    }
 
     const blockNumber = await node.getBlockNumber();
     const block = await node.getBlock(blockNumber);
     deadline = block!.header.globalVariables.timestamp + 1000n;
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await store.delete();
   });
 
   describe("setup_clawback_escrow", () => {
     describe("correct escrow setup", () => {
       let setup_tx: FieldsOf<TxReceipt>;
-
-      beforeAll(async () => {
-        await store.delete();
-        await setup();
-      });
 
       beforeEach(async () => {
         setup_tx = await clawbackEscrow
@@ -153,16 +151,17 @@ describe("Clawback Escrow", () => {
         const blockNumber = setup_tx.blockNumber!;
 
         const events = await wallet.getPrivateEvents<EscrowDetailsLogContent>(
-          clawbackEscrow.address,
           ClawbackEscrowLogicContract.events.EscrowDetailsLogContent,
-          blockNumber,
-          1,
-          [bob],
+          {
+            contractAddress: clawbackEscrow.address,
+            fromBlock: blockNumber,
+            scopes: [bob],
+          },
         );
 
         expect(events.length).toBe(1);
 
-        const event = events[0];
+        const event = events[0].event;
 
         expect(event.escrow).toEqual(escrow.address);
         expect(event.master_secret_keys.nsk_m).toEqual(
@@ -183,16 +182,17 @@ describe("Clawback Escrow", () => {
         const blockNumber = setup_tx.blockNumber!;
 
         const events = await wallet.getPrivateEvents<EscrowDetailsLogContent>(
-          clawbackEscrow.address,
           ClawbackEscrowLogicContract.events.EscrowDetailsLogContent,
-          blockNumber,
-          1,
-          [bob],
+          {
+            contractAddress: clawbackEscrow.address,
+            fromBlock: blockNumber,
+            scopes: [bob],
+          },
         );
 
         expect(events.length).toBe(1);
 
-        const event = events[0];
+        const event = events[0].event;
 
         expect(event.escrow).toEqual(escrow.address);
         expect(event.master_secret_keys.nsk_m).toEqual(
@@ -241,12 +241,9 @@ describe("Clawback Escrow", () => {
         //   storageSlot: slotEscrowNotes,
         // });
 
-        expect(notes[0].note.items[0].toString()).toBe(
-          escrow.address.toString(),
-        );
-        expect(notes[0].note.items[1].toString()).toBe(bob.toString());
-        expect(notes[0].note.items[2].toString()).toBe(alice.toString());
-        expect(notes[0].note.items[3].toBigInt()).toBe(BigInt(deadline));
+        expect(notes[0].note.items[0].toString()).toBe(bob.toString());
+        expect(notes[0].note.items[1].toString()).toBe(alice.toString());
+        expect(notes[0].note.items[2].toBigInt()).toBe(BigInt(deadline));
       });
 
       it("creates clawback escrow should emit a nullifier for the escrow", async () => {
@@ -282,11 +279,6 @@ describe("Clawback Escrow", () => {
   });
 
   describe("claim", () => {
-    beforeAll(async () => {
-      await store.delete();
-      await setup();
-    });
-
     beforeEach(async () => {
       // Deploy a token contract
       token = (await deployTokenWithMinter(wallet, alice)) as TokenContract;
@@ -333,7 +325,7 @@ describe("Clawback Escrow", () => {
         })
       ).filter((note) => note.txHash.equals(claimTx.txHash));
       expect(notes.length).toBe(1);
-      expectUintNote(notes[0], AMOUNT, bob);
+      expectUintNote(notes[0].note, AMOUNT, bob);
 
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, bob, wad(0), AMOUNT);
@@ -382,8 +374,8 @@ describe("Clawback Escrow", () => {
           contractAddress: token.address,
         })
       ).filter((note) => note.txHash.equals(claimTx1.txHash));
-      expectUintNote(changeNote[0], halfAmount, escrow.address);
-      expectUintNote(transferNote[0], halfAmount, bob);
+      expectUintNote(changeNote[0].note, halfAmount, escrow.address);
+      expectUintNote(transferNote[0].note, halfAmount, bob);
 
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, bob, wad(0), halfAmount);
@@ -407,7 +399,7 @@ describe("Clawback Escrow", () => {
         })
       ).filter((note) => note.txHash.equals(claimTx2.txHash));
       expect(notes2.length).toBe(1);
-      expectUintNote(notes2[0], halfAmount, bob);
+      expectUintNote(notes2[0].note, halfAmount, bob);
 
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, bob, wad(0), AMOUNT);
@@ -445,11 +437,6 @@ describe("Clawback Escrow", () => {
 
   describe("claim_nft", () => {
     const tokenId = 1n;
-
-    beforeAll(async () => {
-      await store.delete();
-      await setup();
-    });
 
     beforeEach(async () => {
       // Deploy a nft contract
@@ -495,7 +482,7 @@ describe("Clawback Escrow", () => {
         })
       ).filter((note) => note.txHash.equals(claimTx.txHash));
       expect(notes.length).toBe(1);
-      expectNFTNote(notes[0], tokenId, bob);
+      expectNFTNote(notes[0].note, tokenId);
 
       // Assert that NFT were effectively transferred
       await assertOwnsPrivateNFT(nft, tokenId, bob, true);
@@ -530,11 +517,6 @@ describe("Clawback Escrow", () => {
   });
 
   describe("clawback", () => {
-    beforeAll(async () => {
-      await store.delete();
-      await setup();
-    });
-
     beforeEach(async () => {
       // Deploy a token contract
       token = (await deployTokenWithMinter(wallet, alice)) as TokenContract;
@@ -581,7 +563,7 @@ describe("Clawback Escrow", () => {
         })
       ).filter((note) => note.txHash.equals(clawbackTx.txHash));
       expect(notes.length).toBe(1);
-      expectUintNote(notes[0], AMOUNT, alice);
+      expectUintNote(notes[0].note, AMOUNT, alice);
 
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, alice, wad(0), AMOUNT);
@@ -636,8 +618,8 @@ describe("Clawback Escrow", () => {
           contractAddress: token.address,
         })
       ).filter((note) => note.txHash.equals(clawbackTx1.txHash));
-      expectUintNote(changeNote[0], halfAmount, escrow.address);
-      expectUintNote(transferNote[0], halfAmount, alice);
+      expectUintNote(changeNote[0].note, halfAmount, escrow.address);
+      expectUintNote(transferNote[0].note, halfAmount, alice);
 
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, alice, wad(0), halfAmount);
@@ -667,7 +649,7 @@ describe("Clawback Escrow", () => {
         })
       ).filter((note) => note.txHash.equals(clawbackTx2.txHash));
       expect(notes2.length).toBe(1);
-      expectUintNote(notes2[0], halfAmount, alice);
+      expectUintNote(notes2[0].note, halfAmount, alice);
 
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, alice, wad(0), AMOUNT);
@@ -704,11 +686,6 @@ describe("Clawback Escrow", () => {
 
   describe("clawback_nft", () => {
     const tokenId = 1n;
-
-    beforeAll(async () => {
-      await store.delete();
-      await setup();
-    });
 
     beforeEach(async () => {
       // Deploy a nft contract
@@ -754,7 +731,7 @@ describe("Clawback Escrow", () => {
         })
       ).filter((note) => note.txHash.equals(claimTx.txHash));
       expect(notes.length).toBe(1);
-      expectNFTNote(notes[0], tokenId, alice);
+      expectNFTNote(notes[0].note, tokenId);
 
       // Assert that NFT were effectively transferred
       await assertOwnsPrivateNFT(nft, tokenId, alice, true);

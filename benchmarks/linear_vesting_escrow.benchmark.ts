@@ -1,9 +1,11 @@
 import { Fr } from "@aztec/aztec.js/fields";
 import { deriveKeys } from "@aztec/stdlib/keys";
 import type { Wallet } from "@aztec/aztec.js/wallet";
+import type { AztecNode } from "@aztec/aztec.js/node";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { type AztecLMDBStoreV2 } from "@aztec/kv-store/lmdb-v2";
 import { getContractClassFromArtifact } from "@aztec/stdlib/contract";
+import type { ContractInstanceWithAddress } from "@aztec/aztec.js/contracts";
 import type { ContractFunctionInteractionCallIntent } from "@aztec/aztec.js/authorization";
 
 // Import the new Benchmark base class and context
@@ -32,6 +34,7 @@ const AZTEC_SLOT_TIME = 36n;
 
 async function deployEscrow(
   wallet: Wallet,
+  node: AztecNode,
   deployer: AztecAddress,
   linearVestingEscrowContract: LinearVestingEscrowLogicContract,
 ) {
@@ -47,11 +50,16 @@ async function deployEscrow(
     escrowSalt,
   )) as EscrowContract;
 
-  await wallet.registerContract(
-    escrowContract.instance,
-    EscrowContractArtifact,
-    escrowSk,
-  );
+  const escrowInstance = (await node.getContract(
+    escrowContract.address,
+  )) as ContractInstanceWithAddress;
+  if (escrowInstance) {
+    await wallet.registerContract(
+      escrowInstance,
+      EscrowContractArtifact,
+      escrowSk,
+    );
+  }
 
   const secretKeys = {
     nsk_m: grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
@@ -96,6 +104,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
   async setup(): Promise<LinearVestingEscrowBenchmarkContext> {
     const { store, node, wallet, accounts } = await setupTestSuite(
       "bench-linear-vesting",
+      true,
     );
     const [deployer] = accounts;
 
@@ -113,11 +122,11 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     // 1 - [Create] Stop vesting and clawback (withdraw to recipient)
     // 3 - [Create and stop vesting] Final claim and clawback (no withdraw to recipient)
     const { escrowContract: escrowContract_1, secretKeys: secretKeys_1 } =
-      await deployEscrow(wallet, deployer, linearVestingEscrowContract);
+      await deployEscrow(wallet, node, deployer, linearVestingEscrowContract);
     const { escrowContract: escrowContract_2, secretKeys: secretKeys_2 } =
-      await deployEscrow(wallet, deployer, linearVestingEscrowContract);
+      await deployEscrow(wallet, node, deployer, linearVestingEscrowContract);
     const { escrowContract: escrowContract_3, secretKeys: secretKeys_3 } =
-      await deployEscrow(wallet, deployer, linearVestingEscrowContract);
+      await deployEscrow(wallet, node, deployer, linearVestingEscrowContract);
 
     const escrows = [
       { contract: escrowContract_1, secretKeys: secretKeys_1 },

@@ -10,6 +10,7 @@ concurrency:
 permissions:
   contents: read
   pull-requests: write
+  issues: write
 
 env:
   BENCH_DIR: ./benchmarks
@@ -45,33 +46,72 @@ jobs:
             const hasRelevantChanges = files.some(file => relevantPatterns.test(file.filename));
 
             // Check for AZTEC_VERSION change in package.json
-            const hasAztecVersionChange = files.some(file => 
+            const hasAztecVersionChange = files.some(file =>
               file.filename === 'package.json' && file.patch?.includes('aztecVersion')
             );
 
             const shouldBenchmark = hasRelevantChanges || hasAztecVersionChange;
 
             if (hasRelevantChanges) {
-              console.log('📝 Noir contracts, config, or benchmark files changed');
+              console.log('Noir contracts, config, or benchmark files changed');
             } else if (hasAztecVersionChange) {
-              console.log('🔄 AZTEC_VERSION changed in package.json');
+              console.log('AZTEC_VERSION changed in package.json');
             } else {
-              console.log('⏭️ No benchmark-relevant changes detected, skipping benchmarks');
+              console.log('No benchmark-relevant changes detected, skipping benchmarks');
             }
 
             core.setOutput('should-benchmark', shouldBenchmark);
 
+  version-check:
+    name: Check version compatibility
+    runs-on: ubuntu-latest
+    outputs:
+      skip_benchmark: ${{ steps.compare.outputs.skip }}
+      base_version: ${{ steps.compare.outputs.base_ver }}
+      pr_version: ${{ steps.compare.outputs.pr_ver }}
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v5
+
+      - name: Get PR version
+        id: pr
+        run: echo "ver=$(node -p "require('./package.json').config.aztecVersion")" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout BASE
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - name: Compare versions
+        id: compare
+        run: |
+          BASE_VER=$(node -p "require('./package.json').config.aztecVersion")
+          PR_VER="${{ steps.pr.outputs.ver }}"
+          echo "base_ver=$BASE_VER" >> "$GITHUB_OUTPUT"
+          echo "pr_ver=$PR_VER" >> "$GITHUB_OUTPUT"
+          echo "Base version: $BASE_VER"
+          echo "PR version: $PR_VER"
+          if [ "$BASE_VER" != "$PR_VER" ]; then
+            echo "Versions differ - benchmarks will be skipped"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Versions match - benchmarks will run"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
   benchmark:
-    needs: check-changes
-    if: needs.check-changes.outputs.should-benchmark == 'true'
+    needs: [check-changes, version-check]
+    if: |
+      needs.check-changes.outputs.should-benchmark == 'true' &&
+      needs.version-check.outputs.skip_benchmark != 'true'
     strategy:
       matrix:
         os: [ubuntu-latest-m]
         threads: [12]
 
-    runs-on: 
+    runs-on:
       labels: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       # ──────────────────────────────────────────────────────────────
@@ -85,10 +125,17 @@ jobs:
       - name: Set up Docker Buildx (Aztec sandbox needs BuildKit)
         uses: docker/setup-buildx-action@v2
 
+      - name: Detect Aztec version
+        id: aztec-version
+        run: |
+          AZTEC_VERSION=$(node -p "require('./package.json').config.aztecVersion")
+          echo "version=$AZTEC_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Aztec version is $AZTEC_VERSION"
+
       - name: Install Aztec CLI
         run: |
           curl -s https://install.aztec.network > tmp.sh
-          bash tmp.sh <<< yes "yes"
+          VERSION=${{ steps.aztec-version.outputs.version }} bash tmp.sh <<< yes "yes"
     
       - name: Update path
         run: echo "/home/runner/.aztec/bin" >> $GITHUB_PATH
@@ -116,8 +163,8 @@ jobs:
         run: |
           VERSION=${{ steps.basever.outputs.ver }} aztec-up
 
-      - name: Start sandbox (BASE, background)
-        run: aztec start --sandbox &
+      - name: Start local network (BASE, background)
+        run: aztec start --local-network &
 
       - name: Start PXE node (BASE, background)
         run: |
@@ -182,8 +229,8 @@ jobs:
       - name: Kill BASE services
         if: steps.prver.outputs.ver_diff == 'true'
         run: |
-          pkill -f "aztec.*--sandbox" || true                   
-          pkill -f "aztec.*--pxe.*8081" || true                   
+          pkill -f "aztec.*--local-network" || true
+          pkill -f "aztec.*--pxe.*8081" || true
           sleep 5      
 
       - name: Switch CLI to PR version
@@ -191,9 +238,9 @@ jobs:
         run: |
           VERSION=${{ steps.prver.outputs.ver }} aztec-up
 
-      - name: Start sandbox (PR, background)
+      - name: Start local network (PR, background)
         if: steps.prver.outputs.ver_diff == 'true'
-        run: aztec start --sandbox &
+        run: aztec start --local-network &
 
       - name: Start PXE node (PR, background)
         if: steps.prver.outputs.ver_diff == 'true'
@@ -233,3 +280,26 @@ jobs:
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body-file: benchmark-comparison.md
+
+  skip-comment:
+    name: Post skip notice
+    needs: [check-changes, version-check]
+    if: |
+      needs.check-changes.outputs.should-benchmark == 'true' &&
+      needs.version-check.outputs.skip_benchmark == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Post skip comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ## Benchmark Comparison Skipped
+
+            Benchmarks were skipped because the Aztec version changed:
+            - **Base:** `${{ needs.version-check.outputs.base_version }}`
+            - **PR:** `${{ needs.version-check.outputs.pr_version }}`
+
+            This is expected during version upgrades.

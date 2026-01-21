@@ -84,7 +84,7 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
 
 // TODO: cannot deploy escrow contract with custom salt. This should pass.
 // #[test]
-#[test(should_fail_with = "Note: escrow address mismatch")]
+#[test(should_fail_with = "Note: recipient address mismatch")]
 unconstrained fn create_linear_vesting_escrow_success() {
     let (env, owner, recipient, reclaimer) = utils::setup(false);
 
@@ -118,10 +118,6 @@ unconstrained fn create_linear_vesting_escrow_success() {
 
     let vesting_schedule_note =
         utils::get_vesting_schedule_note(*env, logic_contract_address, escrow_contract_address);
-    assert(
-        vesting_schedule_note.escrow == escrow_contract_address,
-        "Note: escrow address mismatch",
-    );
     assert(vesting_schedule_note.recipient == recipient, "Note: recipient address mismatch");
     assert(vesting_schedule_note.token == token_contract_address, "Note: token address mismatch");
     assert(vesting_schedule_note.start == start, "Note: start mismatch");
@@ -131,7 +127,6 @@ unconstrained fn create_linear_vesting_escrow_success() {
 
     let released_amount_note =
         utils::get_released_amount_note(*env, logic_contract_address, escrow_contract_address);
-    assert(released_amount_note.escrow == escrow_contract_address, "Note: escrow address mismatch");
     assert(released_amount_note.released_amount == 0, "Note: released amount mismatch");
     assert(released_amount_note.claim_completed == false, "Note: claim completed mismatch");
 }

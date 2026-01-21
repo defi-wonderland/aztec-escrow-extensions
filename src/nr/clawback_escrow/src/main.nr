@@ -10,9 +10,9 @@ pub contract ClawbackEscrowLogic {
         context::PrivateContext,
         macros::{events::event, functions::{external, initializer, view}, storage::storage},
         messages::message_delivery::MessageDelivery,
-        note::{note_getter_options::NoteGetterOptions, note_interface::NoteProperties},
+        note::note_getter_options::NoteGetterOptions,
         protocol_types::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
-        state_vars::{private_set::PrivateSet, public_immutable::PublicImmutable},
+        state_vars::{Owned, private_set::PrivateSet, public_immutable::PublicImmutable},
         utils::comparison::Comparator,
     };
     use escrow_standard::library::logic::{
@@ -25,7 +25,7 @@ pub contract ClawbackEscrowLogic {
     #[storage]
     struct Storage<Context> {
         escrow_class_id: PublicImmutable<Field, Context>,
-        escrows: PrivateSet<ClawbackEscrowNote, Context>,
+        escrows: Owned<PrivateSet<ClawbackEscrowNote, Context>, Context>,
     }
 
     /// @notice Data privately emitted to an account that will use the escrow
@@ -45,7 +45,7 @@ pub contract ClawbackEscrowLogic {
     #[external("public")]
     #[initializer]
     fn constructor(escrow_class_id: Field) {
-        storage.escrow_class_id.initialize(escrow_class_id);
+        self.storage.escrow_class_id.initialize(escrow_class_id);
     }
 
     /// @notice Computes the escrow address from the given master secret keys and
@@ -64,21 +64,20 @@ pub contract ClawbackEscrowLogic {
         master_secret_keys: MasterSecretKeys,
     ) {
         let escrow = _get_escrow(
-            &mut context,
-            storage.escrow_class_id.read(),
+            self.context,
+            self.storage.escrow_class_id.read(),
             master_secret_keys,
         );
-        _share_escrow(&mut context, reclaimer, escrow, master_secret_keys);
-        _share_escrow(&mut context, recipient, escrow, master_secret_keys);
+        _share_escrow(self.context, reclaimer, escrow, master_secret_keys);
+        _share_escrow(self.context, recipient, escrow, master_secret_keys);
 
         // Create and emit note with gating logic parameters
-        let note = ClawbackEscrowNote::new(escrow, recipient, reclaimer, deadline);
-        let note_insertion = storage.escrows.insert(note);
-        note_insertion.emit(escrow, MessageDelivery.CONSTRAINED_ONCHAIN);
+        let note = ClawbackEscrowNote { recipient, reclaimer, deadline };
+        self.storage.escrows.at(escrow).insert(note).deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
 
         // Check that a clawback escrow has not been created for the provided escrow
         let nullifier = std::hash::pedersen_hash([escrow.to_field()]);
-        context.push_nullifier(nullifier);
+        self.context.push_nullifier(nullifier);
     }
 
     /// @notice Withdraws an amount of tokens from the provided escrow.
@@ -88,10 +87,10 @@ pub contract ClawbackEscrowLogic {
     #[external("private")]
     fn claim(escrow: AztecAddress, token: AztecAddress, amount: u128) {
         // There should only be one note per escrow
-        let note = _find_clawback_note(storage, escrow);
-        _withdraw(&mut context, escrow, note.recipient, token, amount);
+        let note = _find_clawback_note(self.storage, escrow);
+        _withdraw(self.context, escrow, note.recipient, token, amount);
 
-        privately_check_timestamp(Comparator.LTE, note.deadline, &mut context);
+        privately_check_timestamp(Comparator.LTE, note.deadline, self.context);
     }
 
     /// @notice Withdraws an NFT from the provided escrow.
@@ -101,10 +100,10 @@ pub contract ClawbackEscrowLogic {
     #[external("private")]
     fn claim_nft(escrow: AztecAddress, nft: AztecAddress, token_id: Field) {
         // There should only be one note per escrow
-        let note = _find_clawback_note(storage, escrow);
-        _withdraw_nft(&mut context, escrow, note.recipient, nft, token_id);
+        let note = _find_clawback_note(self.storage, escrow);
+        _withdraw_nft(self.context, escrow, note.recipient, nft, token_id);
 
-        privately_check_timestamp(Comparator.LTE, note.deadline, &mut context);
+        privately_check_timestamp(Comparator.LTE, note.deadline, self.context);
     }
 
     /// @notice Withdraws an amount of tokens from the provided escrow.
@@ -114,13 +113,13 @@ pub contract ClawbackEscrowLogic {
     #[external("private")]
     fn clawback(escrow: AztecAddress, token: AztecAddress, amount: u128) {
         // There should only be one note per escrow
-        let note = _find_clawback_note(storage, escrow);
-        _withdraw(&mut context, escrow, note.reclaimer, token, amount);
+        let note = _find_clawback_note(self.storage, escrow);
+        _withdraw(self.context, escrow, note.reclaimer, token, amount);
 
         // Alternatively, the clawback method could rely on historical block proofs to check
         // that the deadline has passed. Pros: more efficient and no public execution. Cons:
         // reclaimer would have to wait until the deadline block is mined.
-        privately_check_timestamp(Comparator.GT, note.deadline, &mut context);
+        privately_check_timestamp(Comparator.GT, note.deadline, self.context);
     }
 
     /// @notice Withdraws an NFT from the provided escrow.
@@ -130,13 +129,13 @@ pub contract ClawbackEscrowLogic {
     #[external("private")]
     fn clawback_nft(escrow: AztecAddress, nft: AztecAddress, token_id: Field) {
         // There should only be one note per escrow
-        let note = _find_clawback_note(storage, escrow);
-        _withdraw_nft(&mut context, escrow, note.reclaimer, nft, token_id);
+        let note = _find_clawback_note(self.storage, escrow);
+        _withdraw_nft(self.context, escrow, note.reclaimer, nft, token_id);
 
         // Alternatively, the clawback method could rely on historical block proofs to check
         // that the deadline has passed. Pros: more efficient and no public execution. Cons:
         // reclaimer would have to wait until the deadline block is mined.
-        privately_check_timestamp(Comparator.GT, note.deadline, &mut context);
+        privately_check_timestamp(Comparator.GT, note.deadline, self.context);
     }
 
     /// @notice Returns the escrow address that corresponds to the given master secret keys and class ID.
@@ -146,8 +145,8 @@ pub contract ClawbackEscrowLogic {
     #[view]
     fn get_escrow(master_secret_keys: MasterSecretKeys) -> pub AztecAddress {
         _get_escrow(
-            &mut context,
-            storage.escrow_class_id.read(),
+            self.context,
+            self.storage.escrow_class_id.read(),
             master_secret_keys,
         )
     }
@@ -175,10 +174,8 @@ pub contract ClawbackEscrowLogic {
         storage: Storage<&mut PrivateContext>,
         escrow: AztecAddress,
     ) -> ClawbackEscrowNote {
-        let options = NoteGetterOptions::new()
-            .select(ClawbackEscrowNote::properties().escrow, Comparator.EQ, escrow)
-            .set_limit(1);
-        let notes = storage.escrows.get_notes(options);
+        let options = NoteGetterOptions::new().set_limit(1);
+        let notes = storage.escrows.at(escrow).get_notes(options);
         assert(notes.len() == 1, "clawback escrow note not found");
 
         // We revert if there is no note in the filter so we can probably unwrap directly
