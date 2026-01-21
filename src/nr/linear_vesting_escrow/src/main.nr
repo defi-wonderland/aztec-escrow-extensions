@@ -356,7 +356,7 @@ pub contract LinearVestingEscrowLogic {
         total_amount: u128,
         stop_timestamp: u64,
     ) {
-        let note = VestingScheduleNote::new(
+        let note = VestingScheduleNote {
             escrow,
             recipient,
             reclaimer,
@@ -365,7 +365,7 @@ pub contract LinearVestingEscrowLogic {
             duration,
             total_amount,
             stop_timestamp,
-        );
+        };
         let note_insertion = storage.escrows.at(escrow).insert(note);
         note_insertion.deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
     }
@@ -383,7 +383,7 @@ pub contract LinearVestingEscrowLogic {
         released_amount: u128,
         claim_completed: bool,
     ) {
-        let note = ReleasedAmountNote::new(escrow, released_amount, claim_completed);
+        let note = ReleasedAmountNote { escrow, released_amount, claim_completed };
         let note_insertion = storage.released_notes.at(escrow).insert(note);
         note_insertion.deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
     }

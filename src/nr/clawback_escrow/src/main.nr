@@ -72,7 +72,7 @@ pub contract ClawbackEscrowLogic {
         _share_escrow(self.context, recipient, escrow, master_secret_keys);
 
         // Create and emit note with gating logic parameters
-        let note = ClawbackEscrowNote::new(escrow, recipient, reclaimer, deadline);
+        let note = ClawbackEscrowNote { escrow, recipient, reclaimer, deadline };
         self.storage.escrows.at(escrow).insert(note).deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
 
         // Check that a clawback escrow has not been created for the provided escrow

@@ -1,14 +1,6 @@
 use aztec::{
-    context::PrivateContext,
-    macros::notes::custom_note,
-    note::note_interface::NoteHash,
-    oracle::random::random,
-    protocol_types::{
-        address::AztecAddress,
-        constants::{GENERATOR_INDEX__NOTE_HASH, GENERATOR_INDEX__NOTE_NULLIFIER},
-        hash::poseidon2_hash_with_separator,
-        traits::{Packable, Serialize, ToField},
-    },
+    macros::notes::note,
+    protocol_types::{address::AztecAddress, traits::{Packable, Serialize}},
 };
 
 /// @param escrow The address of the escrow
@@ -19,10 +11,8 @@ use aztec::{
 /// @param duration The duration of the vesting
 /// @param total_amount The total amount of tokens to vest
 /// @param stop_timestamp The timestamp at which the vesting stopped (if stopped by the reclaimer)
-/// @param randomness The randomness used to create the note
-#[derive(Packable)]
-#[custom_note]
-#[derive(Serialize, Eq)]
+#[derive(Eq, Packable, Serialize)]
+#[note]
 pub struct VestingScheduleNote {
     pub escrow: AztecAddress,
     pub recipient: AztecAddress,
@@ -32,70 +22,4 @@ pub struct VestingScheduleNote {
     pub duration: u64,
     pub total_amount: u128,
     pub stop_timestamp: u64,
-    randomness: Field,
-}
-
-impl NoteHash for VestingScheduleNote {
-    fn compute_note_hash(
-        self,
-        _owner: AztecAddress,
-        storage_slot: Field,
-        _randomness: Field,
-    ) -> Field {
-        poseidon2_hash_with_separator(
-            self.pack().concat([storage_slot]),
-            GENERATOR_INDEX__NOTE_HASH,
-        )
-    }
-
-    fn compute_nullifier(
-        self,
-        _context: &mut PrivateContext,
-        _owner: AztecAddress,
-        note_hash_for_nullify: Field,
-    ) -> Field {
-        poseidon2_hash_with_separator(
-            [note_hash_for_nullify, self.escrow.to_field()],
-            GENERATOR_INDEX__NOTE_NULLIFIER as Field,
-        )
-    }
-
-    unconstrained fn compute_nullifier_unconstrained(
-        self,
-        _owner: AztecAddress,
-        note_hash_for_nullify: Field,
-    ) -> Field {
-        poseidon2_hash_with_separator(
-            [note_hash_for_nullify, self.escrow.to_field()],
-            GENERATOR_INDEX__NOTE_NULLIFIER as Field,
-        )
-    }
-}
-
-impl VestingScheduleNote {
-    pub fn new(
-        escrow: AztecAddress,
-        recipient: AztecAddress,
-        reclaimer: AztecAddress,
-        token: AztecAddress,
-        start: u64,
-        duration: u64,
-        total_amount: u128,
-        stop_timestamp: u64,
-    ) -> Self {
-        // Safety: random() is safe to call here as it generates cryptographically secure randomness
-        // for note creation, which is the intended use case
-        let randomness = unsafe { random() };
-        VestingScheduleNote {
-            escrow,
-            recipient,
-            reclaimer,
-            token,
-            start,
-            duration,
-            total_amount,
-            stop_timestamp,
-            randomness,
-        }
-    }
 }
