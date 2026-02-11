@@ -1,2 +1,2 @@
-aztec fmt
+cd src/nr/clawback_escrow && nargo fmt && cd ../linear_vesting_escrow && nargo fmt && cd ../../..
 yarn lint-staged
