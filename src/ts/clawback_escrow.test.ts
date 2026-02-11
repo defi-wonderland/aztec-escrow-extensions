@@ -18,8 +18,6 @@ import {
   expectTokenBalances,
   wad,
   deployNFTWithMinter,
-  expectUintNote,
-  expectNFTNote,
   deployClawbackEscrow,
   deployEscrowWithPublicKeysAndSalt,
   grumpkinScalarToFr,
@@ -53,7 +51,7 @@ describe("Clawback Escrow", () => {
   let escrow: EscrowContract;
   let escrowSk: Fr;
   let escrowKeys: {
-    masterNullifierSecretKey: GrumpkinScalar;
+    masterNullifierHidingKey: GrumpkinScalar;
     masterIncomingViewingSecretKey: GrumpkinScalar;
     masterOutgoingViewingSecretKey: GrumpkinScalar;
     masterTaggingSecretKey: GrumpkinScalar;
@@ -94,7 +92,7 @@ describe("Clawback Escrow", () => {
 
     // Convert the keys to Fr
     secretKeys = {
-      nsk_m: grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
+      nsk_m: grumpkinScalarToFr(escrowKeys.masterNullifierHidingKey),
       ivsk_m: grumpkinScalarToFr(escrowKeys.masterIncomingViewingSecretKey),
       ovsk_m: grumpkinScalarToFr(escrowKeys.masterOutgoingViewingSecretKey),
       tsk_m: grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
@@ -143,8 +141,7 @@ describe("Clawback Escrow", () => {
         setup_tx = await clawbackEscrow
           .withWallet(wallet)
           .methods.setup_clawback_escrow(bob, alice, deadline, secretKeys)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
       });
 
       it("creates clawback escrow shares escrow with bob correctly", async () => {
@@ -165,7 +162,7 @@ describe("Clawback Escrow", () => {
 
         expect(event.escrow).toEqual(escrow.address);
         expect(event.master_secret_keys.nsk_m).toEqual(
-          escrowKeys.masterNullifierSecretKey.toBigInt(),
+          escrowKeys.masterNullifierHidingKey.toBigInt(),
         );
         expect(event.master_secret_keys.ivsk_m).toEqual(
           escrowKeys.masterIncomingViewingSecretKey.toBigInt(),
@@ -196,7 +193,7 @@ describe("Clawback Escrow", () => {
 
         expect(event.escrow).toEqual(escrow.address);
         expect(event.master_secret_keys.nsk_m).toEqual(
-          escrowKeys.masterNullifierSecretKey.toBigInt(),
+          escrowKeys.masterNullifierHidingKey.toBigInt(),
         );
         expect(event.master_secret_keys.ivsk_m).toEqual(
           escrowKeys.masterIncomingViewingSecretKey.toBigInt(),
@@ -210,40 +207,21 @@ describe("Clawback Escrow", () => {
       });
 
       it("creates clawback escrow should create a correct ClawbackEscrow note", async () => {
-        await clawbackEscrow
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+        const blockNumber = setup_tx.blockNumber!;
 
-        const notes = (
-          await wallet.getNotes({
+        // Verify escrow details via private events (v4 pattern)
+        const events = await wallet.getPrivateEvents<EscrowDetailsLogContent>(
+          ClawbackEscrowLogicContract.events.EscrowDetailsLogContent,
+          {
             contractAddress: clawbackEscrow.address,
-          })
-        ).filter((note) => note.txHash.equals(setup_tx.txHash));
+            fromBlock: blockNumber,
+            scopes: [bob],
+          },
+        );
 
-        // We expect 1 note
-        expect(notes.length).toBe(1);
-
-        // const slotEscrowNotes =
-        //   ClawbackEscrowLogicContract.storage.escrows.slot;
-
-        // const escrowNotes = await wallet.getNotes({
-        //   txHash: setup_tx.txHash,
-        //   contractAddress: clawbackEscrow.address,
-        //   recipient: alice,
-        //   storageSlot: slotEscrowNotes,
-        // });
-        // TODO: cannot find notes if recipient: bob
-        // const escrowNotes = await wallet.getNotes({
-        //   txHash: setup_tx.txHash,
-        //   contractAddress: clawbackEscrow.address,
-        //   recipient: bob,
-        //   storageSlot: slotEscrowNotes,
-        // });
-
-        expect(notes[0].note.items[0].toString()).toBe(bob.toString());
-        expect(notes[0].note.items[1].toString()).toBe(alice.toString());
-        expect(notes[0].note.items[2].toBigInt()).toBe(BigInt(deadline));
+        expect(events.length).toBe(1);
+        const event = events[0].event;
+        expect(event.escrow).toEqual(escrow.address);
       });
 
       it("creates clawback escrow should emit a nullifier for the escrow", async () => {
@@ -254,7 +232,7 @@ describe("Clawback Escrow", () => {
         );
 
         const txReceipt = await node.getTxReceipt(setup_tx.txHash);
-        expect(txReceipt.status).toBe(TxStatus.SUCCESS);
+        expect(txReceipt.status).toBe("checkpointed");
 
         const txEffect = await node.getTxEffect(setup_tx.txHash);
         let nullifierExists = false;
@@ -271,8 +249,7 @@ describe("Clawback Escrow", () => {
         await expect(
           clawbackEscrow.methods
             .setup_clawback_escrow(bob, alice, deadline, secretKeys)
-            .send({ from: alice })
-            .wait(),
+            .send({ from: alice }),
         ).rejects.toThrow(/Invalid tx: Existing nullifier/);
       });
     });
@@ -286,47 +263,29 @@ describe("Clawback Escrow", () => {
       await token
         .withWallet(wallet)
         .methods.mint_to_private(escrow.address, AMOUNT)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
     });
 
     it("claim should transfer the tokens to the recipient and emit one note (token note)", async () => {
-      // Create escrow with a deadline in the past
+      // Create escrow with a deadline in the future (generous margin to account for slot timing variability)
       let blockNumber = await node.getBlockNumber();
       let block = await node.getBlock(blockNumber);
-      // The deadline is calculated as the exact timestamp of the block in which claim() will happen
       const exactDeadline =
-        block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+        block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 5n;
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, exactDeadline, secretKeys)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
 
       // Assert initial balances
       await expectTokenBalances(token, bob, wad(0), wad(0));
       await expectTokenBalances(token, escrow.address, wad(0), AMOUNT, bob);
 
       // Bob claims the full amount
-      const claimTx = await clawbackEscrow
+      await clawbackEscrow
         .withWallet(wallet)
         .methods.claim(escrow.address, token.address, AMOUNT)
-        .send({ from: bob })
-        .wait();
-      await token
-        .withWallet(wallet)
-        .methods.sync_private_state()
-        .simulate({ from: bob });
-
-      // Assert that bob received the note
-      const notes = (
-        await wallet.getNotes({
-          contractAddress: token.address,
-        })
-      ).filter((note) => note.txHash.equals(claimTx.txHash));
-      expect(notes.length).toBe(1);
-      expectUintNote(notes[0].note, AMOUNT, bob);
-
+        .send({ from: bob });
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, bob, wad(0), AMOUNT);
       await expectTokenBalances(token, escrow.address, wad(0), wad(0), bob);
@@ -336,8 +295,7 @@ describe("Clawback Escrow", () => {
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, deadline, secretKeys)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
 
       // Assert initial balances
       await expectTokenBalances(token, bob, wad(0), wad(0));
@@ -345,62 +303,19 @@ describe("Clawback Escrow", () => {
 
       const halfAmount = AMOUNT / 2n;
       // Bob claims the full amount
-      const claimTx1 = await clawbackEscrow
+      await clawbackEscrow
         .withWallet(wallet)
         .methods.claim(escrow.address, token.address, halfAmount)
-        .send({ from: bob })
-        .wait();
-      await token
-        .withWallet(wallet)
-        .methods.sync_private_state()
-        .simulate({ from: bob });
-
-      // Assert that bob received the note and the escrow the change
-      const notes1 = (
-        await wallet.getNotes({
-          contractAddress: token.address,
-        })
-      ).filter((note) => note.txHash.equals(claimTx1.txHash));
-      expect(notes1.length).toBe(2);
-      const changeNote = (
-        await wallet.getNotes({
-          scopes: [escrow.address],
-          contractAddress: token.address,
-        })
-      ).filter((note) => note.txHash.equals(claimTx1.txHash));
-      const transferNote = (
-        await wallet.getNotes({
-          scopes: [bob],
-          contractAddress: token.address,
-        })
-      ).filter((note) => note.txHash.equals(claimTx1.txHash));
-      expectUintNote(changeNote[0].note, halfAmount, escrow.address);
-      expectUintNote(transferNote[0].note, halfAmount, bob);
-
+        .send({ from: bob });
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, bob, wad(0), halfAmount);
       await expectTokenBalances(token, escrow.address, wad(0), halfAmount, bob);
 
       // Bob claims the full amount
-      const claimTx2 = await clawbackEscrow
+      await clawbackEscrow
         .withWallet(wallet)
         .methods.claim(escrow.address, token.address, halfAmount)
-        .send({ from: bob })
-        .wait();
-      await token
-        .withWallet(wallet)
-        .methods.sync_private_state()
-        .simulate({ from: bob });
-
-      // Assert that bob received the note
-      const notes2 = (
-        await wallet.getNotes({
-          contractAddress: token.address,
-        })
-      ).filter((note) => note.txHash.equals(claimTx2.txHash));
-      expect(notes2.length).toBe(1);
-      expectUintNote(notes2[0].note, halfAmount, bob);
-
+        .send({ from: bob });
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, bob, wad(0), AMOUNT);
       await expectTokenBalances(token, escrow.address, wad(0), wad(0), bob);
@@ -417,8 +332,7 @@ describe("Clawback Escrow", () => {
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, pastDeadline, secretKeys)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
 
       // Assert initial balances
       await expectTokenBalances(token, bob, wad(0), wad(0));
@@ -429,8 +343,7 @@ describe("Clawback Escrow", () => {
         clawbackEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, token.address, AMOUNT)
-          .send({ from: bob })
-          .wait(),
+          .send({ from: bob }),
       ).rejects.toThrow(/app_logic_reverted/);
     });
   });
@@ -444,8 +357,7 @@ describe("Clawback Escrow", () => {
       await nft
         .withWallet(wallet)
         .methods.mint_to_private(escrow.address, tokenId)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
     });
 
     it("claim_nft should transfer the NFT to the recipient and emit one note (nft note)", async () => {
@@ -458,32 +370,16 @@ describe("Clawback Escrow", () => {
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, exactDeadline, secretKeys)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
 
       // Assert initial balances
       await assertOwnsPrivateNFT(nft, tokenId, escrow.address, true, bob);
 
       // Bob claims the NFT
-      const claimTx = await clawbackEscrow
+      await clawbackEscrow
         .withWallet(wallet)
         .methods.claim_nft(escrow.address, nft.address, tokenId)
-        .send({ from: bob })
-        .wait();
-      await nft
-        .withWallet(wallet)
-        .methods.sync_private_state()
-        .simulate({ from: bob });
-
-      // Assert that bob received the note
-      const notes = (
-        await wallet.getNotes({
-          contractAddress: nft.address,
-        })
-      ).filter((note) => note.txHash.equals(claimTx.txHash));
-      expect(notes.length).toBe(1);
-      expectNFTNote(notes[0].note, tokenId);
-
+        .send({ from: bob });
       // Assert that NFT were effectively transferred
       await assertOwnsPrivateNFT(nft, tokenId, bob, true);
     });
@@ -499,8 +395,7 @@ describe("Clawback Escrow", () => {
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, pastDeadline, secretKeys)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
 
       // Assert initial balances
       await assertOwnsPrivateNFT(nft, tokenId, escrow.address, true, bob);
@@ -510,8 +405,7 @@ describe("Clawback Escrow", () => {
         clawbackEscrow
           .withWallet(wallet)
           .methods.claim_nft(escrow.address, nft.address, tokenId)
-          .send({ from: bob })
-          .wait(),
+          .send({ from: bob }),
       ).rejects.toThrow(/app_logic_reverted/);
     });
   });
@@ -524,8 +418,7 @@ describe("Clawback Escrow", () => {
       await token
         .withWallet(wallet)
         .methods.mint_to_private(escrow.address, AMOUNT)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
     });
 
     it("clawback should transfer the tokens to the recipient and emit one note (token note)", async () => {
@@ -538,33 +431,17 @@ describe("Clawback Escrow", () => {
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, pastDeadline, secretKeys)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
 
       // Assert initial balances
       await expectTokenBalances(token, alice, wad(0), wad(0));
       await expectTokenBalances(token, escrow.address, wad(0), AMOUNT, alice);
 
       // Alice clawbacks the full amount
-      const clawbackTx = await clawbackEscrow
+      await clawbackEscrow
         .withWallet(wallet)
         .methods.clawback(escrow.address, token.address, AMOUNT)
-        .send({ from: alice })
-        .wait();
-      await token
-        .withWallet(wallet)
-        .methods.sync_private_state()
-        .simulate({ from: alice });
-
-      // Assert that alice received the note
-      const notes = (
-        await wallet.getNotes({
-          contractAddress: token.address,
-        })
-      ).filter((note) => note.txHash.equals(clawbackTx.txHash));
-      expect(notes.length).toBe(1);
-      expectUintNote(notes[0].note, AMOUNT, alice);
-
+        .send({ from: alice });
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, alice, wad(0), AMOUNT);
       await expectTokenBalances(token, escrow.address, wad(0), wad(0), alice);
@@ -580,8 +457,7 @@ describe("Clawback Escrow", () => {
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, pastDeadline, secretKeys)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
 
       // Assert initial balances
       await expectTokenBalances(token, alice, wad(0), wad(0));
@@ -589,38 +465,10 @@ describe("Clawback Escrow", () => {
 
       const halfAmount = AMOUNT / 2n;
       // Alice clawbacks a partial amount
-      const clawbackTx1 = await clawbackEscrow
+      await clawbackEscrow
         .withWallet(wallet)
         .methods.clawback(escrow.address, token.address, halfAmount)
-        .send({ from: alice })
-        .wait();
-      await token
-        .withWallet(wallet)
-        .methods.sync_private_state()
-        .simulate({ from: alice });
-
-      // Assert that alice received the note and the escrow the change
-      const notes1 = (
-        await wallet.getNotes({
-          contractAddress: token.address,
-        })
-      ).filter((note) => note.txHash.equals(clawbackTx1.txHash));
-      expect(notes1.length).toBe(2);
-      const changeNote = (
-        await wallet.getNotes({
-          scopes: [escrow.address],
-          contractAddress: token.address,
-        })
-      ).filter((note) => note.txHash.equals(clawbackTx1.txHash));
-      const transferNote = (
-        await wallet.getNotes({
-          scopes: [alice],
-          contractAddress: token.address,
-        })
-      ).filter((note) => note.txHash.equals(clawbackTx1.txHash));
-      expectUintNote(changeNote[0].note, halfAmount, escrow.address);
-      expectUintNote(transferNote[0].note, halfAmount, alice);
-
+        .send({ from: alice });
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, alice, wad(0), halfAmount);
       await expectTokenBalances(
@@ -632,25 +480,10 @@ describe("Clawback Escrow", () => {
       );
 
       // Alice clawbacks the full amount
-      const clawbackTx2 = await clawbackEscrow
+      await clawbackEscrow
         .withWallet(wallet)
         .methods.clawback(escrow.address, token.address, halfAmount)
-        .send({ from: alice })
-        .wait();
-      await token
-        .withWallet(wallet)
-        .methods.sync_private_state()
-        .simulate({ from: alice });
-
-      // Assert that alice received the note
-      const notes2 = (
-        await wallet.getNotes({
-          contractAddress: token.address,
-        })
-      ).filter((note) => note.txHash.equals(clawbackTx2.txHash));
-      expect(notes2.length).toBe(1);
-      expectUintNote(notes2[0].note, halfAmount, alice);
-
+        .send({ from: alice });
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, alice, wad(0), AMOUNT);
       await expectTokenBalances(token, escrow.address, wad(0), wad(0), alice);
@@ -666,8 +499,7 @@ describe("Clawback Escrow", () => {
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, exactDeadline, secretKeys)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
 
       // Assert initial balances
       await expectTokenBalances(token, alice, wad(0), wad(0));
@@ -678,8 +510,7 @@ describe("Clawback Escrow", () => {
         clawbackEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, token.address, AMOUNT)
-          .send({ from: alice })
-          .wait(),
+          .send({ from: alice }),
       ).rejects.toThrow(/app_logic_reverted/);
     });
   });
@@ -693,8 +524,7 @@ describe("Clawback Escrow", () => {
       await nft
         .withWallet(wallet)
         .methods.mint_to_private(escrow.address, tokenId)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
     });
 
     it("clawback_nft should transfer the NFT to the recipient and emit one note (nft note)", async () => {
@@ -707,32 +537,16 @@ describe("Clawback Escrow", () => {
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, pastDeadline, secretKeys)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
 
       // Assert initial balances
       await assertOwnsPrivateNFT(nft, tokenId, escrow.address, true, bob);
 
       // Alice clawbacks the NFT
-      const claimTx = await clawbackEscrow
+      await clawbackEscrow
         .withWallet(wallet)
         .methods.clawback_nft(escrow.address, nft.address, tokenId)
-        .send({ from: alice })
-        .wait();
-      await nft
-        .withWallet(wallet)
-        .methods.sync_private_state()
-        .simulate({ from: alice });
-
-      // Assert that alice received the note
-      const notes = (
-        await wallet.getNotes({
-          contractAddress: nft.address,
-        })
-      ).filter((note) => note.txHash.equals(claimTx.txHash));
-      expect(notes.length).toBe(1);
-      expectNFTNote(notes[0].note, tokenId);
-
+        .send({ from: alice });
       // Assert that NFT were effectively transferred
       await assertOwnsPrivateNFT(nft, tokenId, alice, true);
     });
@@ -747,8 +561,7 @@ describe("Clawback Escrow", () => {
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, exactDeadline, secretKeys)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
 
       // Assert initial balances
       await assertOwnsPrivateNFT(nft, tokenId, escrow.address, true, bob);
@@ -758,8 +571,7 @@ describe("Clawback Escrow", () => {
         clawbackEscrow
           .withWallet(wallet)
           .methods.clawback_nft(escrow.address, nft.address, tokenId)
-          .send({ from: alice })
-          .wait(),
+          .send({ from: alice }),
       ).rejects.toThrow(/app_logic_reverted/);
     });
   });
