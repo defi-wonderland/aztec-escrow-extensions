@@ -1,4 +1,3 @@
-import { Note } from "@aztec/aztec.js/note";
 import { PublicKeys } from "@aztec/stdlib/keys";
 import { createLogger } from "@aztec/aztec.js/log";
 import { type Wallet } from "@aztec/aztec.js/wallet";
@@ -95,14 +94,6 @@ export const setupTestSuite = async (
 
 // --- Token Utils ---
 
-export const expectUintNote = (
-  note: Note,
-  amount: bigint,
-  owner: AztecAddress,
-) => {
-  expect(note.items[0]).toEqual(new Fr(amount));
-};
-
 export const expectTokenBalances = async (
   token: TokenContract,
   address: AztecAddress,
@@ -151,9 +142,7 @@ export async function deployTokenWithMinter(
     TokenContractArtifact,
     ["PrivateToken", "PT", 18, deployer, AztecAddress.ZERO],
     "constructor_with_minter",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
+  ).send({ ...options, from: deployer });
   return contract;
 }
 
@@ -173,9 +162,7 @@ export async function deployTokenWithInitialSupply(
     TokenContractArtifact,
     ["PrivateToken", "PT", 18, 0, deployer, deployer],
     "constructor_with_initial_supply",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
+  ).send({ ...options, from: deployer });
   return contract;
 }
 
@@ -197,12 +184,10 @@ export async function deployNFTWithMinter(
     NFTContractArtifact,
     ["TestNFT", "TNFT", deployer, deployer],
     "constructor_with_minter",
-  )
-    .send({
-      ...options,
-      from: deployer,
-    })
-    .deployed();
+  ).send({
+    ...options,
+    from: deployer,
+  });
   return contract;
 }
 
@@ -224,18 +209,14 @@ export async function deployVaultAndAssetWithMinter(
     TokenContractArtifact,
     ["PrivateToken", "PT", 6, deployer, AztecAddress.ZERO],
     "constructor_with_minter",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
+  ).send({ ...options, from: deployer });
 
   const vaultContract = await Contract.deploy(
     wallet,
     TokenContractArtifact,
     ["VaultToken", "VT", 6, assetContract.address, AztecAddress.ZERO],
     "constructor_with_asset",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
+  ).send({ ...options, from: deployer });
 
   return [vaultContract, assetContract];
 }
@@ -261,9 +242,7 @@ export async function deployLinearVestingEscrow(
     LinearVestingEscrowLogicContractArtifact,
     [escrowClassId],
     "constructor",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
+  ).send({ ...options, from: deployer });
   return contract as LinearVestingEscrowLogicContract;
 }
 
@@ -286,9 +265,7 @@ export async function deployClawbackEscrow(
     ClawbackEscrowLogicContractArtifact,
     [escrowClassId],
     "constructor",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
+  ).send({ ...options, from: deployer });
   return contract as ClawbackEscrowLogicContract;
 }
 
@@ -316,13 +293,11 @@ export async function deployEscrowWithPublicKeysAndSalt(
     EscrowContractArtifact,
     args,
     constructor,
-  )
-    .send({
-      contractAddressSalt: salt,
-      universalDeploy: true,
-      from: deployer,
-    })
-    .deployed();
+  ).send({
+    contractAddressSalt: salt,
+    universalDeploy: true,
+    from: deployer,
+  });
   return contract as EscrowContract;
 }
 
@@ -347,10 +322,6 @@ export async function assertOwnsPrivateNFT(
   const hasNFT = nfts.some((id: bigint) => id === tokenId);
   expect(hasNFT).toBe(expectToBeTrue);
 }
-
-export const expectNFTNote = (note: Note, tokenId: bigint) => {
-  expect(note.items[0]).toEqual(new Fr(tokenId));
-};
 
 // --- General Utils ---
 
@@ -381,7 +352,7 @@ export async function setPublicAuthWit(
     },
     true,
   );
-  await validateAction.send().wait();
+  await validateAction.send();
 }
 
 /**
