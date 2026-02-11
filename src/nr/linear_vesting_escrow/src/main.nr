@@ -10,8 +10,8 @@ pub contract LinearVestingEscrowLogic {
         macros::{events::event, functions::{external, initializer, view}, storage::storage},
         messages::message_delivery::MessageDelivery,
         note::{note_getter_options::NoteGetterOptions, note_viewer_options::NoteViewerOptions},
-        protocol_types::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
-        state_vars::{Owned, private_set::PrivateSet, public_immutable::PublicImmutable},
+        protocol::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
+        state_vars::{Owned, PrivateSet, PublicImmutable},
         utils::comparison::Comparator,
     };
     // std library
@@ -28,7 +28,7 @@ pub contract LinearVestingEscrowLogic {
     // bignum library
     use bignum::{BigNum, bignum::to_field, U256};
     // router contract
-    use router::utils::privately_check_timestamp;
+    use public_checks::utils::privately_check_timestamp;
 
     /// @notice Data privately emitted to an account that will use the escrow
     /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
@@ -139,10 +139,7 @@ pub contract LinearVestingEscrowLogic {
             claim_timestamp = block_header.global_variables.timestamp;
         } else {
             // Assert that the message sender is the recipient (final claim only possible for recipient)
-            assert(
-                self.msg_sender().unwrap() == vesting_schedule_note.recipient,
-                "caller is not recipient",
-            );
+            assert(self.msg_sender() == vesting_schedule_note.recipient, "caller is not recipient");
             // Get the stop timestamp from the vesting schedule note
             claim_timestamp = vesting_schedule_note.stop_timestamp;
             // This is the final claim since the vesting is stopped
@@ -194,10 +191,7 @@ pub contract LinearVestingEscrowLogic {
             _pop_vesting_schedule_note(self.storage, escrow);
 
         // Assert that the message sender is the reclaimer
-        assert(
-            self.msg_sender().unwrap() == vesting_schedule_note.reclaimer,
-            "caller is not reclaimer",
-        );
+        assert(self.msg_sender() == vesting_schedule_note.reclaimer, "caller is not reclaimer");
 
         // We assert that the vesting schedule is still active
         assert(vesting_schedule_note.stop_timestamp == 0, "Vesting schedule is not active");
@@ -233,10 +227,7 @@ pub contract LinearVestingEscrowLogic {
         let vesting_schedule_note = _get_vesting_schedule_note(self.storage, escrow);
 
         // Assert that the message sender is the reclaimer
-        assert(
-            self.msg_sender().unwrap() == vesting_schedule_note.reclaimer,
-            "caller is not reclaimer",
-        );
+        assert(self.msg_sender() == vesting_schedule_note.reclaimer, "caller is not reclaimer");
 
         // We assert that the vesting schedule is not active
         assert(vesting_schedule_note.stop_timestamp > 0, "Vesting schedule is active");
@@ -272,7 +263,7 @@ pub contract LinearVestingEscrowLogic {
         _withdraw(
             self.context,
             escrow,
-            self.msg_sender().unwrap(),
+            self.msg_sender(),
             vesting_schedule_note.token,
             reclaimer_amount,
         );
@@ -363,7 +354,7 @@ pub contract LinearVestingEscrowLogic {
             stop_timestamp,
         };
         let note_insertion = storage.escrows.at(escrow).insert(note);
-        note_insertion.deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+        note_insertion.deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
     }
 
     /// @notice Creates and inserts a new released amount note into the storage and emits it to the escrow
@@ -381,7 +372,7 @@ pub contract LinearVestingEscrowLogic {
     ) {
         let note = ReleasedAmountNote { released_amount, claim_completed };
         let note_insertion = storage.released_notes.at(escrow).insert(note);
-        note_insertion.deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+        note_insertion.deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
     }
 
     /// @notice Finds a vesting schedule note in the storage
