@@ -11,7 +11,7 @@ import type { ContractFunctionInteractionCallIntent } from "@aztec/aztec.js/auth
 import { Benchmark, BenchmarkContext } from "@defi-wonderland/aztec-benchmark";
 import type { NamedBenchmarkedInteraction } from "@defi-wonderland/aztec-benchmark/dist/types.js";
 
-import { TokenContract } from "../src/artifacts/Token.js";
+import { TokenContract } from "@defi-wonderland/aztec-standards/dist/src/artifacts/Token.js";
 import {
   AMOUNT,
   deployEscrowWithPublicKeysAndSalt,
@@ -25,7 +25,7 @@ import { LinearVestingEscrowLogicContract } from "../src/artifacts/LinearVesting
 import {
   EscrowContractArtifact,
   EscrowContract,
-} from "../src/artifacts/Escrow.js";
+} from "@defi-wonderland/aztec-standards/dist/src/artifacts/Escrow.js";
 
 // Escrow key counter starting at 1000 (no overlap with clawback escrow key counter), incremented on each deployment
 let escrowKeyCounter = 1000n;

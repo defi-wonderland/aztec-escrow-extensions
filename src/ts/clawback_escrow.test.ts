@@ -33,9 +33,12 @@ import {
   ClawbackEscrowLogicContract,
   EscrowDetailsLogContent,
 } from "../artifacts/ClawbackEscrowLogic.js";
-import { EscrowContractArtifact, EscrowContract } from "../artifacts/Escrow.js";
-import { TokenContract } from "../artifacts/Token.js";
-import { NFTContract } from "../artifacts/NFT.js";
+import {
+  EscrowContractArtifact,
+  EscrowContract,
+} from "@defi-wonderland/aztec-standards/dist/src/artifacts/Escrow.js";
+import { TokenContract } from "@defi-wonderland/aztec-standards/dist/src/artifacts/Token.js";
+import { NFTContract } from "@defi-wonderland/aztec-standards/dist/src/artifacts/NFT.js";
 
 describe("Clawback Escrow", () => {
   const AZTEC_SLOT_TIME = 36n; // seconds

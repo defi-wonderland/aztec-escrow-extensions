@@ -35,9 +35,18 @@ import {
   ClawbackEscrowLogicContract,
   ClawbackEscrowLogicContractArtifact,
 } from "../artifacts/ClawbackEscrowLogic.js";
-import { EscrowContract, EscrowContractArtifact } from "../artifacts/Escrow.js";
-import { TokenContract, TokenContractArtifact } from "../artifacts/Token.js";
-import { NFTContract, NFTContractArtifact } from "../artifacts/NFT.js";
+import {
+  EscrowContract,
+  EscrowContractArtifact,
+} from "@defi-wonderland/aztec-standards/dist/src/artifacts/Escrow.js";
+import {
+  TokenContract,
+  TokenContractArtifact,
+} from "@defi-wonderland/aztec-standards/dist/src/artifacts/Token.js";
+import {
+  NFTContract,
+  NFTContractArtifact,
+} from "@defi-wonderland/aztec-standards/dist/src/artifacts/NFT.js";
 
 export const logger = createLogger("aztec:aztec-standards");
 

@@ -21,8 +21,11 @@ import {
   LinearVestingEscrowLogicContractArtifact,
   EscrowDetailsLogContent,
 } from "../artifacts/LinearVestingEscrowLogic.js";
-import { EscrowContractArtifact, EscrowContract } from "../artifacts/Escrow.js";
-import { TokenContract } from "../artifacts/Token.js";
+import {
+  EscrowContractArtifact,
+  EscrowContract,
+} from "@defi-wonderland/aztec-standards/dist/src/artifacts/Escrow.js";
+import { TokenContract } from "@defi-wonderland/aztec-standards/dist/src/artifacts/Token.js";
 
 import {
   setupTestSuite,

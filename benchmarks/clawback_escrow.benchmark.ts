@@ -24,9 +24,9 @@ import { ClawbackEscrowLogicContract } from "../src/artifacts/ClawbackEscrowLogi
 import {
   EscrowContractArtifact,
   EscrowContract,
-} from "../src/artifacts/Escrow.js";
-import { TokenContract } from "../src/artifacts/Token.js";
-import { NFTContract } from "../src/artifacts/NFT.js";
+} from "@defi-wonderland/aztec-standards/dist/src/artifacts/Escrow.js";
+import { TokenContract } from "@defi-wonderland/aztec-standards/dist/src/artifacts/Token.js";
+import { NFTContract } from "@defi-wonderland/aztec-standards/dist/src/artifacts/NFT.js";
 
 // Escrow key counter starting at 2, incremented on each deployment
 let escrowKeyCounter = 2n;
