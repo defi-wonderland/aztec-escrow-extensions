@@ -2,17 +2,14 @@ import { Note } from "@aztec/aztec.js/note";
 import { PublicKeys } from "@aztec/stdlib/keys";
 import { createLogger } from "@aztec/aztec.js/log";
 import { type Wallet } from "@aztec/aztec.js/wallet";
-import { createStore } from "@aztec/kv-store/lmdb-v2";
 import { getDefaultInitializer } from "@aztec/stdlib/abi";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { getPXEConfig } from "@aztec/pxe/server";
-import { type AztecLMDBStoreV2 } from "@aztec/kv-store/lmdb-v2";
-import { Fr, type GrumpkinScalar } from "@aztec/aztec.js/fields";
+import { Fr } from "@aztec/aztec.js/fields";
+import { type Fq } from "@aztec/foundation/curves/bn254";
 import { createAztecNodeClient, waitForNode } from "@aztec/aztec.js/node";
-import {
-  registerInitialLocalNetworkAccountsInWallet,
-  TestWallet,
-} from "@aztec/test-wallet/server";
+import { EmbeddedWallet } from "@aztec/wallets/embedded";
+import { registerInitialLocalNetworkAccountsInWallet } from "@aztec/wallets/testing";
 import {
   Contract,
   DeployOptions,
@@ -21,6 +18,7 @@ import {
 } from "@aztec/aztec.js/contracts";
 import {
   AuthWitness,
+  SetPublicAuthwitContractInteraction,
   type ContractFunctionInteractionCallIntent,
 } from "@aztec/aztec.js/authorization";
 import {
@@ -43,53 +41,53 @@ import { NFTContract, NFTContractArtifact } from "../artifacts/NFT.js";
 
 export const logger = createLogger("aztec:aztec-standards");
 
+import { randomBytes } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { rmSync } from "node:fs";
+
 const { NODE_URL = "http://localhost:8080" } = process.env;
 const node = createAztecNodeClient(NODE_URL);
 await waitForNode(node);
-const { PXE_VERSION = "2" } = process.env;
-const pxeVersion = parseInt(PXE_VERSION);
-const l1Contracts = await node.getL1ContractAddresses();
 const config = getPXEConfig();
-let fullConfig = { ...config, l1Contracts };
 
 /**
- * Setup the store, node, wallet and accounts
- * @param suffix - optional - The suffix to use for the store directory.
+ * Setup the node, wallet and accounts
+ * @param suffix - optional - The suffix to use for the store directory name.
  * @param proverEnabled - optional - Whether to enable the prover, used for benchmarking.
- * @returns The store, node, wallet and accounts
+ * @returns The node, wallet, accounts, and a cleanup function
  */
 export const setupTestSuite = async (
   suffix?: string,
   proverEnabled: boolean = false,
 ) => {
-  const storeDir = suffix ? `store-${suffix}` : "store";
+  const dirName = suffix
+    ? `aztec-escrow-${suffix}-${randomBytes(4).toString("hex")}`
+    : `aztec-escrow-${randomBytes(8).toString("hex")}`;
+  const dataDirectory = join(tmpdir(), dirName);
+  const pxeConfig = { ...config, dataDirectory, proverEnabled };
 
-  fullConfig = {
-    ...fullConfig,
-    dataDirectory: storeDir,
-    dataStoreMapSizeKb: 1e6,
-  };
-
-  // Create the store for manual cleanups
-  const store: AztecLMDBStoreV2 = await createStore("pxe_data", pxeVersion, {
-    dataDirectory: storeDir,
-    dataStoreMapSizeKb: 1e6,
+  const wallet: EmbeddedWallet = await EmbeddedWallet.create(node, {
+    pxeConfig,
   });
-
-  const wallet: TestWallet = await TestWallet.create(
-    node,
-    { ...fullConfig, proverEnabled },
-    { store },
-  );
 
   const accounts: AztecAddress[] =
     await registerInitialLocalNetworkAccountsInWallet(wallet);
 
+  const cleanup = async () => {
+    await wallet.stop();
+    try {
+      rmSync(dataDirectory, { recursive: true, force: true });
+    } catch {
+      // ignore cleanup errors
+    }
+  };
+
   return {
-    store,
     node,
     wallet,
     accounts,
+    cleanup,
   };
 };
 
@@ -151,9 +149,7 @@ export async function deployTokenWithMinter(
     TokenContractArtifact,
     ["PrivateToken", "PT", 18, deployer, AztecAddress.ZERO],
     "constructor_with_minter",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
+  ).send({ ...options, from: deployer });
   return contract;
 }
 
@@ -173,9 +169,7 @@ export async function deployTokenWithInitialSupply(
     TokenContractArtifact,
     ["PrivateToken", "PT", 18, 0, deployer, deployer],
     "constructor_with_initial_supply",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
+  ).send({ ...options, from: deployer });
   return contract;
 }
 
@@ -188,7 +182,7 @@ export async function deployTokenWithInitialSupply(
  */
 // Deploy NFT contract with a minter
 export async function deployNFTWithMinter(
-  wallet: TestWallet,
+  wallet: EmbeddedWallet,
   deployer: AztecAddress,
   options?: DeployOptions,
 ) {
@@ -197,12 +191,10 @@ export async function deployNFTWithMinter(
     NFTContractArtifact,
     ["TestNFT", "TNFT", deployer, deployer],
     "constructor_with_minter",
-  )
-    .send({
-      ...options,
-      from: deployer,
-    })
-    .deployed();
+  ).send({
+    ...options,
+    from: deployer,
+  });
   return contract;
 }
 
@@ -224,19 +216,13 @@ export async function deployVaultAndAssetWithMinter(
     TokenContractArtifact,
     ["PrivateToken", "PT", 6, deployer, AztecAddress.ZERO],
     "constructor_with_minter",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
-
+  ).send({ ...options, from: deployer });
   const vaultContract = await Contract.deploy(
     wallet,
     TokenContractArtifact,
     ["VaultToken", "VT", 6, assetContract.address, AztecAddress.ZERO],
     "constructor_with_asset",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
-
+  ).send({ ...options, from: deployer });
   return [vaultContract, assetContract];
 }
 
@@ -261,9 +247,7 @@ export async function deployLinearVestingEscrow(
     LinearVestingEscrowLogicContractArtifact,
     [escrowClassId],
     "constructor",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
+  ).send({ ...options, from: deployer });
   return contract as LinearVestingEscrowLogicContract;
 }
 
@@ -286,9 +270,7 @@ export async function deployClawbackEscrow(
     ClawbackEscrowLogicContractArtifact,
     [escrowClassId],
     "constructor",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
+  ).send({ ...options, from: deployer });
   return contract as ClawbackEscrowLogicContract;
 }
 
@@ -316,13 +298,11 @@ export async function deployEscrowWithPublicKeysAndSalt(
     EscrowContractArtifact,
     args,
     constructor,
-  )
-    .send({
-      contractAddressSalt: salt,
-      universalDeploy: true,
-      from: deployer,
-    })
-    .deployed();
+  ).send({
+    contractAddressSalt: salt,
+    universalDeploy: true,
+    from: deployer,
+  });
   return contract as EscrowContract;
 }
 
@@ -358,22 +338,26 @@ export async function setPrivateAuthWit(
   caller: AztecAddress,
   action: ContractFunctionInteraction,
   authorizer: AztecAddress,
-  wallet: TestWallet,
+  wallet: EmbeddedWallet,
 ): Promise<AuthWitness> {
   const intent: ContractFunctionInteractionCallIntent = {
     caller: caller,
     action: action,
   };
-  return wallet.createAuthWit(authorizer, intent);
+  return wallet.createAuthWit(
+    authorizer,
+    intent as unknown as Parameters<typeof wallet.createAuthWit>[1],
+  );
 }
 
 export async function setPublicAuthWit(
   caller: AztecAddress,
   action: ContractFunctionInteraction,
   authorizer: AztecAddress,
-  wallet: TestWallet,
+  wallet: EmbeddedWallet,
 ) {
-  const validateAction = await wallet.setPublicAuthWit(
+  const validateAction = await SetPublicAuthwitContractInteraction.create(
+    wallet,
     authorizer,
     {
       caller: caller,
@@ -381,15 +365,83 @@ export async function setPublicAuthWit(
     },
     true,
   );
-  await validateAction.send().wait();
+  await validateAction.send();
 }
 
 /**
- * Converts a GrumpkinScalar to an Fr.
- * @param scalar - The GrumpkinScalar to convert.
+ * Access getNotes via the PXE debug utilities.
+ * In v4, getNotes moved from the wallet to PXEDebugUtils.
+ */
+export async function getWalletNotes(
+  wallet: EmbeddedWallet,
+  filter: {
+    contractAddress: AztecAddress;
+    owner?: AztecAddress;
+    storageSlot?: Fr;
+    scopes?: "ALL_SCOPES" | AztecAddress[];
+  },
+) {
+  const fullFilter = {
+    scopes: "ALL_SCOPES" as const,
+    ...filter,
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (wallet as any).pxe.debug.getNotes(fullFilter);
+}
+
+/**
+ * Patches the wallet's scope resolution to include the escrow address.
+ * In v4, all PXE operations are scoped to [from]. This means utility/view
+ * functions and sends can't read notes belonging to the escrow unless the
+ * escrow address is included in the scope.
+ */
+export function addEscrowToWalletScopes(
+  wallet: EmbeddedWallet,
+  escrowAddress: AztecAddress,
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = wallet as any;
+
+  // Patch scopesFor (used by simulateTx, proveTx, profileTx)
+  const originalScopesFor = w.scopesFor.bind(wallet);
+  w.scopesFor = (from: AztecAddress): AztecAddress[] => {
+    const scopes: AztecAddress[] = originalScopesFor(from);
+    if (!scopes.some((s: AztecAddress) => s.equals(escrowAddress))) {
+      scopes.push(escrowAddress);
+    }
+    return scopes;
+  };
+
+  // Patch simulateUtility (used by utility function .simulate() calls)
+  const originalSimulateUtility = w.simulateUtility.bind(wallet);
+  w.simulateUtility = (
+    call: unknown,
+    opts: { scope: AztecAddress; authWitnesses?: unknown[] },
+  ) => {
+    return w.pxe.simulateUtility(call, {
+      authwits: opts.authWitnesses,
+      scopes: opts.scope.equals(escrowAddress)
+        ? [escrowAddress]
+        : [opts.scope, escrowAddress],
+    });
+  };
+}
+
+/**
+ * Syncs the PXE private state via debug utilities.
+ * In v4, sync_state() on contracts is forbidden via simulate.
+ */
+export async function syncPXE(wallet: EmbeddedWallet) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (wallet as any).pxe.debug.sync();
+}
+
+/**
+ * Converts an Fq to an Fr.
+ * @param scalar - The Fq to convert.
  * @returns The converted Fr.
  */
-export function grumpkinScalarToFr(scalar: GrumpkinScalar) {
+export function grumpkinScalarToFr(scalar: Fq) {
   return new Fr(scalar.toBigInt());
 }
 

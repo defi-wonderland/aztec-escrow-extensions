@@ -1,14 +1,14 @@
 import { siloNullifier } from "@aztec/stdlib/hash";
 import { FieldsOf } from "@aztec/foundation/types";
 import { type AztecNode } from "@aztec/aztec.js/node";
-import { TestWallet } from "@aztec/test-wallet/server";
+import { type EmbeddedWallet } from "@aztec/wallets/embedded";
 import { pedersenHash } from "@aztec/foundation/crypto/pedersen";
 import { TxStatus, TxReceipt } from "@aztec/aztec.js/tx";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { deriveKeys, PublicKeys } from "@aztec/stdlib/keys";
 import { ContractDeployer } from "@aztec/aztec.js/deployment";
-import { type AztecLMDBStoreV2 } from "@aztec/kv-store/lmdb-v2";
-import { Fr, type GrumpkinScalar } from "@aztec/aztec.js/fields";
+import { Fr } from "@aztec/aztec.js/fields";
+import { type Fq } from "@aztec/foundation/curves/bn254";
 import { getContractClassFromArtifact } from "@aztec/stdlib/contract";
 import {
   Contract,
@@ -36,13 +36,16 @@ import {
   deployEscrowWithPublicKeysAndSalt,
   grumpkinScalarToFr,
   deriveContractAddress,
+  getWalletNotes,
+  addEscrowToWalletScopes,
+  syncPXE,
 } from "./utils.js";
 
 describe("Linear Vesting Escrow", () => {
   let node: AztecNode;
-  let store: AztecLMDBStoreV2;
+  let cleanup: () => Promise<void>;
 
-  let wallet: TestWallet;
+  let wallet: EmbeddedWallet;
   let accounts: AztecAddress[];
   let alice: AztecAddress;
   let bob: AztecAddress;
@@ -55,10 +58,10 @@ describe("Linear Vesting Escrow", () => {
   let escrow: EscrowContract;
   let escrowSk: Fr;
   let escrowKeys: {
-    masterNullifierSecretKey: GrumpkinScalar;
-    masterIncomingViewingSecretKey: GrumpkinScalar;
-    masterOutgoingViewingSecretKey: GrumpkinScalar;
-    masterTaggingSecretKey: GrumpkinScalar;
+    masterNullifierHidingKey: Fq;
+    masterIncomingViewingSecretKey: Fq;
+    masterOutgoingViewingSecretKey: Fq;
+    masterTaggingSecretKey: Fq;
     publicKeys: PublicKeys;
   };
   let escrowSalt: Fr;
@@ -85,7 +88,7 @@ describe("Linear Vesting Escrow", () => {
 
   beforeEach(async () => {
     // Setup test suite
-    ({ store, node, wallet, accounts } = await setupTestSuite(
+    ({ node, wallet, accounts, cleanup } = await setupTestSuite(
       "linear-vesting-escrow",
     ));
 
@@ -103,7 +106,7 @@ describe("Linear Vesting Escrow", () => {
 
     // Convert the keys to Fr
     secretKeys = {
-      nsk_m: grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
+      nsk_m: grumpkinScalarToFr(escrowKeys.masterNullifierHidingKey),
       ivsk_m: grumpkinScalarToFr(escrowKeys.masterIncomingViewingSecretKey),
       ovsk_m: grumpkinScalarToFr(escrowKeys.masterOutgoingViewingSecretKey),
       tsk_m: grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
@@ -142,11 +145,13 @@ describe("Linear Vesting Escrow", () => {
       );
     }
 
+    // Patch wallet scopes to include the escrow address for note visibility
+    addEscrowToWalletScopes(wallet, escrow.address);
+
     await token
       .withWallet(wallet)
       .methods.mint_to_private(escrow.address, AMOUNT)
-      .send({ from: alice })
-      .wait();
+      .send({ from: alice });
 
     const blockNumber = await node.getBlockNumber();
     const block = await node.getBlock(blockNumber);
@@ -155,7 +160,7 @@ describe("Linear Vesting Escrow", () => {
   });
 
   afterEach(async () => {
-    await store.delete();
+    await cleanup();
   });
 
   describe("Deployment", () => {
@@ -177,37 +182,17 @@ describe("Linear Vesting Escrow", () => {
         undefined,
         "constructor",
       );
-      const tx = deployer.deploy(escrowClassId).send({
+      const contract = await deployer.deploy(escrowClassId).send({
         contractAddressSalt: salt,
         from: alice,
       });
-
-      const receipt = await tx.getReceipt();
-
-      expect(receipt).toEqual(
-        expect.objectContaining({
-          status: TxStatus.PENDING,
-          error: "",
-        }),
-      );
-
-      const receiptAfterMined = await tx.wait({ wallet });
 
       const contractMetadata = await wallet.getContractMetadata(
         deploymentData.address,
       );
       expect(contractMetadata).toBeDefined();
-      // TODO: Fix this
-      // expect(contractMetadata.isContractPubliclyDeployed).toBeTruthy();
-      expect(receiptAfterMined).toEqual(
-        expect.objectContaining({
-          status: TxStatus.SUCCESS,
-        }),
-      );
 
-      expect(receiptAfterMined.contract.address).toEqual(
-        deploymentData.address,
-      );
+      expect(contract.address).toEqual(deploymentData.address);
     });
 
     it("deploys escrow with correctly derived address", async () => {
@@ -244,8 +229,7 @@ describe("Linear Vesting Escrow", () => {
           AMOUNT,
           secretKeys,
         )
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
     });
 
     it("creates linear vesting escrow shares escrow with bob correctly", async () => {
@@ -266,7 +250,7 @@ describe("Linear Vesting Escrow", () => {
 
       expect(event.escrow).toEqual(escrow.address);
       expect(event.master_secret_keys.nsk_m).toEqual(
-        escrowKeys.masterNullifierSecretKey.toBigInt(),
+        escrowKeys.masterNullifierHidingKey.toBigInt(),
       );
       expect(event.master_secret_keys.ivsk_m).toEqual(
         escrowKeys.masterIncomingViewingSecretKey.toBigInt(),
@@ -280,12 +264,9 @@ describe("Linear Vesting Escrow", () => {
     });
 
     it("creates linear vesting escrow should create a correct linearVestingEscrow note", async () => {
-      await linearVestingEscrow
-        .withWallet(wallet)
-        .methods.sync_private_state()
-        .simulate({ from: bob });
+      await syncPXE(wallet);
 
-      const notes = await wallet.getNotes({
+      const notes = await getWalletNotes(wallet, {
         contractAddress: linearVestingEscrow.address,
         scopes: [escrow.address],
       });
@@ -294,14 +275,14 @@ describe("Linear Vesting Escrow", () => {
       expect(notes.length).toBe(2);
 
       const escrowNotes = (
-        await wallet.getNotes({
+        await getWalletNotes(wallet, {
           scopes: [escrow.address],
           contractAddress: linearVestingEscrow.address,
           storageSlot: slotEscrowNotes,
         })
       )[0].note;
       const releasedAmountNotes = (
-        await wallet.getNotes({
+        await getWalletNotes(wallet, {
           scopes: [escrow.address],
           contractAddress: linearVestingEscrow.address,
           storageSlot: slotReleasedAmountNotes,
@@ -326,7 +307,11 @@ describe("Linear Vesting Escrow", () => {
       );
 
       const txReceipt = await node.getTxReceipt(tx.txHash);
-      expect(txReceipt.status).toBe(TxStatus.SUCCESS);
+      expect([
+        TxStatus.CHECKPOINTED,
+        TxStatus.PROVEN,
+        TxStatus.FINALIZED,
+      ]).toContain(txReceipt.status);
 
       const txEffect = await node.getTxEffect(tx.txHash);
       let nullifierExists = false;
@@ -351,8 +336,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait(),
+          .send({ from: alice }),
       ).rejects.toThrow(/Invalid tx: Existing nullifier/);
     });
 
@@ -371,8 +355,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait(),
+          .send({ from: alice }),
       ).rejects.toThrow(
         "Assertion failed: attempt to add with overflow 'start + duration'",
       );
@@ -397,8 +380,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Next claim tx will read previous tx timestamp
         const block = await node.getBlock(tx.blockNumber!);
@@ -418,15 +400,11 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, releasableAmount)
-          .send({ from: bob })
-          .wait();
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+          .send({ from: bob });
+        await syncPXE(wallet);
 
         // Assert that bob received the note
-        const notes = await wallet.getNotes({
+        const notes = await getWalletNotes(wallet, {
           scopes: [bob],
           contractAddress: token.address,
         });
@@ -453,8 +431,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Next claim tx will read previous tx timestamp
         const block = await node.getBlock(tx.blockNumber!);
@@ -473,30 +450,22 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, releasableAmount)
-          .send({ from: bob })
-          .wait();
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
-        await linearVestingEscrow
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+          .send({ from: bob });
+        await syncPXE(wallet);
 
         const receivedAmount =
           ((BigInt(claimTimestamp) - BigInt(start)) * AMOUNT) /
           BigInt(duration);
 
         // We expect a released amount note
-        const notes = await wallet.getNotes({
+        const notes = await getWalletNotes(wallet, {
           scopes: [escrow.address],
           contractAddress: linearVestingEscrow.address,
           storageSlot: slotReleasedAmountNotes,
         });
         expect(notes.length).toBe(1);
 
-        const escrowTokenNote = await wallet.getNotes({
+        const escrowTokenNote = await getWalletNotes(wallet, {
           scopes: [escrow.address],
           contractAddress: token.address,
         });
@@ -507,7 +476,7 @@ describe("Linear Vesting Escrow", () => {
         );
 
         const releasedAmountNote = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             scopes: [escrow.address],
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
@@ -515,7 +484,7 @@ describe("Linear Vesting Escrow", () => {
         )[0].note;
         expect(releasedAmountNote.items[0].toBigInt()).toBe(receivedAmount);
 
-        const bobTokenNote = await wallet.getNotes({
+        const bobTokenNote = await getWalletNotes(wallet, {
           scopes: [bob],
           contractAddress: token.address,
         });
@@ -536,6 +505,9 @@ describe("Linear Vesting Escrow", () => {
         // This test makes sure the bignum works correctly by testing what would be the overflow case without bignum:
         // (total_amount * elapsed) = (U128_MAX * duration) > U128_MAX
 
+        // Use a longer duration to ensure multiple claims are needed (blocks advance by ~72s each)
+        duration = 1000n;
+
         const newToken = (await deployTokenWithMinter(
           wallet,
           alice,
@@ -544,8 +516,7 @@ describe("Linear Vesting Escrow", () => {
         await newToken
           .withWallet(wallet)
           .methods.mint_to_private(escrow.address, U128_MAX)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const setupTx = await linearVestingEscrow
           .withWallet(wallet)
@@ -558,8 +529,7 @@ describe("Linear Vesting Escrow", () => {
             U128_MAX,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert initial balances
         await expectTokenBalances(newToken, bob, wad(0), wad(0));
@@ -595,16 +565,8 @@ describe("Linear Vesting Escrow", () => {
           const claimTx = await linearVestingEscrow
             .withWallet(wallet)
             .methods.claim(escrow.address, releasableAmount)
-            .send({ from: bob })
-            .wait();
-          await newToken
-            .withWallet(wallet)
-            .methods.sync_private_state()
-            .simulate({ from: bob });
-          await linearVestingEscrow
-            .withWallet(wallet)
-            .methods.sync_private_state()
-            .simulate({ from: bob });
+            .send({ from: bob });
+          await syncPXE(wallet);
 
           // Calculate total vested amount up to the previous transaction's timestamp
           const totalVestedAmount =
@@ -626,13 +588,13 @@ describe("Linear Vesting Escrow", () => {
 
           // We expect different number of notes based on vesting completion
           const notes = (
-            await wallet.getNotes({
+            await getWalletNotes(wallet, {
               contractAddress: newToken.address,
             })
-          ).filter((note) => note.txHash.equals(claimTx.txHash));
+          ).filter((note: any) => note.txHash.equals(claimTx.txHash));
 
           const releasedAmountNote = (
-            await wallet.getNotes({
+            await getWalletNotes(wallet, {
               scopes: [escrow.address],
               contractAddress: linearVestingEscrow.address,
               storageSlot: slotReleasedAmountNotes,
@@ -647,22 +609,22 @@ describe("Linear Vesting Escrow", () => {
             expect(notes.length).toBe(1);
 
             const bobTokenNote = (
-              await wallet.getNotes({
+              await getWalletNotes(wallet, {
                 scopes: [bob],
                 contractAddress: newToken.address,
               })
-            ).filter((note) => note.txHash.equals(claimTx.txHash));
+            ).filter((note: any) => note.txHash.equals(claimTx.txHash));
             expectUintNote(bobTokenNote[0].note, receivedAmount, bob);
           } else {
             // Partial claim: 2 token notes (escrow change tokens and bob withdrawal tokens)
             expect(notes.length).toBe(2);
 
             const escrowTokenNote = (
-              await wallet.getNotes({
+              await getWalletNotes(wallet, {
                 scopes: [escrow.address],
                 contractAddress: newToken.address,
               })
-            ).filter((note) => note.txHash.equals(claimTx.txHash));
+            ).filter((note: any) => note.txHash.equals(claimTx.txHash));
             expectUintNote(
               escrowTokenNote[0].note,
               U128_MAX - totalClaimed,
@@ -670,11 +632,11 @@ describe("Linear Vesting Escrow", () => {
             );
 
             const bobTokenNote = (
-              await wallet.getNotes({
+              await getWalletNotes(wallet, {
                 scopes: [bob],
                 contractAddress: newToken.address,
               })
-            ).filter((note) => note.txHash.equals(claimTx.txHash));
+            ).filter((note: any) => note.txHash.equals(claimTx.txHash));
             expectUintNote(bobTokenNote[0].note, receivedAmount, bob);
           }
 
@@ -711,8 +673,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Next claim tx will read previous tx timestamp
         const block = await node.getBlock(tx.blockNumber!);
@@ -731,8 +692,7 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, releasableAmount)
-          .send({ from: bob })
-          .wait();
+          .send({ from: bob });
 
         await expectTokenBalances(token, bob, wad(0), wad(0));
         await expectTokenBalances(token, escrow.address, wad(0), AMOUNT, bob);
@@ -754,8 +714,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert initial balances
         await expectTokenBalances(token, bob, wad(0), wad(0));
@@ -787,16 +746,8 @@ describe("Linear Vesting Escrow", () => {
           const claimTx = await linearVestingEscrow
             .withWallet(wallet)
             .methods.claim(escrow.address, releasableAmount)
-            .send({ from: bob })
-            .wait();
-          await token
-            .withWallet(wallet)
-            .methods.sync_private_state()
-            .simulate({ from: bob });
-          await linearVestingEscrow
-            .withWallet(wallet)
-            .methods.sync_private_state()
-            .simulate({ from: bob });
+            .send({ from: bob });
+          await syncPXE(wallet);
 
           // Calculate total vested amount up to the previous transaction's timestamp
           const totalVestedAmount =
@@ -818,13 +769,13 @@ describe("Linear Vesting Escrow", () => {
 
           // We expect different number of notes based on vesting completion
           const notes = (
-            await wallet.getNotes({
+            await getWalletNotes(wallet, {
               contractAddress: token.address,
             })
-          ).filter((note) => note.txHash.equals(claimTx.txHash));
+          ).filter((note: any) => note.txHash.equals(claimTx.txHash));
 
           const releasedAmountNote = (
-            await wallet.getNotes({
+            await getWalletNotes(wallet, {
               scopes: [escrow.address],
               contractAddress: linearVestingEscrow.address,
               storageSlot: slotReleasedAmountNotes,
@@ -839,17 +790,17 @@ describe("Linear Vesting Escrow", () => {
             expect(notes.length).toBe(1);
 
             const bobTokenNote = (
-              await wallet.getNotes({
+              await getWalletNotes(wallet, {
                 scopes: [bob],
                 contractAddress: token.address,
               })
-            ).filter((note) => note.txHash.equals(claimTx.txHash));
+            ).filter((note: any) => note.txHash.equals(claimTx.txHash));
             expectUintNote(bobTokenNote[0].note, receivedAmount, bob);
           } else {
             // Partial claim: 2 token notes (escrow change tokens and bob withdrawal tokens)
             expect(notes.length).toBe(2);
 
-            const escrowTokenNote = await wallet.getNotes({
+            const escrowTokenNote = await getWalletNotes(wallet, {
               scopes: [escrow.address],
               contractAddress: token.address,
             });
@@ -859,7 +810,7 @@ describe("Linear Vesting Escrow", () => {
               escrow.address,
             );
 
-            const bobTokenNote = await wallet.getNotes({
+            const bobTokenNote = await getWalletNotes(wallet, {
               scopes: [bob],
               contractAddress: token.address,
             });
@@ -900,15 +851,14 @@ describe("Linear Vesting Escrow", () => {
           linearVestingEscrow
             .withWallet(wallet)
             .methods.claim(escrow.address, releasableAmount * 2n)
-            .send({ from: bob })
-            .wait(),
+            .send({ from: bob }),
         ).rejects.toThrow(/claim amount too high/);
       });
 
       it("final claim should not allow further claims", async () => {
         const block = await node.getBlock(tx.blockNumber!);
         const stopVestingTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         const [releasableAmount] = await linearVestingEscrow
           .withWallet(wallet)
@@ -922,22 +872,19 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopVestingTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, releasableAmount)
-          .send({ from: bob })
-          .wait();
+          .send({ from: bob });
 
         // Try to claim again should fail
         await expect(
           linearVestingEscrow
             .withWallet(wallet)
             .methods.claim(escrow.address, 1n)
-            .send({ from: bob })
-            .wait(),
+            .send({ from: bob }),
         ).rejects.toThrow(/Claim already completed/);
       });
     });
@@ -959,8 +906,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert initial balances
         await expectTokenBalances(token, bob, wad(0), wad(0));
@@ -968,7 +914,7 @@ describe("Linear Vesting Escrow", () => {
 
         const block = await node.getBlock(setupTx.blockNumber!);
         const stopVestingTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         const [releasableAmount, vestedAmount] = await linearVestingEscrow
           .withWallet(wallet)
@@ -982,22 +928,17 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopVestingTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, releasableAmount)
-          .send({ from: bob })
-          .wait();
+          .send({ from: bob });
 
-        await linearVestingEscrow
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+        await syncPXE(wallet);
 
         const releasedAmountNote = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             scopes: [escrow.address],
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
@@ -1032,8 +973,7 @@ describe("Linear Vesting Escrow", () => {
             amount,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert initial balances
         await expectTokenBalances(token, bob, wad(0), wad(0));
@@ -1041,7 +981,7 @@ describe("Linear Vesting Escrow", () => {
 
         const block = await node.getBlock(setupTx.blockNumber!);
         const stopVestingTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         const [releasableAmount, vestedAmount] = await linearVestingEscrow
           .withWallet(wallet)
@@ -1055,22 +995,17 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopVestingTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const finalClaimTx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, releasableAmount)
-          .send({ from: bob })
-          .wait();
+          .send({ from: bob });
 
-        await linearVestingEscrow
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+        await syncPXE(wallet);
 
         const releasedAmountNote = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             scopes: [escrow.address],
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
@@ -1103,12 +1038,11 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const block = await node.getBlock(setupTx.blockNumber!);
         const stopVestingTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         const [releasableAmount] = await linearVestingEscrow
           .withWallet(wallet)
@@ -1122,15 +1056,13 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopVestingTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         await expect(
           linearVestingEscrow
             .withWallet(wallet)
             .methods.claim(escrow.address, releasableAmount)
-            .send({ from: alice })
-            .wait(),
+            .send({ from: alice }),
         ).rejects.toThrow(/caller is not recipient/);
       });
 
@@ -1145,12 +1077,11 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const block = await node.getBlock(setupTx.blockNumber!);
         const stopVestingTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         const [releasableAmount] = await linearVestingEscrow
           .withWallet(wallet)
@@ -1164,16 +1095,14 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopVestingTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // We test the edge case where the claim amount is greater than the releasable amount by 1
         await expect(
           linearVestingEscrow
             .withWallet(wallet)
             .methods.claim(escrow.address, releasableAmount + 1n)
-            .send({ from: bob })
-            .wait(),
+            .send({ from: bob }),
         ).rejects.toThrow(/claim amount too high/);
       });
     });
@@ -1201,8 +1130,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert initial balances
         await expectTokenBalances(token, bob, wad(0), wad(0));
@@ -1227,8 +1155,7 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, 0n)
-          .send({ from: bob })
-          .wait();
+          .send({ from: bob });
 
         // Assert balances unchanged
         await expectTokenBalances(token, bob, wad(0), wad(0));
@@ -1247,8 +1174,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert initial balances
         await expectTokenBalances(token, bob, wad(0), wad(0));
@@ -1274,11 +1200,10 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, AMOUNT)
-          .send({ from: bob })
-          .wait();
+          .send({ from: bob });
 
         // Assert bob received the note
-        const notes = await wallet.getNotes({
+        const notes = await getWalletNotes(wallet, {
           scopes: [bob],
           contractAddress: token.address,
         });
@@ -1307,8 +1232,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert initial balances
         await expectTokenBalances(token, bob, wad(0), wad(0));
@@ -1334,8 +1258,7 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, AMOUNT)
-          .send({ from: bob })
-          .wait();
+          .send({ from: bob });
 
         // Assert final balances
         await expectTokenBalances(token, bob, wad(0), AMOUNT);
@@ -1359,8 +1282,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert initial balances
         await expectTokenBalances(token, alice, wad(0), wad(0));
@@ -1370,14 +1292,13 @@ describe("Linear Vesting Escrow", () => {
         const setupBlock = await node.getBlock(tx.blockNumber!);
         // Stop timestamp is before start, so vested amount should be 0
         const stopTimestamp =
-          setupBlock!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          setupBlock!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         // Stop vesting
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Get releasable and vested amounts at stop timestamp
         const [releasableAmount, vestedAmount] = await linearVestingEscrow
@@ -1393,15 +1314,14 @@ describe("Linear Vesting Escrow", () => {
         const clawbackTx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, AMOUNT)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert token notes - 1 note (alice's clawback, no recipient withdrawal since releasable = 0)
         const notes = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             contractAddress: token.address,
           })
-        ).filter((note) => note.txHash.equals(clawbackTx.txHash));
+        ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(1);
 
         // Assert final balances - alice gets everything
@@ -1427,8 +1347,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert initial balances
         await expectTokenBalances(token, alice, wad(0), wad(0));
@@ -1437,14 +1356,13 @@ describe("Linear Vesting Escrow", () => {
 
         const setupBlock = await node.getBlock(tx.blockNumber!);
         const stopTimestamp =
-          setupBlock!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          setupBlock!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         // Stop vesting
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Get releasable and vested amounts at stop timestamp
         const [releasableAmount, vestedAmount] = await linearVestingEscrow
@@ -1460,15 +1378,14 @@ describe("Linear Vesting Escrow", () => {
         const clawbackTx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, 0n)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert token notes - 1 note (bob's releasable, no reclaimer withdrawal)
         const notes = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             contractAddress: token.address,
           })
-        ).filter((note) => note.txHash.equals(clawbackTx.txHash));
+        ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(1);
 
         // Assert final balances - bob gets everything
@@ -1493,19 +1410,15 @@ describe("Linear Vesting Escrow", () => {
           AMOUNT,
           secretKeys,
         )
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
     });
 
     it("stop vesting should stop the vesting and emit correct vesting schedule note", async () => {
       // Sync to get linear vesting escrow note
-      await linearVestingEscrow
-        .withWallet(wallet)
-        .methods.sync_private_state()
-        .simulate({ from: alice });
+      await syncPXE(wallet);
 
       const setupEscrowNote = (
-        await wallet.getNotes({
+        await getWalletNotes(wallet, {
           scopes: [escrow.address],
           contractAddress: linearVestingEscrow.address,
           storageSlot: slotEscrowNotes,
@@ -1517,17 +1430,13 @@ describe("Linear Vesting Escrow", () => {
       const stopVestingTx = await linearVestingEscrow
         .withWallet(wallet)
         .methods.stop_vesting(escrow.address, stopVestingTimestamp)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
 
       // Sync to get linear vesting escrow note
-      await linearVestingEscrow
-        .withWallet(wallet)
-        .methods.sync_private_state()
-        .simulate({ from: alice });
+      await syncPXE(wallet);
 
       const stopVestingEscrowNote = (
-        await wallet.getNotes({
+        await getWalletNotes(wallet, {
           scopes: [escrow.address],
           contractAddress: linearVestingEscrow.address,
           storageSlot: slotEscrowNotes,
@@ -1566,8 +1475,7 @@ describe("Linear Vesting Escrow", () => {
         linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopVestingTimestamp)
-          .send({ from: bob })
-          .wait(),
+          .send({ from: bob }),
       ).rejects.toThrow(/caller is not reclaimer/);
     });
 
@@ -1578,16 +1486,14 @@ describe("Linear Vesting Escrow", () => {
       await linearVestingEscrow
         .withWallet(wallet)
         .methods.stop_vesting(escrow.address, stopVestingTimestamp)
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
 
       // Stop vesting should fail if the vesting is already stopped
       await expect(
         linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopVestingTimestamp)
-          .send({ from: alice })
-          .wait(),
+          .send({ from: alice }),
       ).rejects.toThrow(/Vesting schedule is not active/);
     });
 
@@ -1598,8 +1504,7 @@ describe("Linear Vesting Escrow", () => {
         linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopVestingTimestamp)
-          .send({ from: alice })
-          .wait(),
+          .send({ from: alice }),
       ).rejects.toThrow(/app_logic_reverted/);
     });
   });
@@ -1619,8 +1524,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert initial balances
         await expectTokenBalances(token, alice, wad(0), wad(0));
@@ -1632,14 +1536,13 @@ describe("Linear Vesting Escrow", () => {
         const block = await node.getBlock(tx.blockNumber!);
         // Stop timestamp to match exactly the next block timestamp
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         // Stop vesting
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const [releasableAmount, vestedAmount] = await linearVestingEscrow
           .withWallet(wallet)
@@ -1652,24 +1555,16 @@ describe("Linear Vesting Escrow", () => {
         const clawbackTx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, clawbackAmount)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: alice });
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+        await syncPXE(wallet);
 
         // Assert notes
         const notes = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             contractAddress: token.address,
           })
-        ).filter((note) => note.txHash.equals(clawbackTx.txHash));
+        ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(2);
 
         // Assert final balances
@@ -1682,14 +1577,13 @@ describe("Linear Vesting Escrow", () => {
         const block = await node.getBlock(tx.blockNumber!);
         // Stop timestamp to match exactly the next block timestamp
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         // Stop vesting
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // releasableAmount here is not 0, it will be after the claim transaction
         const [releasableAmount, vestedAmount] = await linearVestingEscrow
@@ -1701,12 +1595,8 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, releasableAmount)
-          .send({ from: bob })
-          .wait();
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+          .send({ from: bob });
+        await syncPXE(wallet);
 
         // releasableAmount should be 0 after the claim transaction
         const [releasableAmountAfterClaim, _] = await linearVestingEscrow
@@ -1733,24 +1623,16 @@ describe("Linear Vesting Escrow", () => {
         const clawbackTx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, clawbackAmount)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: alice });
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+        await syncPXE(wallet);
 
         // Assert notes
         const notes = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             contractAddress: token.address,
           })
-        ).filter((note) => note.txHash.equals(clawbackTx.txHash));
+        ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(1);
 
         // Assert final balances
@@ -1763,14 +1645,13 @@ describe("Linear Vesting Escrow", () => {
         const block = await node.getBlock(tx.blockNumber!);
         // Stop timestamp to match exactly the next block timestamp
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         // Stop vesting
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // releasableAmount here is not 0, it will be after the claim transaction
         const [releasableAmount, vestedAmount] = await linearVestingEscrow
@@ -1782,12 +1663,8 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, releasableAmount / 2n)
-          .send({ from: bob })
-          .wait();
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+          .send({ from: bob });
+        await syncPXE(wallet);
 
         // releasableAmount should be 0 after the claim transaction
         const [releasableAmountAfterClaim, _] = await linearVestingEscrow
@@ -1814,24 +1691,16 @@ describe("Linear Vesting Escrow", () => {
         const clawbackTx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, clawbackAmount)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: alice });
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+        await syncPXE(wallet);
 
         // Assert notes
         const notes = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             contractAddress: token.address,
           })
-        ).filter((note) => note.txHash.equals(clawbackTx.txHash));
+        ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(2);
 
         // Assert final balances
@@ -1846,8 +1715,7 @@ describe("Linear Vesting Escrow", () => {
           linearVestingEscrow
             .withWallet(wallet)
             .methods.clawback(escrow.address, AMOUNT)
-            .send({ from: bob })
-            .wait(),
+            .send({ from: bob }),
         ).rejects.toThrow(/caller is not reclaimer/);
       });
 
@@ -1857,8 +1725,7 @@ describe("Linear Vesting Escrow", () => {
           linearVestingEscrow
             .withWallet(wallet)
             .methods.clawback(escrow.address, AMOUNT)
-            .send({ from: alice })
-            .wait(),
+            .send({ from: alice }),
         ).rejects.toThrow(/Vesting schedule is active/);
       });
     });
@@ -1884,31 +1751,28 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const block = await node.getBlock(tx.blockNumber!);
         // Stop timestamp to match exactly the next block timestamp
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         // Stop vesting
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const [releasableAmount, _] = await linearVestingEscrow
           .withWallet(wallet)
           .methods.releasable_and_vested_amounts(escrow.address, stopTimestamp)
           .simulate({ from: alice });
 
-        linearVestingEscrow
+        await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, 0n)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         await expectTokenBalances(token, alice, wad(0), wad(0));
         await expectTokenBalances(token, bob, wad(0), releasableAmount);
@@ -1932,20 +1796,18 @@ describe("Linear Vesting Escrow", () => {
             amount,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const block = await node.getBlock(setupTx.blockNumber!);
         // Stop timestamp to match exactly the next block timestamp
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         // Stop vesting
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const [releasableAmount, vestedAmount] = await linearVestingEscrow
           .withWallet(wallet)
@@ -1963,24 +1825,16 @@ describe("Linear Vesting Escrow", () => {
         const clawbackTx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, clawbackAmount)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: alice });
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+        await syncPXE(wallet);
 
         // Assert notes
         const notes = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             contractAddress: token.address,
           })
-        ).filter((note) => note.txHash.equals(clawbackTx.txHash));
+        ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(2);
 
         // Assert final balances
@@ -2000,20 +1854,18 @@ describe("Linear Vesting Escrow", () => {
             amount,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const block = await node.getBlock(setupTx.blockNumber!);
         // Stop timestamp to match exactly the next block timestamp
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         // Stop vesting
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const [releasableAmount, vestedAmount] = await linearVestingEscrow
           .withWallet(wallet)
@@ -2031,12 +1883,8 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, releasableAmount)
-          .send({ from: bob })
-          .wait();
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+          .send({ from: bob });
+        await syncPXE(wallet);
 
         // Assert post-claim balances
         await expectTokenBalances(token, alice, wad(0), wad(0));
@@ -2053,24 +1901,16 @@ describe("Linear Vesting Escrow", () => {
         const clawbackTx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, clawbackAmount)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: alice });
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+        await syncPXE(wallet);
 
         // Assert notes
         const notes = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             contractAddress: token.address,
           })
-        ).filter((note) => note.txHash.equals(clawbackTx.txHash));
+        ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(1);
 
         // Assert final balances
@@ -2090,20 +1930,18 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const block = await node.getBlock(setupTx.blockNumber!);
         // Stop timestamp to match exactly the next block timestamp
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         // Stop vesting
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const [releasableAmount, vestedAmount] = await linearVestingEscrow
           .withWallet(wallet)
@@ -2121,16 +1959,14 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, clawbackAmount)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Claiming after clawback should fail because claim completed is true
         await expect(
           linearVestingEscrow
             .withWallet(wallet)
             .methods.claim(escrow.address, 1n)
-            .send({ from: bob })
-            .wait(),
+            .send({ from: bob }),
         ).rejects.toThrow(/Claim already completed/);
       });
     });
@@ -2149,8 +1985,7 @@ describe("Linear Vesting Escrow", () => {
             AMOUNT,
             secretKeys,
           )
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert initial balances
         await expectTokenBalances(token, alice, wad(0), wad(0));
@@ -2161,14 +1996,13 @@ describe("Linear Vesting Escrow", () => {
       it("release amount note is correctly created and emitted", async () => {
         const block = await node.getBlock(tx.blockNumber!);
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         // Stop vesting
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const [_, vestedAmount] = await linearVestingEscrow
           .withWallet(wallet)
@@ -2181,17 +2015,16 @@ describe("Linear Vesting Escrow", () => {
         const clawbackTx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, clawbackAmount)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert released amount note
         const releasedAmountNote = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             scopes: [escrow.address],
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
           })
-        ).filter((note) => note.txHash.equals(clawbackTx.txHash))[0].note;
+        ).filter((note: any) => note.txHash.equals(clawbackTx.txHash))[0].note;
 
         // Assert released amount is vested amount and claim completed is true
         expect(releasedAmountNote.items[0].toBigInt()).toBe(vestedAmount);
@@ -2201,14 +2034,13 @@ describe("Linear Vesting Escrow", () => {
       it("reclaimer can split clawback amount across multiple transactions", async () => {
         const block = await node.getBlock(tx.blockNumber!);
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         // Stop vesting
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const [releasableAmount, vestedAmount] = await linearVestingEscrow
           .withWallet(wallet)
@@ -2227,17 +2059,16 @@ describe("Linear Vesting Escrow", () => {
         const clawbackTx1 = await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, firstClawbackAmount)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert released amount note
         const releasedAmountNote = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             scopes: [escrow.address],
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
           })
-        ).filter((note) => note.txHash.equals(clawbackTx1.txHash))[0].note;
+        ).filter((note: any) => note.txHash.equals(clawbackTx1.txHash))[0].note;
 
         expect(releasedAmountNote.items[0].toBigInt()).toBe(vestedAmount);
         expect(releasedAmountNote.items[1].toBigInt()).toBe(1n);
@@ -2258,17 +2089,16 @@ describe("Linear Vesting Escrow", () => {
         const clawbackTx2 = await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, secondClawbackAmount)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         // Assert released amount note
         const releasedAmountNote2 = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             scopes: [escrow.address],
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
           })
-        ).filter((note) => note.txHash.equals(clawbackTx2.txHash))[0].note;
+        ).filter((note: any) => note.txHash.equals(clawbackTx2.txHash))[0].note;
 
         expect(releasedAmountNote2.items[0].toBigInt()).toBe(vestedAmount);
         expect(releasedAmountNote2.items[1].toBigInt()).toBe(1n);
@@ -2282,14 +2112,13 @@ describe("Linear Vesting Escrow", () => {
       it("reclaimer can do multiple clawbacks after recipient has already claimed", async () => {
         const block = await node.getBlock(tx.blockNumber!);
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME;
+          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
 
         // Stop vesting
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.stop_vesting(escrow.address, stopTimestamp)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         const [releasableAmount, vestedAmount] = await linearVestingEscrow
           .withWallet(wallet)
@@ -2300,8 +2129,7 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, releasableAmount)
-          .send({ from: bob })
-          .wait();
+          .send({ from: bob });
 
         const totalClawbackAmount = AMOUNT - vestedAmount;
 
@@ -2321,8 +2149,7 @@ describe("Linear Vesting Escrow", () => {
         await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, firstClawbackAmount)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         await expectTokenBalances(token, alice, wad(0), firstClawbackAmount);
         await expectTokenBalances(
@@ -2338,8 +2165,7 @@ describe("Linear Vesting Escrow", () => {
         const clawbackTx2 = await linearVestingEscrow
           .withWallet(wallet)
           .methods.clawback(escrow.address, secondClawbackAmount)
-          .send({ from: alice })
-          .wait();
+          .send({ from: alice });
 
         await expectTokenBalances(
           token,
@@ -2355,12 +2181,12 @@ describe("Linear Vesting Escrow", () => {
 
         // Assert released amount note
         const releasedAmountNote2 = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             scopes: [escrow.address],
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
           })
-        ).filter((note) => note.txHash.equals(clawbackTx2.txHash))[0].note;
+        ).filter((note: any) => note.txHash.equals(clawbackTx2.txHash))[0].note;
 
         expect(releasedAmountNote2.items[0].toBigInt()).toBe(vestedAmount);
         expect(releasedAmountNote2.items[1].toBigInt()).toBe(1n);
@@ -2381,12 +2207,17 @@ describe("Linear Vesting Escrow", () => {
           AMOUNT,
           secretKeys,
         )
-        .send({ from: alice })
-        .wait();
+        .send({ from: alice });
 
       // Assert initial balances
       await expectTokenBalances(token, bob, wad(0), wad(0));
-      await expectTokenBalances(token, escrow.address, wad(0), AMOUNT, bob);
+      await expectTokenBalances(
+        token,
+        escrow.address,
+        wad(0),
+        AMOUNT,
+        escrow.address,
+      );
 
       let totalClaimed = 0n;
       let previousTx = tx;
@@ -2426,29 +2257,21 @@ describe("Linear Vesting Escrow", () => {
         const claimTx = await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, utilityReleasable)
-          .send({ from: bob })
-          .wait();
-        await token
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
-        await linearVestingEscrow
-          .withWallet(wallet)
-          .methods.sync_private_state()
-          .simulate({ from: bob });
+          .send({ from: bob });
+        await syncPXE(wallet);
 
         // Check if vesting is complete
         const isVestingComplete = claimTimestamp >= start + duration;
 
         // We expect different number of notes based on vesting completion
         const notes = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             contractAddress: token.address,
           })
-        ).filter((note) => note.txHash.equals(claimTx.txHash));
+        ).filter((note: any) => note.txHash.equals(claimTx.txHash));
 
         const releasedAmountNote = (
-          await wallet.getNotes({
+          await getWalletNotes(wallet, {
             scopes: [escrow.address],
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
@@ -2461,22 +2284,22 @@ describe("Linear Vesting Escrow", () => {
           expect(notes.length).toBe(1);
 
           const bobTokenNote = (
-            await wallet.getNotes({
+            await getWalletNotes(wallet, {
               scopes: [bob],
               contractAddress: token.address,
             })
-          ).filter((note) => note.txHash.equals(claimTx.txHash));
+          ).filter((note: any) => note.txHash.equals(claimTx.txHash));
           expectUintNote(bobTokenNote[0].note, utilityReleasable, bob);
         } else {
           // Partial claim: 2 token notes (escrow change tokens and bob withdrawal tokens)
           expect(notes.length).toBe(2);
 
           const escrowTokenNote = (
-            await wallet.getNotes({
+            await getWalletNotes(wallet, {
               scopes: [escrow.address],
               contractAddress: token.address,
             })
-          ).filter((note) => note.txHash.equals(claimTx.txHash));
+          ).filter((note: any) => note.txHash.equals(claimTx.txHash));
           expectUintNote(
             escrowTokenNote[0].note,
             AMOUNT - totalClaimed,
@@ -2484,11 +2307,11 @@ describe("Linear Vesting Escrow", () => {
           );
 
           const bobTokenNote = (
-            await wallet.getNotes({
+            await getWalletNotes(wallet, {
               scopes: [bob],
               contractAddress: token.address,
             })
-          ).filter((note) => note.txHash.equals(claimTx.txHash));
+          ).filter((note: any) => note.txHash.equals(claimTx.txHash));
           expectUintNote(bobTokenNote[0].note, utilityReleasable, bob);
         }
 
@@ -2502,7 +2325,7 @@ describe("Linear Vesting Escrow", () => {
           escrow.address,
           wad(0),
           AMOUNT - totalClaimed,
-          bob,
+          escrow.address,
         );
       }
 

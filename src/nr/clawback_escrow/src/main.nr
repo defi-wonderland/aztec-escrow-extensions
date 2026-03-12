@@ -11,15 +11,15 @@ pub contract ClawbackEscrowLogic {
         macros::{events::event, functions::{external, initializer, view}, storage::storage},
         messages::message_delivery::MessageDelivery,
         note::note_getter_options::NoteGetterOptions,
-        protocol_types::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
-        state_vars::{Owned, private_set::PrivateSet, public_immutable::PublicImmutable},
+        protocol::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
+        state_vars::{Owned, PrivateSet, PublicImmutable},
         utils::comparison::Comparator,
     };
     use escrow_standard::library::logic::{
         _get_escrow, _secret_keys_to_public_keys, _share_escrow, _withdraw, _withdraw_nft,
     };
     use escrow_standard::types::escrow_details_event::MasterSecretKeys;
-    use router::utils::privately_check_timestamp;
+    use public_checks_contract::utils::privately_check_timestamp;
 
     // @param escrow_class_id The contract class id of the escrow contract
     #[storage]
@@ -73,7 +73,7 @@ pub contract ClawbackEscrowLogic {
 
         // Create and emit note with gating logic parameters
         let note = ClawbackEscrowNote { recipient, reclaimer, deadline };
-        self.storage.escrows.at(escrow).insert(note).deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+        self.storage.escrows.at(escrow).insert(note).deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
 
         // Check that a clawback escrow has not been created for the provided escrow
         let nullifier = std::hash::pedersen_hash([escrow.to_field()]);

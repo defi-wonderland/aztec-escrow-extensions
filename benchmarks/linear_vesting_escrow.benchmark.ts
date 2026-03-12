@@ -3,7 +3,6 @@ import { deriveKeys } from "@aztec/stdlib/keys";
 import type { Wallet } from "@aztec/aztec.js/wallet";
 import type { AztecNode } from "@aztec/aztec.js/node";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
-import { type AztecLMDBStoreV2 } from "@aztec/kv-store/lmdb-v2";
 import { getContractClassFromArtifact } from "@aztec/stdlib/contract";
 import type { ContractInstanceWithAddress } from "@aztec/aztec.js/contracts";
 import type { ContractFunctionInteractionCallIntent } from "@aztec/aztec.js/authorization";
@@ -73,7 +72,7 @@ async function deployEscrow(
 
 // Extend the BenchmarkContext from the new package
 interface LinearVestingEscrowBenchmarkContext extends BenchmarkContext {
-  store: AztecLMDBStoreV2;
+  cleanup: () => Promise<void>;
   deployer: AztecAddress;
   wallet: Wallet;
   accounts: AztecAddress[];
@@ -102,7 +101,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
    */
 
   async setup(): Promise<LinearVestingEscrowBenchmarkContext> {
-    const { store, node, wallet, accounts } = await setupTestSuite(
+    const { node, wallet, accounts, cleanup } = await setupTestSuite(
       "bench-linear-vesting",
       true,
     );
@@ -258,7 +257,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     };
 
     return {
-      store,
+      cleanup,
       deployer,
       wallet,
       accounts,
@@ -389,9 +388,9 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
 
   /**
    * Cleans up the benchmark environment for the LinearVestingEscrowContract.
-   * Deletes the store.
+   * Cleans up the wallet and data directory.
    */
   async teardown(context: LinearVestingEscrowBenchmarkContext): Promise<void> {
-    await context.store.delete();
+    await context.cleanup();
   }
 }

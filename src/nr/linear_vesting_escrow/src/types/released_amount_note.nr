@@ -1,4 +1,4 @@
-use aztec::{macros::notes::note, protocol_types::traits::{Packable, Serialize}};
+use aztec::{macros::notes::note, protocol::traits::{Packable, Serialize}};
 
 /// @param escrow The address of the escrow
 /// @param released_amount The released amount of tokens

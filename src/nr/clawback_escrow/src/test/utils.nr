@@ -2,13 +2,13 @@ use crate::ClawbackEscrowLogic;
 use crate::types::clawback_escrow_note::ClawbackEscrowNote;
 use aztec::{
     note::{constants::MAX_NOTES_PER_PAGE, note_viewer_options::NoteViewerOptions},
-    protocol_types::{
+    protocol::{
         address::AztecAddress,
         point::Point,
         public_keys::{IvpkM, NpkM, OvpkM, PublicKeys, TpkM},
         traits::Packable,
     },
-    state_vars::{owned_state_variable::OwnedStateVariable, private_set::PrivateSet},
+    state_vars::{OwnedStateVariable, PrivateSet},
     test::helpers::test_environment::TestEnvironment,
 };
 use escrow_standard::test::utils as escrow_utils;
@@ -73,8 +73,10 @@ pub unconstrained fn deploy_and_create_escrow(
             vector_secret_keys_1,
         ),
     );
-    let expected_escrow_address = env.view_private(ClawbackEscrowLogic::at(logic_contract_address)
-        .get_escrow(vector_secret_keys_1));
+    let expected_escrow_address = env.view_private(
+        owner,
+        ClawbackEscrowLogic::at(logic_contract_address).get_escrow(vector_secret_keys_1),
+    );
     assert_eq(escrow_contract_address, expected_escrow_address, "Incorrect escrow deployment");
 
     // Deploy and mint tokens

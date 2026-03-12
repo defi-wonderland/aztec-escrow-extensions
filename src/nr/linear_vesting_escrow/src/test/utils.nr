@@ -3,12 +3,12 @@ use crate::types::released_amount_note::ReleasedAmountNote;
 use crate::types::vesting_schedule_note::VestingScheduleNote;
 use aztec::{
     note::{constants::MAX_NOTES_PER_PAGE, note_viewer_options::NoteViewerOptions},
-    protocol_types::{
+    protocol::{
         address::AztecAddress,
         point::Point,
         public_keys::{IvpkM, NpkM, OvpkM, PublicKeys, TpkM},
     },
-    state_vars::{owned_state_variable::OwnedStateVariable, private_set::PrivateSet},
+    state_vars::{OwnedStateVariable, PrivateSet},
     test::helpers::test_environment::TestEnvironment,
 };
 use escrow_standard::test::utils as escrow_utils;
@@ -77,10 +77,10 @@ pub unconstrained fn deploy_and_create_escrow(
         ),
     );
 
-    let expected_escrow_address = env.view_private(LinearVestingEscrowLogic::at(
-        logic_contract_address,
-    )
-        .get_escrow(vector_secret_keys_1));
+    let expected_escrow_address = env.view_private(
+        owner,
+        LinearVestingEscrowLogic::at(logic_contract_address).get_escrow(vector_secret_keys_1),
+    );
     env.call_private(
         owner,
         LinearVestingEscrowLogic::at(logic_contract_address).setup_linear_vesting_escrow(

@@ -1,7 +1,4 @@
-use aztec::{
-    macros::notes::note,
-    protocol_types::{address::AztecAddress, traits::{Packable, Serialize}},
-};
+use aztec::{macros::notes::note, protocol::{address::AztecAddress, traits::{Packable, Serialize}}};
 
 /// @param escrow The address of the escrow
 /// @param recipient The address of the recipient

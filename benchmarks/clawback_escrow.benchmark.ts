@@ -3,7 +3,6 @@ import { deriveKeys } from "@aztec/stdlib/keys";
 import type { Wallet } from "@aztec/aztec.js/wallet";
 import type { AztecNode } from "@aztec/aztec.js/node";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
-import { type AztecLMDBStoreV2 } from "@aztec/kv-store/lmdb-v2";
 import { getContractClassFromArtifact } from "@aztec/stdlib/contract";
 import type { ContractInstanceWithAddress } from "@aztec/aztec.js/contracts";
 import type { ContractFunctionInteractionCallIntent } from "@aztec/aztec.js/authorization";
@@ -73,7 +72,7 @@ async function deployEscrow(
 
 // Extend the BenchmarkContext from the new package
 interface ClawbackEscrowBenchmarkContext extends BenchmarkContext {
-  store: AztecLMDBStoreV2;
+  cleanup: () => Promise<void>;
   deployer: AztecAddress;
   wallet: Wallet;
   accounts: AztecAddress[];
@@ -95,7 +94,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
    */
 
   async setup(): Promise<ClawbackEscrowBenchmarkContext> {
-    const { store, node, wallet, accounts } = await setupTestSuite(
+    const { node, wallet, accounts, cleanup } = await setupTestSuite(
       "bench-clawback",
       true,
     );
@@ -170,7 +169,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
       .wait();
 
     return {
-      store,
+      cleanup,
       wallet,
       deployer,
       accounts,
@@ -283,10 +282,10 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
   }
 
   /**
-   * Cleans up the benchmark environment for the LinearVestingEscrowContract.
-   * Deletes the store.
+   * Cleans up the benchmark environment for the ClawbackEscrowContract.
+   * Cleans up the wallet and data directory.
    */
   async teardown(context: ClawbackEscrowBenchmarkContext): Promise<void> {
-    await context.store.delete();
+    await context.cleanup();
   }
 }
