@@ -15,8 +15,8 @@ pub contract ClawbackEscrowLogic {
         state_vars::{Owned, PrivateSet, PublicImmutable},
         utils::comparison::Comparator,
     };
-    use escrow_standard::library::logic::{_get_escrow, _share_escrow, _withdraw, _withdraw_nft};
     use escrow_standard::key_derivation;
+    use escrow_standard::library::logic::{_get_escrow, _share_escrow, _withdraw, _withdraw_nft};
     use public_checks_contract::utils::privately_check_timestamp;
 
     // @param escrow_class_id The contract class id of the escrow contract
@@ -157,9 +157,7 @@ pub contract ClawbackEscrowLogic {
     /// @param secret_key The secret key used to derive master secret keys and public keys
     /// @return PublicKeys containing the derived public keys.
     #[external("utility")]
-    unconstrained fn secret_key_to_public_keys(
-        secret_key: Field,
-    ) -> pub PublicKeys {
+    unconstrained fn secret_key_to_public_keys(secret_key: Field) -> pub PublicKeys {
         key_derivation::secret_key_to_public_keys(secret_key)
     }
 

@@ -17,8 +17,8 @@ pub contract LinearVestingEscrowLogic {
     // std library
     use std::field::bn254::assert_lt;
     // escrow standard library
-    use escrow_standard::library::logic::{_get_escrow, _share_escrow, _withdraw};
     use escrow_standard::key_derivation::secret_key_to_public_keys as _secret_key_to_public_keys;
+    use escrow_standard::library::logic::{_get_escrow, _share_escrow, _withdraw};
     // vesting schedule, released amount, final claim note types
     use crate::types::{
         released_amount_note::ReleasedAmountNote, vesting_schedule_note::VestingScheduleNote,
@@ -288,9 +288,7 @@ pub contract LinearVestingEscrowLogic {
     /// @param secret_key The secret key used to derive master secret keys and public keys
     /// @return PublicKeys containing the derived public keys.
     #[external("utility")]
-    unconstrained fn secret_key_to_public_keys(
-        secret_key: Field,
-    ) -> pub PublicKeys {
+    unconstrained fn secret_key_to_public_keys(secret_key: Field) -> pub PublicKeys {
         _secret_key_to_public_keys(secret_key)
     }
 
