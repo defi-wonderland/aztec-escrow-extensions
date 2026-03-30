@@ -131,10 +131,12 @@ export const expectTokenBalances = async (
   };
 
   expect(
-    await token.methods.balance_of_public(aztecAddress).simulate({ from }),
+    (await token.methods.balance_of_public(aztecAddress).simulate({ from }))
+      .result,
   ).toBe(toBigInt(publicBalance));
   expect(
-    await token.methods.balance_of_private(aztecAddress).simulate({ from }),
+    (await token.methods.balance_of_private(aztecAddress).simulate({ from }))
+      .result,
   ).toBe(toBigInt(privateBalance));
 };
 
@@ -153,13 +155,13 @@ export async function deployTokenWithMinter(
   deployer: AztecAddress,
   options?: DeployOptions,
 ) {
-  const contract = await Contract.deploy(
+  const result = await Contract.deploy(
     wallet,
     TokenContractArtifact,
-    ["PrivateToken", "PT", 18, deployer, AztecAddress.ZERO],
+    ["PrivateToken", "PT", 18, deployer],
     "constructor_with_minter",
   ).send({ ...options, from: deployer });
-  return contract;
+  return result.contract as TokenContract;
 }
 
 /**
@@ -173,13 +175,13 @@ export async function deployTokenWithInitialSupply(
   deployer: AztecAddress,
   options?: DeployOptions,
 ) {
-  const contract = await Contract.deploy(
+  const result = await Contract.deploy(
     wallet,
     TokenContractArtifact,
     ["PrivateToken", "PT", 18, 0, deployer, deployer],
     "constructor_with_initial_supply",
   ).send({ ...options, from: deployer });
-  return contract;
+  return result.contract as TokenContract;
 }
 
 /**
@@ -195,16 +197,16 @@ export async function deployNFTWithMinter(
   deployer: AztecAddress,
   options?: DeployOptions,
 ) {
-  const contract = await Contract.deploy(
+  const result = await Contract.deploy(
     wallet,
     NFTContractArtifact,
-    ["TestNFT", "TNFT", deployer, deployer],
+    ["TestNFT", "TNFT", deployer],
     "constructor_with_minter",
   ).send({
     ...options,
     from: deployer,
   });
-  return contract;
+  return result.contract as NFTContract;
 }
 
 // --- Tokenized Vault Utils ---
@@ -220,19 +222,19 @@ export async function deployVaultAndAssetWithMinter(
   deployer: AztecAddress,
   options?: DeployOptions,
 ): Promise<[Contract, Contract]> {
-  const assetContract = await Contract.deploy(
+  const assetResult = await Contract.deploy(
     wallet,
     TokenContractArtifact,
-    ["PrivateToken", "PT", 6, deployer, AztecAddress.ZERO],
+    ["PrivateToken", "PT", 6, deployer],
     "constructor_with_minter",
   ).send({ ...options, from: deployer });
-  const vaultContract = await Contract.deploy(
+  const vaultResult = await Contract.deploy(
     wallet,
     TokenContractArtifact,
-    ["VaultToken", "VT", 6, assetContract.address, AztecAddress.ZERO],
+    ["VaultToken", "VT", 6, assetResult.contract.address],
     "constructor_with_asset",
   ).send({ ...options, from: deployer });
-  return [vaultContract, assetContract];
+  return [vaultResult.contract, assetResult.contract];
 }
 
 // --- Escrow Utils ---
@@ -251,13 +253,13 @@ export async function deployLinearVestingEscrow(
   escrowClassId: Fr,
   options?: DeployOptions,
 ) {
-  const contract = await Contract.deploy(
+  const result = await Contract.deploy(
     wallet,
     LinearVestingEscrowLogicContractArtifact,
     [escrowClassId],
     "constructor",
   ).send({ ...options, from: deployer });
-  return contract as LinearVestingEscrowLogicContract;
+  return result.contract as LinearVestingEscrowLogicContract;
 }
 
 /**
@@ -274,13 +276,13 @@ export async function deployClawbackEscrow(
   escrowClassId: Fr,
   options?: DeployOptions,
 ) {
-  const contract = await Contract.deploy(
+  const result = await Contract.deploy(
     wallet,
     ClawbackEscrowLogicContractArtifact,
     [escrowClassId],
     "constructor",
   ).send({ ...options, from: deployer });
-  return contract as ClawbackEscrowLogicContract;
+  return result.contract as ClawbackEscrowLogicContract;
 }
 
 /**
@@ -301,7 +303,7 @@ export async function deployEscrowWithPublicKeysAndSalt(
   args: unknown[] = [],
   constructor?: string,
 ): Promise<EscrowContract> {
-  const contract = await Contract.deployWithPublicKeys(
+  const result = await Contract.deployWithPublicKeys(
     publicKeys,
     wallet,
     EscrowContractArtifact,
@@ -312,7 +314,7 @@ export async function deployEscrowWithPublicKeysAndSalt(
     universalDeploy: true,
     from: deployer,
   });
-  return contract as EscrowContract;
+  return result.contract as EscrowContract;
 }
 
 // --- NFT Utils ---
@@ -330,9 +332,10 @@ export async function assertOwnsPrivateNFT(
       ? caller
       : caller
     : owner;
-  const [nfts, _] = await nft.methods
+  const simResult = await nft.methods
     .get_private_nfts(owner, 0)
     .simulate({ from });
+  const [nfts, _] = simResult.result;
   const hasNFT = nfts.some((id: bigint) => id === tokenId);
   expect(hasNFT).toBe(expectToBeTrue);
 }
@@ -411,7 +414,7 @@ export function addEscrowToWalletScopes(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = wallet as any;
 
-  // Patch scopesFor (used by simulateTx, proveTx, profileTx)
+  // Patch scopesFor (legacy, used internally)
   const originalScopesFor = w.scopesFor.bind(wallet);
   w.scopesFor = (from: AztecAddress): AztecAddress[] => {
     const scopes: AztecAddress[] = originalScopesFor(from);
@@ -421,13 +424,26 @@ export function addEscrowToWalletScopes(
     return scopes;
   };
 
-  // Patch simulateUtility (used by utility function .simulate() calls)
-  const originalSimulateUtility = w.simulateUtility.bind(wallet);
-  w.simulateUtility = (
+  // Patch scopesFrom (used by simulateTx, proveTx, sendTx in v4.1)
+  const originalScopesFrom = w.scopesFrom.bind(wallet);
+  w.scopesFrom = (
+    from: AztecAddress,
+    additionalScopes: AztecAddress[] = [],
+  ): AztecAddress[] => {
+    const scopes: AztecAddress[] = originalScopesFrom(from, additionalScopes);
+    if (!scopes.some((s: AztecAddress) => s.equals(escrowAddress))) {
+      scopes.push(escrowAddress);
+    }
+    return scopes;
+  };
+
+  // Patch executeUtility (used by utility function .simulate() calls)
+  const originalExecuteUtility = w.executeUtility.bind(wallet);
+  w.executeUtility = (
     call: unknown,
     opts: { scope: AztecAddress; authWitnesses?: unknown[] },
   ) => {
-    return w.pxe.simulateUtility(call, {
+    return w.pxe.executeUtility(call, {
       authwits: opts.authWitnesses,
       scopes: opts.scope.equals(escrowAddress)
         ? [escrowAddress]

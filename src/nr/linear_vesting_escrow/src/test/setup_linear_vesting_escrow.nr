@@ -11,7 +11,7 @@ unconstrained fn create_linear_vesting_escrow_fails_if_start_plus_duration_overf
     let logic_contract_address =
         utils::deploy_linear_vesting_escrow_logic(env, owner, escrow_class_id);
 
-    let (_, vector_secret_keys_1, _, _) = utils::get_test_vector();
+    let (_, secret_key_1, _, _) = utils::get_test_vector();
 
     let amount: u128 = 1000;
     let token_contract_address =
@@ -33,7 +33,7 @@ unconstrained fn create_linear_vesting_escrow_fails_if_start_plus_duration_overf
             start,
             duration,
             amount,
-            vector_secret_keys_1,
+            secret_key_1,
         ),
     );
 }
@@ -46,7 +46,7 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
     let logic_contract_address =
         utils::deploy_linear_vesting_escrow_logic(env, owner, escrow_class_id);
 
-    let (_, vector_secret_keys_1, _, _) = utils::get_test_vector();
+    let (_, secret_key_1, _, _) = utils::get_test_vector();
 
     let amount: u128 = 1000;
     let token_contract_address =
@@ -64,7 +64,7 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
             start,
             duration,
             amount,
-            vector_secret_keys_1,
+            secret_key_1,
         ),
     );
 
@@ -77,7 +77,7 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
             start,
             duration,
             amount,
-            vector_secret_keys_1,
+            secret_key_1,
         ),
     );
 }
@@ -93,7 +93,7 @@ unconstrained fn create_linear_vesting_escrow_success() {
     let logic_contract_address =
         utils::deploy_linear_vesting_escrow_logic(env, owner, escrow_class_id);
 
-    let (_, vector_secret_keys_1, _, _) = utils::get_test_vector();
+    let (_, secret_key_1, _, _) = utils::get_test_vector();
 
     let amount: u128 = 1000;
     let token_contract_address =
@@ -112,7 +112,7 @@ unconstrained fn create_linear_vesting_escrow_success() {
             start,
             duration,
             amount,
-            vector_secret_keys_1,
+            secret_key_1,
         ),
     );
 

@@ -17,7 +17,6 @@ import {
   deployEscrowWithPublicKeysAndSalt,
   deployLinearVestingEscrow,
   deployTokenWithMinter,
-  grumpkinScalarToFr,
   setupTestSuite,
 } from "../src/ts/utils.js";
 
@@ -60,14 +59,9 @@ async function deployEscrow(
     );
   }
 
-  const secretKeys = {
-    nsk_m: grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
-    ivsk_m: grumpkinScalarToFr(escrowKeys.masterIncomingViewingSecretKey),
-    ovsk_m: grumpkinScalarToFr(escrowKeys.masterOutgoingViewingSecretKey),
-    tsk_m: grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
-  };
+  const secretKey = escrowSk;
 
-  return { escrowContract, secretKeys };
+  return { escrowContract, secretKey };
 }
 
 // Extend the BenchmarkContext from the new package
@@ -79,7 +73,7 @@ interface LinearVestingEscrowBenchmarkContext extends BenchmarkContext {
   linearVestingEscrowContract: LinearVestingEscrowLogicContract;
   escrows: {
     contract: EscrowContract;
-    secretKeys: { nsk_m: Fr; ivsk_m: Fr; ovsk_m: Fr; tsk_m: Fr };
+    secretKey: Fr;
   }[];
   tokenContract: TokenContract;
   additionalData: {
@@ -120,17 +114,17 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     // 0 - Create, partial and full claim
     // 1 - [Create] Stop vesting and clawback (withdraw to recipient)
     // 3 - [Create and stop vesting] Final claim and clawback (no withdraw to recipient)
-    const { escrowContract: escrowContract_1, secretKeys: secretKeys_1 } =
+    const { escrowContract: escrowContract_1, secretKey: secretKey_1 } =
       await deployEscrow(wallet, node, deployer, linearVestingEscrowContract);
-    const { escrowContract: escrowContract_2, secretKeys: secretKeys_2 } =
+    const { escrowContract: escrowContract_2, secretKey: secretKey_2 } =
       await deployEscrow(wallet, node, deployer, linearVestingEscrowContract);
-    const { escrowContract: escrowContract_3, secretKeys: secretKeys_3 } =
+    const { escrowContract: escrowContract_3, secretKey: secretKey_3 } =
       await deployEscrow(wallet, node, deployer, linearVestingEscrowContract);
 
     const escrows = [
-      { contract: escrowContract_1, secretKeys: secretKeys_1 },
-      { contract: escrowContract_2, secretKeys: secretKeys_2 },
-      { contract: escrowContract_3, secretKeys: secretKeys_3 },
+      { contract: escrowContract_1, secretKey: secretKey_1 },
+      { contract: escrowContract_2, secretKey: secretKey_2 },
+      { contract: escrowContract_3, secretKey: secretKey_3 },
     ];
 
     // Deploy a token contract and fund the escrows
@@ -177,7 +171,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         start_2,
         duration_2,
         AMOUNT,
-        escrows[1].secretKeys,
+        escrows[1].secretKey,
       )
       .send({ from: alice })
       .wait();
@@ -210,7 +204,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         start_3,
         duration_3,
         AMOUNT,
-        escrows[2].secretKeys,
+        escrows[2].secretKey,
       )
       .send({ from: alice })
       .wait();
@@ -305,7 +299,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
               additionalData.start_1,
               additionalData.duration_1,
               AMOUNT,
-              escrows[0].secretKeys,
+              escrows[0].secretKey,
             ),
         },
       },

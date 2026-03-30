@@ -15,10 +15,8 @@ pub contract ClawbackEscrowLogic {
         state_vars::{Owned, PrivateSet, PublicImmutable},
         utils::comparison::Comparator,
     };
-    use escrow_standard::library::logic::{
-        _get_escrow, _secret_keys_to_public_keys, _share_escrow, _withdraw, _withdraw_nft,
-    };
-    use escrow_standard::types::escrow_details_event::MasterSecretKeys;
+    use escrow_standard::library::logic::{_get_escrow, _share_escrow, _withdraw, _withdraw_nft};
+    use escrow_standard::key_derivation;
     use public_checks_contract::utils::privately_check_timestamp;
 
     // @param escrow_class_id The contract class id of the escrow contract
@@ -32,12 +30,12 @@ pub contract ClawbackEscrowLogic {
     /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
     /// @dev #[allow(dead_code)] added because is used because EscrowDetailsLogContent is defined for logging but not directly instantiated.
     /// @param escrow The address of the escrow
-    /// @param master_secret_keys The master secret keys
+    /// @param secret_key The secret key used to derive master secret keys and public keys
     #[event]
     #[allow(dead_code)]
     struct EscrowDetailsLogContent {
         escrow: AztecAddress,
-        master_secret_keys: MasterSecretKeys,
+        secret_key: Field,
     }
 
     /// @dev Initialize the contract
@@ -51,25 +49,25 @@ pub contract ClawbackEscrowLogic {
     /// @notice Computes the escrow address from the given master secret keys and
     ///         shares the escrow data with the recipient and the reclaimer. The
     ///         escrow address is nullified to prevent future reuse.
-    /// @dev Reverts if master_secret_keys was already used.
+    /// @dev Reverts if secret_key was already used.
     /// @param recipient The address that can claim tokens before deadline
     /// @param reclaimer The address that can clawback tokens after deadline
     /// @param deadline The timestamp after which owner can clawback
-    /// @param master_secret_keys The master secret keys
+    /// @param secret_key The secret key used to derive master secret keys and public keys
     #[external("private")]
     fn setup_clawback_escrow(
         recipient: AztecAddress,
         reclaimer: AztecAddress,
         deadline: u64,
-        master_secret_keys: MasterSecretKeys,
+        secret_key: Field,
     ) {
         let escrow = _get_escrow(
             self.context,
             self.storage.escrow_class_id.read(),
-            master_secret_keys,
+            secret_key,
         );
-        _share_escrow(self.context, reclaimer, escrow, master_secret_keys);
-        _share_escrow(self.context, recipient, escrow, master_secret_keys);
+        _share_escrow(self.context, reclaimer, escrow, secret_key);
+        _share_escrow(self.context, recipient, escrow, secret_key);
 
         // Create and emit note with gating logic parameters
         let note = ClawbackEscrowNote { recipient, reclaimer, deadline };
@@ -138,16 +136,16 @@ pub contract ClawbackEscrowLogic {
         privately_check_timestamp(Comparator.GT, note.deadline, self.context);
     }
 
-    /// @notice Returns the escrow address that corresponds to the given master secret keys and class ID.
-    /// @param master_secret_keys The master secret keys
+    /// @notice Returns the escrow address that corresponds to the given secret key and class ID.
+    /// @param secret_key The secret key used to derive master secret keys and public keys
     /// @return AztecAddress of the escrow.
     #[external("private")]
     #[view]
-    fn get_escrow(master_secret_keys: MasterSecretKeys) -> pub AztecAddress {
+    fn get_escrow(secret_key: Field) -> pub AztecAddress {
         _get_escrow(
             self.context,
             self.storage.escrow_class_id.read(),
-            master_secret_keys,
+            secret_key,
         )
     }
 
@@ -155,14 +153,14 @@ pub contract ClawbackEscrowLogic {
      * ======================== UTILITIES ========================
      * ======================================================== */
 
-    /// @notice Derives public keys from secret keys.
-    /// @param master_secret_keys The master secret keys
+    /// @notice Derives public keys from a secret key.
+    /// @param secret_key The secret key used to derive master secret keys and public keys
     /// @return PublicKeys containing the derived public keys.
     #[external("utility")]
-    unconstrained fn secret_keys_to_public_keys(
-        master_secret_keys: MasterSecretKeys,
+    unconstrained fn secret_key_to_public_keys(
+        secret_key: Field,
     ) -> pub PublicKeys {
-        _secret_keys_to_public_keys(master_secret_keys)
+        key_derivation::secret_key_to_public_keys(secret_key)
     }
 
     /** ==========================================================

@@ -21,7 +21,7 @@ unconstrained fn claim_fully_vested_tokens_success() {
     token_utils::check_private_balance(*env, token_contract_address, recipient, 0);
 
     env.set_next_block_timestamp(env.last_block_timestamp() + duration);
-    let (releasable_amount, _) = env.simulate_utility(LinearVestingEscrowLogic::at(
+    let (releasable_amount, _) = env.execute_utility(LinearVestingEscrowLogic::at(
         logic_contract_address,
     )
         .releasable_and_vested_amounts(escrow_contract_address, env.last_block_timestamp()));
@@ -60,7 +60,7 @@ unconstrained fn claim_partially_vested_tokens_success() {
     token_utils::check_private_balance(*env, token_contract_address, recipient, 0);
 
     env.set_next_block_timestamp(env.last_block_timestamp() + half_duration);
-    let (releasable_amount, _) = env.simulate_utility(LinearVestingEscrowLogic::at(
+    let (releasable_amount, _) = env.execute_utility(LinearVestingEscrowLogic::at(
         logic_contract_address,
     )
         .releasable_and_vested_amounts(escrow_contract_address, env.last_block_timestamp()));
@@ -102,7 +102,7 @@ unconstrained fn claim_before_start_time() {
     );
     token_utils::check_private_balance(*env, token_contract_address, recipient, 0);
 
-    let (releasable_amount, _) = env.simulate_utility(LinearVestingEscrowLogic::at(
+    let (releasable_amount, _) = env.execute_utility(LinearVestingEscrowLogic::at(
         logic_contract_address,
     )
         .releasable_and_vested_amounts(escrow_contract_address, env.last_block_timestamp()));
@@ -139,7 +139,7 @@ unconstrained fn claim_after_stop_vesting_success() {
     let stop_timestamp = env.last_block_timestamp() + duration / 2;
     env.set_next_block_timestamp(stop_timestamp);
 
-    let (releasable_amount, _) = env.simulate_utility(LinearVestingEscrowLogic::at(
+    let (releasable_amount, _) = env.execute_utility(LinearVestingEscrowLogic::at(
         logic_contract_address,
     )
         .releasable_and_vested_amounts(escrow_contract_address, stop_timestamp));

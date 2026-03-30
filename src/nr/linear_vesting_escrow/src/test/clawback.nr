@@ -25,7 +25,7 @@ unconstrained fn clawback_success() {
     let stop_timestamp = env.last_block_timestamp() + duration / 2;
     env.set_next_block_timestamp(stop_timestamp);
 
-    let (_, vested_amount) = env.simulate_utility(LinearVestingEscrowLogic::at(
+    let (_, vested_amount) = env.execute_utility(LinearVestingEscrowLogic::at(
         logic_contract_address,
     )
         .releasable_and_vested_amounts(escrow_contract_address, stop_timestamp));
@@ -76,7 +76,7 @@ unconstrained fn clawback_after_claim_success() {
     let stop_timestamp = env.last_block_timestamp() + duration / 2;
     env.set_next_block_timestamp(stop_timestamp);
 
-    let (releasable_amount, vested_amount) = env.simulate_utility(LinearVestingEscrowLogic::at(
+    let (releasable_amount, vested_amount) = env.execute_utility(LinearVestingEscrowLogic::at(
         logic_contract_address,
     )
         .releasable_and_vested_amounts(escrow_contract_address, stop_timestamp));

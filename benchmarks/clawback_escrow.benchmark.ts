@@ -18,7 +18,6 @@ import {
   deployTokenWithMinter,
   deployNFTWithMinter,
   setupTestSuite,
-  grumpkinScalarToFr,
 } from "../src/ts/utils.js";
 import { ClawbackEscrowLogicContract } from "../src/artifacts/ClawbackEscrowLogic.js";
 import {
@@ -60,14 +59,9 @@ async function deployEscrow(
     );
   }
 
-  const secretKeys = {
-    nsk_m: grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
-    ivsk_m: grumpkinScalarToFr(escrowKeys.masterIncomingViewingSecretKey),
-    ovsk_m: grumpkinScalarToFr(escrowKeys.masterOutgoingViewingSecretKey),
-    tsk_m: grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
-  };
+  const secretKey = escrowSk;
 
-  return { escrowContract, secretKeys };
+  return { escrowContract, secretKey };
 }
 
 // Extend the BenchmarkContext from the new package
@@ -79,7 +73,7 @@ interface ClawbackEscrowBenchmarkContext extends BenchmarkContext {
   clawbackEscrowContract: ClawbackEscrowLogicContract;
   escrows: {
     contract: EscrowContract;
-    secretKeys: { nsk_m: Fr; ivsk_m: Fr; ovsk_m: Fr; tsk_m: Fr };
+    secretKey: Fr;
   }[];
   tokenContract: TokenContract;
   nftContract: NFTContract;
@@ -109,14 +103,14 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
       escrowClassId,
     );
 
-    const { escrowContract: escrowContract_1, secretKeys: secretKeys_1 } =
+    const { escrowContract: escrowContract_1, secretKey: secretKey_1 } =
       await deployEscrow(wallet, node, deployer, clawbackEscrowContract);
-    const { escrowContract: escrowContract_2, secretKeys: secretKeys_2 } =
+    const { escrowContract: escrowContract_2, secretKey: secretKey_2 } =
       await deployEscrow(wallet, node, deployer, clawbackEscrowContract);
 
     const escrows = [
-      { contract: escrowContract_1, secretKeys: secretKeys_1 },
-      { contract: escrowContract_2, secretKeys: secretKeys_2 },
+      { contract: escrowContract_1, secretKey: secretKey_1 },
+      { contract: escrowContract_2, secretKey: secretKey_2 },
     ];
 
     // Deploy a token contract
@@ -163,7 +157,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
         bob,
         alice,
         pastDeadline,
-        escrows[0].secretKeys,
+        escrows[0].secretKey,
       )
       .send({ from: deployer })
       .wait();
@@ -216,7 +210,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
               bob,
               alice,
               futureDeadline,
-              escrows[1].secretKeys,
+              escrows[1].secretKey,
             ),
         },
       },
