@@ -12,4 +12,4 @@ concurrency:
 
 jobs:
   tests:
-    uses: defi-wonderland/aztec-ci-actions/.github/workflows/run-tests.yml@v0
+    uses: defi-wonderland/aztec-ci-actions/.github/workflows/run-tests.yml@feat/next
