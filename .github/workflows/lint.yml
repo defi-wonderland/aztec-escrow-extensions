@@ -55,7 +55,7 @@ jobs:
           run-compile: 'false'
 
       - name: Check Noir formatting
-        run: aztec fmt --check
+        run: nargo fmt --check
 
       - name: Check Javascript & Typescript formatting
         run: yarn prettier '**/*.{js,ts}' --check
