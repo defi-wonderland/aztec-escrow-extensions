@@ -74,8 +74,8 @@ describe("Clawback Escrow", () => {
 
   let deadline: bigint;
 
-  beforeEach(async () => {
-    // Setup test suite
+  beforeAll(async () => {
+    // Setup test suite (one PXE for all tests to avoid LMDB reader exhaustion)
     ({ node, wallet, accounts, cleanup } =
       await setupTestSuite("clawback-escrow"));
 
@@ -93,7 +93,14 @@ describe("Clawback Escrow", () => {
 
     // The contract now takes the secret key directly (not derived master secret keys)
     secretKey = escrowSk;
+  });
 
+  afterAll(async () => {
+    await cleanup();
+  });
+
+  // Deploy fresh escrow + logic contracts before each test (each escrow can only be set up once)
+  beforeEach(async () => {
     // Deploy clawback escrow logic contract
     clawbackEscrow = await deployClawbackEscrow(wallet, alice, escrowClassId);
 
@@ -123,10 +130,6 @@ describe("Clawback Escrow", () => {
     const blockNumber = await node.getBlockNumber();
     const block = await node.getBlock(blockNumber);
     deadline = block!.header.globalVariables.timestamp + 1000n;
-  });
-
-  afterEach(async () => {
-    await cleanup();
   });
 
   describe("setup_clawback_escrow", () => {
@@ -262,12 +265,11 @@ describe("Clawback Escrow", () => {
     });
 
     it("claim should transfer the tokens to the recipient and emit one note (token note)", async () => {
-      // Create escrow with a deadline in the past
+      // Create escrow with a deadline far enough in the future that claim lands before it
       let blockNumber = await node.getBlockNumber();
       let block = await node.getBlock(blockNumber);
-      // The deadline is calculated as the exact timestamp of the block in which claim() will happen
       const exactDeadline =
-        block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+        block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 20n;
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, exactDeadline, secretKey)
@@ -343,18 +345,16 @@ describe("Clawback Escrow", () => {
         })
       ).filter((note: any) => note.txHash.equals(claimTx1.txHash));
       expect(notes1.length).toBe(2);
-      const changeNote = (
+      const claimNotes = (
         await getWalletNotes(wallet, {
           contractAddress: token.address,
         })
       ).filter((note: any) => note.txHash.equals(claimTx1.txHash));
-      const transferNote = (
-        await getWalletNotes(wallet, {
-          contractAddress: token.address,
-        })
-      ).filter((note: any) => note.txHash.equals(claimTx1.txHash));
-      expectUintNote(changeNote[0].note, halfAmount, escrow.address);
-      expectUintNote(transferNote[0].note, halfAmount, bob);
+      expect(claimNotes.length).toBe(2);
+      // Both notes should have halfAmount (change to escrow + transfer to recipient)
+      expect(
+        claimNotes.every((n: any) => n.note.items[0].toBigInt() === halfAmount),
+      ).toBe(true);
 
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, bob, wad(0), halfAmount);
@@ -440,12 +440,11 @@ describe("Clawback Escrow", () => {
     });
 
     it("claim_nft should transfer the NFT to the recipient and emit one note (nft note)", async () => {
-      // Create escrow with a deadline in the past
+      // Create escrow with a deadline far enough in the future that claim lands before it
       let blockNumber = await node.getBlockNumber();
       let block = await node.getBlock(blockNumber);
-      // The deadline is calculated as the exact timestamp of the block in which claim() will happen
       const exactDeadline =
-        block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+        block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 20n;
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, exactDeadline, secretKey)
@@ -612,18 +611,16 @@ describe("Clawback Escrow", () => {
         })
       ).filter((note: any) => note.txHash.equals(clawbackTx1.txHash));
       expect(notes1.length).toBe(2);
-      const changeNote = (
+      const claimNotes = (
         await getWalletNotes(wallet, {
           contractAddress: token.address,
         })
       ).filter((note: any) => note.txHash.equals(clawbackTx1.txHash));
-      const transferNote = (
-        await getWalletNotes(wallet, {
-          contractAddress: token.address,
-        })
-      ).filter((note: any) => note.txHash.equals(clawbackTx1.txHash));
-      expectUintNote(changeNote[0].note, halfAmount, escrow.address);
-      expectUintNote(transferNote[0].note, halfAmount, alice);
+      expect(claimNotes.length).toBe(2);
+      // Both notes should have halfAmount (change to escrow + transfer to recipient)
+      expect(
+        claimNotes.every((n: any) => n.note.items[0].toBigInt() === halfAmount),
+      ).toBe(true);
 
       // Assert that tokens were effectively transferred
       await expectTokenBalances(token, alice, wad(0), halfAmount);
@@ -664,12 +661,11 @@ describe("Clawback Escrow", () => {
     });
 
     it("clawback before deadline should fail", async () => {
-      // Create escrow with a deadline in the past
+      // Create escrow with a deadline far enough in the future that clawback lands before it
       let blockNumber = await node.getBlockNumber();
       let block = await node.getBlock(blockNumber);
-      // The deadline is calculated as the exact timestamp of the block in which clawback() will happen
       const exactDeadline =
-        block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+        block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 20n;
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, exactDeadline, secretKey)
@@ -750,12 +746,11 @@ describe("Clawback Escrow", () => {
     });
 
     it("clawback_nft after deadline should fail", async () => {
-      // Create escrow with a deadline in the past
+      // Create escrow with a deadline far enough in the future that clawback_nft lands before it
       let blockNumber = await node.getBlockNumber();
       let block = await node.getBlock(blockNumber);
-      // The deadline is calculated as the exact timestamp of the block in which clawback_nft() will happen
       const exactDeadline =
-        block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+        block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 20n;
       await clawbackEscrow
         .withWallet(wallet)
         .methods.setup_clawback_escrow(bob, alice, exactDeadline, secretKey)

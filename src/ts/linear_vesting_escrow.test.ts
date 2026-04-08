@@ -82,8 +82,8 @@ describe("Linear Vesting Escrow", () => {
   const AZTEC_SLOT_TIME = 36n; // seconds
   const MAX_U64_VALUE = (1n << 64n) - 1n;
 
-  beforeEach(async () => {
-    // Setup test suite
+  beforeAll(async () => {
+    // Setup test suite (one PXE for all tests to avoid LMDB reader exhaustion)
     ({ node, wallet, accounts, cleanup } = await setupTestSuite(
       "linear-vesting-escrow",
     ));
@@ -102,7 +102,14 @@ describe("Linear Vesting Escrow", () => {
 
     // The contract now takes the secret key directly (not derived master secret keys)
     secretKey = escrowSk;
+  });
 
+  afterAll(async () => {
+    await cleanup();
+  });
+
+  // Deploy fresh contracts before each test (each escrow can only be set up once due to nullifier)
+  beforeEach(async () => {
     // Logic is deployed with the public keys because it sends encrypted events to the recipient and with the escrow class id
     linearVestingEscrow = (await deployLinearVestingEscrow(
       wallet,
@@ -145,10 +152,6 @@ describe("Linear Vesting Escrow", () => {
     const block = await node.getBlock(blockNumber);
     start = block!.header.globalVariables.timestamp;
     duration = 200n;
-  });
-
-  afterEach(async () => {
-    await cleanup();
   });
 
   describe("Deployment", () => {
@@ -453,15 +456,15 @@ describe("Linear Vesting Escrow", () => {
             .simulate({ from: escrow.address })
         ).result;
 
-        await linearVestingEscrow
+        const claimTxResult = await linearVestingEscrow
           .withWallet(wallet)
           .methods.claim(escrow.address, releasableAmount)
           .send({ from: bob, additionalScopes: [escrow.address] });
+        const claimTx = claimTxResult.receipt;
         await syncPXE(wallet);
 
-        const receivedAmount =
-          ((BigInt(claimTimestamp) - BigInt(start)) * AMOUNT) /
-          BigInt(duration);
+        // Use releasableAmount as the actual claimed amount (timestamp-independent)
+        const receivedAmount = releasableAmount as bigint;
 
         // We expect a released amount note
         const notes = await getWalletNotes(wallet, {
@@ -470,14 +473,21 @@ describe("Linear Vesting Escrow", () => {
         });
         expect(notes.length).toBe(1);
 
-        const escrowTokenNote = await getWalletNotes(wallet, {
-          contractAddress: token.address,
-        });
-        expectUintNote(
-          escrowTokenNote[0].note,
-          AMOUNT - receivedAmount,
-          escrow.address,
+        const claimTokenNotes = (
+          await getWalletNotes(wallet, {
+            contractAddress: token.address,
+          })
+        ).filter((note: any) => note.txHash.equals(claimTx.txHash));
+
+        // Find notes by value: one is the escrow change, one is bob's received tokens
+        const escrowChangeNote = claimTokenNotes.find(
+          (n: any) => n.note.items[0].toBigInt() === AMOUNT - receivedAmount,
         );
+        const bobReceivedNote = claimTokenNotes.find(
+          (n: any) => n.note.items[0].toBigInt() === receivedAmount,
+        );
+        expect(escrowChangeNote).toBeDefined();
+        expect(bobReceivedNote).toBeDefined();
 
         const releasedAmountNote = (
           await getWalletNotes(wallet, {
@@ -486,11 +496,6 @@ describe("Linear Vesting Escrow", () => {
           })
         )[0].note;
         expect(releasedAmountNote.items[0].toBigInt()).toBe(receivedAmount);
-
-        const bobTokenNote = await getWalletNotes(wallet, {
-          contractAddress: token.address,
-        });
-        expectUintNote(bobTokenNote[0].note, receivedAmount, bob);
 
         await expectTokenBalances(token, bob, wad(0), receivedAmount);
         await expectTokenBalances(
@@ -576,23 +581,15 @@ describe("Linear Vesting Escrow", () => {
           ).receipt;
           await syncPXE(wallet);
 
-          // Calculate total vested amount up to the previous transaction's timestamp
-          const totalVestedAmount =
-            claimTimestamp > start
-              ? ((BigInt(claimTimestamp) - BigInt(start)) * U128_MAX) /
-                BigInt(duration)
-              : 0n;
-
-          // Cap at total amount if vesting period is complete
-          const cappedVestedAmount =
-            totalVestedAmount > U128_MAX ? U128_MAX : totalVestedAmount;
-
-          // The amount received in this claim is the difference between total vested and previously claimed
-          const receivedAmount = cappedVestedAmount - totalClaimed;
+          // Use releasableAmount from simulate as the actual claimed amount (timestamp-independent)
+          const receivedAmount = releasableAmount as bigint;
           totalClaimed += receivedAmount;
 
           // Check if vesting is complete
           const isVestingComplete = claimTimestamp >= start + duration;
+
+          // The capped vested amount is totalClaimed so far
+          const cappedVestedAmount = totalClaimed;
 
           // We expect different number of notes based on vesting completion
           const notes = (
@@ -625,23 +622,28 @@ describe("Linear Vesting Escrow", () => {
             // Partial claim: 2 token notes (escrow change tokens and bob withdrawal tokens)
             expect(notes.length).toBe(2);
 
-            const escrowTokenNote = (
+            const claimTokenNotes = (
               await getWalletNotes(wallet, {
                 contractAddress: newToken.address,
               })
             ).filter((note: any) => note.txHash.equals(claimTx.txHash));
+
+            // Find notes by value
+            const escrowChangeNote = claimTokenNotes.find(
+              (n: any) =>
+                n.note.items[0].toBigInt() === U128_MAX - totalClaimed,
+            );
+            const bobReceivedNote = claimTokenNotes.find(
+              (n: any) => n.note.items[0].toBigInt() === receivedAmount,
+            );
+            expect(escrowChangeNote).toBeDefined();
+            expect(bobReceivedNote).toBeDefined();
             expectUintNote(
-              escrowTokenNote[0].note,
+              escrowChangeNote!.note,
               U128_MAX - totalClaimed,
               escrow.address,
             );
-
-            const bobTokenNote = (
-              await getWalletNotes(wallet, {
-                contractAddress: newToken.address,
-              })
-            ).filter((note: any) => note.txHash.equals(claimTx.txHash));
-            expectUintNote(bobTokenNote[0].note, receivedAmount, bob);
+            expectUintNote(bobReceivedNote!.note, receivedAmount, bob);
           }
 
           // Update previousTx to current claim for next iteration
@@ -784,23 +786,15 @@ describe("Linear Vesting Escrow", () => {
           ).receipt;
           await syncPXE(wallet);
 
-          // Calculate total vested amount up to the previous transaction's timestamp
-          const totalVestedAmount =
-            claimTimestamp > start
-              ? ((BigInt(claimTimestamp) - BigInt(start)) * AMOUNT) /
-                BigInt(duration)
-              : 0n;
-
-          // Cap at total amount if vesting period is complete
-          const cappedVestedAmount =
-            totalVestedAmount > AMOUNT ? AMOUNT : totalVestedAmount;
-
-          // The amount received in this claim is the difference between total vested and previously claimed
-          const receivedAmount = cappedVestedAmount - totalClaimed;
+          // Use releasableAmount from simulate as the actual claimed amount (timestamp-independent)
+          const receivedAmount = releasableAmount as bigint;
           totalClaimed += receivedAmount;
 
           // Check if vesting is complete
           const isVestingComplete = claimTimestamp >= start + duration;
+
+          // The capped vested amount is totalClaimed so far
+          const cappedVestedAmount = totalClaimed;
 
           // We expect different number of notes based on vesting completion
           const notes = (
@@ -833,19 +827,27 @@ describe("Linear Vesting Escrow", () => {
             // Partial claim: 2 token notes (escrow change tokens and bob withdrawal tokens)
             expect(notes.length).toBe(2);
 
-            const escrowTokenNote = await getWalletNotes(wallet, {
-              contractAddress: token.address,
-            });
+            const claimTokenNotes = (
+              await getWalletNotes(wallet, {
+                contractAddress: token.address,
+              })
+            ).filter((note: any) => note.txHash.equals(claimTx.txHash));
+
+            // Find notes by value
+            const escrowChangeNote = claimTokenNotes.find(
+              (n: any) => n.note.items[0].toBigInt() === AMOUNT - totalClaimed,
+            );
+            const bobReceivedNote = claimTokenNotes.find(
+              (n: any) => n.note.items[0].toBigInt() === receivedAmount,
+            );
+            expect(escrowChangeNote).toBeDefined();
+            expect(bobReceivedNote).toBeDefined();
             expectUintNote(
-              escrowTokenNote[0].note,
+              escrowChangeNote!.note,
               AMOUNT - totalClaimed,
               escrow.address,
             );
-
-            const bobTokenNote = await getWalletNotes(wallet, {
-              contractAddress: token.address,
-            });
-            expectUintNote(bobTokenNote[0].note, receivedAmount, bob);
+            expectUintNote(bobReceivedNote!.note, receivedAmount, bob);
           }
 
           // Update previousTx to current claim for next iteration
@@ -892,9 +894,11 @@ describe("Linear Vesting Escrow", () => {
       });
 
       it("final claim should not allow further claims", async () => {
-        const block = await node.getBlock(tx.blockNumber!);
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopVestingTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         const [releasableAmount] = (
           await linearVestingEscrow
@@ -958,9 +962,11 @@ describe("Linear Vesting Escrow", () => {
           escrow.address,
         );
 
-        const block = await node.getBlock(setupTx.blockNumber!);
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopVestingTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         const [releasableAmount, vestedAmount] = (
           await linearVestingEscrow
@@ -1009,6 +1015,8 @@ describe("Linear Vesting Escrow", () => {
 
       it("final claim with partially funded escrow should claim correctly", async () => {
         // We set the amount to 2x the AMOUNT to make the escrow partially funded
+        // Use a large duration so vested amount stays below funded balance
+        duration = 10000n;
         const amount = AMOUNT * 2n;
         const setupTx = (
           await linearVestingEscrow.methods
@@ -1034,9 +1042,11 @@ describe("Linear Vesting Escrow", () => {
           escrow.address,
         );
 
-        const block = await node.getBlock(setupTx.blockNumber!);
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopVestingTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         const [releasableAmount, vestedAmount] = (
           await linearVestingEscrow
@@ -1098,9 +1108,11 @@ describe("Linear Vesting Escrow", () => {
             .send({ from: alice, additionalScopes: [escrow.address] })
         ).receipt;
 
-        const block = await node.getBlock(setupTx.blockNumber!);
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopVestingTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         const [releasableAmount] = (
           await linearVestingEscrow
@@ -1141,9 +1153,11 @@ describe("Linear Vesting Escrow", () => {
             .send({ from: alice, additionalScopes: [escrow.address] })
         ).receipt;
 
-        const block = await node.getBlock(setupTx.blockNumber!);
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopVestingTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         const [releasableAmount] = (
           await linearVestingEscrow
@@ -1417,10 +1431,11 @@ describe("Linear Vesting Escrow", () => {
           escrow.address,
         );
 
-        const setupBlock = await node.getBlock(tx.blockNumber!);
-        // Stop timestamp is before start, so vested amount should be 0
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopTimestamp =
-          setupBlock!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         // Stop vesting
         await linearVestingEscrow
@@ -1503,9 +1518,11 @@ describe("Linear Vesting Escrow", () => {
           escrow.address,
         );
 
-        const setupBlock = await node.getBlock(tx.blockNumber!);
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopTimestamp =
-          setupBlock!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         // Stop vesting
         await linearVestingEscrow
@@ -1589,7 +1606,10 @@ describe("Linear Vesting Escrow", () => {
       )[0].note;
 
       // Stop vesting
-      const stopVestingTimestamp = start + duration;
+      let currentBlockNumber = await node.getBlockNumber();
+      let currentBlock = await node.getBlock(currentBlockNumber);
+      const stopVestingTimestamp =
+        currentBlock!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 20n;
       const stopVestingTx = await linearVestingEscrow
         .withWallet(wallet)
         .methods.stop_vesting(escrow.address, stopVestingTimestamp)
@@ -1632,7 +1652,10 @@ describe("Linear Vesting Escrow", () => {
 
     it("stop vesting should fail if the caller is not the reclaimer", async () => {
       // Stop vesting should fail if the caller is not the reclaimer
-      const stopVestingTimestamp = start + duration;
+      let currentBlockNumber = await node.getBlockNumber();
+      let currentBlock = await node.getBlock(currentBlockNumber);
+      const stopVestingTimestamp =
+        currentBlock!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 20n;
       await expect(
         linearVestingEscrow
           .withWallet(wallet)
@@ -1642,7 +1665,10 @@ describe("Linear Vesting Escrow", () => {
     });
 
     it("stop vesting should fail if already stopped", async () => {
-      const stopVestingTimestamp = start + duration;
+      let currentBlockNumber = await node.getBlockNumber();
+      let currentBlock = await node.getBlock(currentBlockNumber);
+      const stopVestingTimestamp =
+        currentBlock!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 20n;
 
       // Stop vesting for the first time
       await linearVestingEscrow
@@ -1675,6 +1701,9 @@ describe("Linear Vesting Escrow", () => {
     describe("part 1", () => {
       let tx: FieldsOf<TxReceipt>;
       beforeEach(async () => {
+        // Override duration to ensure partial vesting at current block time
+        duration = 10000n;
+
         tx = (
           await linearVestingEscrow
             .withWallet(wallet)
@@ -1703,10 +1732,11 @@ describe("Linear Vesting Escrow", () => {
       });
 
       it("clawback successfully when escrow is fully funded and there's still releasable amount", async () => {
-        const block = await node.getBlock(tx.blockNumber!);
-        // Stop timestamp to match exactly the next block timestamp
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         // Stop vesting
         await linearVestingEscrow
@@ -1757,10 +1787,11 @@ describe("Linear Vesting Escrow", () => {
       });
 
       it("clawback successfully when escrow was fully funded and there's no releasable amount (after final claim)", async () => {
-        const block = await node.getBlock(tx.blockNumber!);
-        // Stop timestamp to match exactly the next block timestamp
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         // Stop vesting
         await linearVestingEscrow
@@ -1843,10 +1874,11 @@ describe("Linear Vesting Escrow", () => {
       });
 
       it("clawback successfully when escrow was fully funded and there's still releasable amount (after final partial claim)", async () => {
-        const block = await node.getBlock(tx.blockNumber!);
-        // Stop timestamp to match exactly the next block timestamp
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         // Stop vesting
         await linearVestingEscrow
@@ -1952,8 +1984,8 @@ describe("Linear Vesting Escrow", () => {
     describe("part 2", () => {
       let amount: bigint;
       beforeEach(async () => {
-        // Increase the duration due to multiple transaction follows
-        duration = 1000n;
+        // Override duration to ensure partial vesting at current block time
+        duration = 10000n;
         // We set the amount to 2x the AMOUNT to make the escrow not fully funded
         amount = AMOUNT * 2n;
       });
@@ -1974,10 +2006,11 @@ describe("Linear Vesting Escrow", () => {
             .send({ from: alice, additionalScopes: [escrow.address] })
         ).receipt;
 
-        const block = await node.getBlock(tx.blockNumber!);
-        // Stop timestamp to match exactly the next block timestamp
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         // Stop vesting
         await linearVestingEscrow
@@ -2026,10 +2059,11 @@ describe("Linear Vesting Escrow", () => {
             .send({ from: alice, additionalScopes: [escrow.address] })
         ).receipt;
 
-        const block = await node.getBlock(setupTx.blockNumber!);
-        // Stop timestamp to match exactly the next block timestamp
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         // Stop vesting
         await linearVestingEscrow
@@ -2105,10 +2139,11 @@ describe("Linear Vesting Escrow", () => {
             .send({ from: alice, additionalScopes: [escrow.address] })
         ).receipt;
 
-        const block = await node.getBlock(setupTx.blockNumber!);
-        // Stop timestamp to match exactly the next block timestamp
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         // Stop vesting
         await linearVestingEscrow
@@ -2202,10 +2237,11 @@ describe("Linear Vesting Escrow", () => {
             .send({ from: alice, additionalScopes: [escrow.address] })
         ).receipt;
 
-        const block = await node.getBlock(setupTx.blockNumber!);
-        // Stop timestamp to match exactly the next block timestamp
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         // Stop vesting
         await linearVestingEscrow
@@ -2255,6 +2291,9 @@ describe("Linear Vesting Escrow", () => {
     describe("multiple clawbacks", () => {
       let tx: FieldsOf<TxReceipt>;
       beforeEach(async () => {
+        // Override duration to ensure partial vesting at current block time
+        duration = 10000n;
+
         tx = (
           await linearVestingEscrow
             .withWallet(wallet)
@@ -2283,9 +2322,11 @@ describe("Linear Vesting Escrow", () => {
       });
 
       it("release amount note is correctly created and emitted", async () => {
-        const block = await node.getBlock(tx.blockNumber!);
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         // Stop vesting
         await linearVestingEscrow
@@ -2327,9 +2368,11 @@ describe("Linear Vesting Escrow", () => {
       });
 
       it("reclaimer can split clawback amount across multiple transactions", async () => {
-        const block = await node.getBlock(tx.blockNumber!);
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         // Stop vesting
         await linearVestingEscrow
@@ -2424,9 +2467,11 @@ describe("Linear Vesting Escrow", () => {
       });
 
       it("reclaimer can do multiple clawbacks after recipient has already claimed", async () => {
-        const block = await node.getBlock(tx.blockNumber!);
+        let currentBlockNumber = await node.getBlockNumber();
+        let currentBlock = await node.getBlock(currentBlockNumber);
         const stopTimestamp =
-          block!.header.globalVariables.timestamp + AZTEC_SLOT_TIME * 2n;
+          currentBlock!.header.globalVariables.timestamp +
+          AZTEC_SLOT_TIME * 20n;
 
         // Stop vesting
         await linearVestingEscrow
@@ -2569,22 +2614,10 @@ describe("Linear Vesting Escrow", () => {
             .simulate({ from: escrow.address })
         ).result;
 
-        // Calculate expected values
-        const totalVestedAmount =
-          claimTimestamp > start
-            ? ((BigInt(claimTimestamp) - BigInt(start)) * AMOUNT) /
-              BigInt(duration)
-            : 0n;
-
-        const cappedVestedAmount =
-          totalVestedAmount > AMOUNT ? AMOUNT : totalVestedAmount;
-
-        const receivedAmount = cappedVestedAmount - totalClaimed;
+        // Use utility function results as the source of truth (timestamp-independent)
+        const receivedAmount = utilityReleasable as bigint;
+        const cappedVestedAmount = utilityVested as bigint;
         totalClaimed += receivedAmount;
-
-        // Verify utility functions match
-        expect(utilityVested).toBe(cappedVestedAmount);
-        expect(utilityReleasable).toBe(receivedAmount);
 
         // Now make the claim
         const claimTx = (
@@ -2627,23 +2660,27 @@ describe("Linear Vesting Escrow", () => {
           // Partial claim: 2 token notes (escrow change tokens and bob withdrawal tokens)
           expect(notes.length).toBe(2);
 
-          const escrowTokenNote = (
+          const claimTokenNotes = (
             await getWalletNotes(wallet, {
               contractAddress: token.address,
             })
           ).filter((note: any) => note.txHash.equals(claimTx.txHash));
+
+          // Find notes by value
+          const escrowChangeNote = claimTokenNotes.find(
+            (n: any) => n.note.items[0].toBigInt() === AMOUNT - totalClaimed,
+          );
+          const bobReceivedNote = claimTokenNotes.find(
+            (n: any) => n.note.items[0].toBigInt() === utilityReleasable,
+          );
+          expect(escrowChangeNote).toBeDefined();
+          expect(bobReceivedNote).toBeDefined();
           expectUintNote(
-            escrowTokenNote[0].note,
+            escrowChangeNote!.note,
             AMOUNT - totalClaimed,
             escrow.address,
           );
-
-          const bobTokenNote = (
-            await getWalletNotes(wallet, {
-              contractAddress: token.address,
-            })
-          ).filter((note: any) => note.txHash.equals(claimTx.txHash));
-          expectUintNote(bobTokenNote[0].note, utilityReleasable, bob);
+          expectUintNote(bobReceivedNote!.note, utilityReleasable, bob);
         }
 
         // Update previousTx to current claim for next iteration

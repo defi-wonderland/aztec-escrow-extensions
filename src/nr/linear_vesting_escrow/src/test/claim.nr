@@ -2,9 +2,11 @@ use crate::LinearVestingEscrowLogic;
 use crate::test::utils;
 use token::test::utils as token_utils;
 
-// TODO: cannot deploy escrow contract with custom salt. This should pass.
+// TODO (reenable test): TXE scope enforcement means only the caller's notes are accessible during
+// private execution. The escrow's notes are not in scope when called from the logic contract.
+// The TS tests handle this via `additionalScopes: [escrow.address]`, but TXE doesn't support it yet.
 // #[test]
-#[test(should_fail_with = "Incorrect escrow deployment")]
+#[allow(dead_code)]
 unconstrained fn claim_fully_vested_tokens_success() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let duration = 10;
@@ -38,9 +40,11 @@ unconstrained fn claim_fully_vested_tokens_success() {
     token_utils::check_private_balance(*env, token_contract_address, recipient, amount);
 }
 
-// TODO: cannot deploy escrow contract with custom salt. This should pass.
+// TODO (reenable test): TXE scope enforcement means only the caller's notes are accessible during
+// private execution. The escrow's notes are not in scope when called from the logic contract.
+// The TS tests handle this via `additionalScopes: [escrow.address]`, but TXE doesn't support it yet.
 // #[test]
-#[test(should_fail_with = "Incorrect escrow deployment")]
+#[allow(dead_code)]
 unconstrained fn claim_partially_vested_tokens_success() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let duration = 10;
@@ -82,10 +86,11 @@ unconstrained fn claim_partially_vested_tokens_success() {
     token_utils::check_private_balance(*env, token_contract_address, recipient, half_amount);
 }
 
-// TODO: cannot deploy escrow contract with custom salt. This should pass.
-// #[test]
+// TODO (reenable test): TXE scope enforcement means only the caller's notes are accessible during
+// private execution. The escrow's notes are not in scope when called from the logic contract.
+// The TS tests handle this via `additionalScopes: [escrow.address]`, but TXE doesn't support it yet.
 // #[test(should_fail_with = "Balance too low 'subtracted > 0")]
-#[test(should_fail_with = "Incorrect escrow deployment")]
+#[allow(dead_code)]
 unconstrained fn claim_before_start_time() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let duration = 10;
@@ -116,9 +121,11 @@ unconstrained fn claim_before_start_time() {
     );
 }
 
-// TODO: cannot deploy escrow contract with custom salt. This should pass.
+// TODO (reenable test): TXE scope enforcement means only the caller's notes are accessible during
+// private execution. The escrow's notes are not in scope when called from the logic contract.
+// The TS tests handle this via `additionalScopes: [escrow.address]`, but TXE doesn't support it yet.
 // #[test]
-#[test(should_fail_with = "Incorrect escrow deployment")]
+#[allow(dead_code)]
 unconstrained fn claim_after_stop_vesting_success() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let duration = 10;

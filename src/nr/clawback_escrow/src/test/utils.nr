@@ -57,9 +57,9 @@ pub unconstrained fn deploy_and_create_escrow(
     ) -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
     let (env, owner, recipient) = setup(with_account_contracts);
 
-    let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1);
     let escrow_class_id = escrow_utils::get_escrow_class_id();
     let logic_contract_address = deploy_clawback_logic(env, owner, escrow_class_id);
+    let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1, logic_contract_address);
 
     let (_, secret_key_1, _, _) = get_test_vector();
 

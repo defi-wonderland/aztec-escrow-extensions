@@ -1,29 +1,25 @@
 import { defineConfig } from "vitest/config";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve as pathResolve } from "node:path";
+import { createRequire } from "node:module";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const require = createRequire(import.meta.url);
+const nobleUtilsPath = require.resolve("@noble/hashes/utils");
 
 export default defineConfig({
   resolve: {
+    alias: {
+      "@noble/hashes/utils": nobleUtilsPath,
+    },
     conditions: ["import", "module", "browser", "default"],
   },
   test: {
-    // aztec sandbox tests take quite some time
+    // aztec local network tests take quite some time
     hookTimeout: 200000,
     testTimeout: 200000,
-    globalSetup: "./vitest.setup.ts",
-    fileParallelism: false,
     globals: true,
+    fileParallelism: false,
     pool: "forks",
-    poolOptions: {
-      forks: {
-        singleFork: true,
-        isolate: false,
-        execArgv: ["--experimental-vm-modules"],
-      },
-    },
+    isolate: false,
+    execArgv: ["--experimental-vm-modules"],
     // Use new API to inline dependencies through Vite's transform pipeline
     // This ensures @aztec packages use Vite's module resolution with proper JSON import handling
     server: {
