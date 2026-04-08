@@ -402,57 +402,6 @@ export async function getWalletNotes(
 }
 
 /**
- * Patches the wallet's scope resolution to include the escrow address.
- * In v4, all PXE operations are scoped to [from]. This means utility/view
- * functions and sends can't read notes belonging to the escrow unless the
- * escrow address is included in the scope.
- */
-export function addEscrowToWalletScopes(
-  wallet: EmbeddedWallet,
-  escrowAddress: AztecAddress,
-) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const w = wallet as any;
-
-  // Patch scopesFor (legacy, used internally)
-  const originalScopesFor = w.scopesFor.bind(wallet);
-  w.scopesFor = (from: AztecAddress): AztecAddress[] => {
-    const scopes: AztecAddress[] = originalScopesFor(from);
-    if (!scopes.some((s: AztecAddress) => s.equals(escrowAddress))) {
-      scopes.push(escrowAddress);
-    }
-    return scopes;
-  };
-
-  // Patch scopesFrom (used by simulateTx, proveTx, sendTx in v4.1)
-  const originalScopesFrom = w.scopesFrom.bind(wallet);
-  w.scopesFrom = (
-    from: AztecAddress,
-    additionalScopes: AztecAddress[] = [],
-  ): AztecAddress[] => {
-    const scopes: AztecAddress[] = originalScopesFrom(from, additionalScopes);
-    if (!scopes.some((s: AztecAddress) => s.equals(escrowAddress))) {
-      scopes.push(escrowAddress);
-    }
-    return scopes;
-  };
-
-  // Patch executeUtility (used by utility function .simulate() calls)
-  const originalExecuteUtility = w.executeUtility.bind(wallet);
-  w.executeUtility = (
-    call: unknown,
-    opts: { scope: AztecAddress; authWitnesses?: unknown[] },
-  ) => {
-    return w.pxe.executeUtility(call, {
-      authwits: opts.authWitnesses,
-      scopes: opts.scope.equals(escrowAddress)
-        ? [escrowAddress]
-        : [opts.scope, escrowAddress],
-    });
-  };
-}
-
-/**
  * Syncs the PXE private state via debug utilities.
  * In v4, sync_state() on contracts is forbidden via simulate.
  */
