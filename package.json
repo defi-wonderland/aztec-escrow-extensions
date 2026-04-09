@@ -33,15 +33,15 @@
     "@defi-wonderland/aztec-standards": "https://github.com/defi-wonderland/aztec-standards/releases/download/prerelease-ece5cf6/defi-wonderland-aztec-standards-4.2.0-aztecnr-rc.2-prerelease.ece5cf6.tgz"
   },
   "devDependencies": {
-    "@commitlint/cli": "19.8.1",
-    "@commitlint/config-conventional": "19.8.1",
-    "@types/node": "22.5.1",
+    "@commitlint/cli": "20.3.1",
+    "@commitlint/config-conventional": "20.2.0",
+    "@types/node": "25.0.10",
     "husky": "9.1.7",
-    "lint-staged": "16.1.5",
-    "prettier": "3.6.2",
-    "tsx": "4.20.4",
-    "typescript": "5.9.2",
-    "vitest": "3.2.4"
+    "lint-staged": "16.2.7",
+    "prettier": "3.8.0",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3",
+    "vitest": "4.0.17"
   },
   "config": {
     "aztecVersion": "4.2.0-aztecnr-rc.2"
