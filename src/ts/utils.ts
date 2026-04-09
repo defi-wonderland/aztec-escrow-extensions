@@ -390,15 +390,36 @@ export async function getWalletNotes(
     contractAddress: AztecAddress;
     owner?: AztecAddress;
     storageSlot?: Fr;
-    scopes?: "ALL_SCOPES" | AztecAddress[];
+    scopes?: AztecAddress[];
   },
 ) {
-  const fullFilter = {
-    scopes: "ALL_SCOPES" as const,
-    ...filter,
-  };
+  if (!filter.scopes) {
+    const accounts = await wallet.getAccounts();
+    const addressBook = await wallet.getAddressBook();
+    const scopeSet = new Set<string>();
+    const scopes: AztecAddress[] = [];
+    for (const a of accounts) {
+      const addr = (a as any).item ?? a;
+      if (!scopeSet.has(addr.toString())) {
+        scopeSet.add(addr.toString());
+        scopes.push(addr);
+      }
+    }
+    for (const a of addressBook) {
+      const addr = (a as any).item ?? a;
+      if (!scopeSet.has(addr.toString())) {
+        scopeSet.add(addr.toString());
+        scopes.push(addr);
+      }
+    }
+    // Always include the queried contract address
+    if (!scopeSet.has(filter.contractAddress.toString())) {
+      scopes.push(filter.contractAddress);
+    }
+    filter = { ...filter, scopes };
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (wallet as any).pxe.debug.getNotes(fullFilter);
+  return (wallet as any).pxe.debug.getNotes(filter);
 }
 
 /**

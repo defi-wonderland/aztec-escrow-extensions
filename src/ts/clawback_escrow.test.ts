@@ -115,6 +115,9 @@ describe("Clawback Escrow", () => {
       escrowSalt,
     )) as EscrowContract;
 
+    // Register escrow as a sender so it's included in address book scopes
+    await wallet.registerSender(escrow.address, "escrow");
+
     // Register the escrow contract
     const escrowInstance = (await node.getContract(
       escrow.address,

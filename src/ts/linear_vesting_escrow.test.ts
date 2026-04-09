@@ -131,6 +131,11 @@ describe("Linear Vesting Escrow", () => {
     // Deploy a token contract
     token = (await deployTokenWithMinter(wallet, alice)) as TokenContract;
 
+    // Register contract addresses as senders so they're included in address book scopes
+    await wallet.registerSender(escrow.address, "escrow");
+    await wallet.registerSender(linearVestingEscrow.address, "logic");
+    await wallet.registerSender(token.address, "token");
+
     // Register the escrow contract
     const escrowInstance = (await node.getContract(
       escrow.address,
