@@ -91,7 +91,8 @@ unconstrained fn create_linear_vesting_escrow_success() {
     let escrow_class_id = escrow_utils::get_escrow_class_id();
     let logic_contract_address =
         utils::deploy_linear_vesting_escrow_logic(env, owner, escrow_class_id);
-    let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1, logic_contract_address);
+    let escrow_contract_address =
+        escrow_utils::deploy_escrow_with_secret(env, 1, logic_contract_address);
 
     let (_, secret_key_1, _, _) = utils::get_test_vector();
 
