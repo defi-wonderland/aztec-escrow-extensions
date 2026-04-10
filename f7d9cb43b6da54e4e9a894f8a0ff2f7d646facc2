@@ -1,0 +1,29 @@
+src/ts/clawback_escrow.test.ts
+  4023a308184cf733 44-47,195,206,213,302,347,353,383,476,562,613,619,649,741
+package.json
+  4023a308184cf733 3,25-33,47
+src/ts/utils.ts
+  4023a308184cf733 393,395,397-427,429
+src/ts/linear_vesting_escrow.test.ts
+  4023a308184cf733 85-88,255,263,269,402,474,481,497,600,606,620,630,805,811,825,835,999,1079,1320,1475,1562,1606,1626,1775,1862,1949,2113,2211,2363,2421,2452,2560,2640,2646,2658,2668
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "f7d9cb43b6da54e4e9a894f8a0ff2f7d646facc2",
+  "prompts": {
+    "4023a308184cf733": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e78580ad-8134-4b9a-b394-8f7f6a7b5cdf",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": null,
+      "messages": [],
+      "total_additions": 125,
+      "total_deletions": 89,
+      "accepted_lines": 101,
+      "overriden_lines": 0
+    }
+  }
+}
