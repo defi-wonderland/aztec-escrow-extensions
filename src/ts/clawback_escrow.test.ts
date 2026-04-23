@@ -190,6 +190,7 @@ describe("Clawback Escrow", () => {
         const notes = (
           await getWalletNotes(wallet, {
             contractAddress: clawbackEscrow.address,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(setup_tx.txHash));
 
@@ -297,6 +298,7 @@ describe("Clawback Escrow", () => {
       const notes = (
         await getWalletNotes(wallet, {
           contractAddress: token.address,
+          additionalScopes: [escrow.address],
         })
       ).filter((note: any) => note.txHash.equals(claimTx.txHash));
       expect(notes.length).toBe(1);
@@ -342,12 +344,14 @@ describe("Clawback Escrow", () => {
       const notes1 = (
         await getWalletNotes(wallet, {
           contractAddress: token.address,
+          additionalScopes: [escrow.address],
         })
       ).filter((note: any) => note.txHash.equals(claimTx1.txHash));
       expect(notes1.length).toBe(2);
       const claimNotes = (
         await getWalletNotes(wallet, {
           contractAddress: token.address,
+          additionalScopes: [escrow.address],
         })
       ).filter((note: any) => note.txHash.equals(claimTx1.txHash));
       expect(claimNotes.length).toBe(2);
@@ -378,6 +382,7 @@ describe("Clawback Escrow", () => {
       const notes2 = (
         await getWalletNotes(wallet, {
           contractAddress: token.address,
+          additionalScopes: [escrow.address],
         })
       ).filter((note: any) => note.txHash.equals(claimTx2.txHash));
       expect(notes2.length).toBe(1);
@@ -471,6 +476,7 @@ describe("Clawback Escrow", () => {
       const notes = (
         await getWalletNotes(wallet, {
           contractAddress: nft.address,
+          additionalScopes: [escrow.address],
         })
       ).filter((note: any) => note.txHash.equals(claimTx.txHash));
       expect(notes.length).toBe(1);
@@ -557,6 +563,7 @@ describe("Clawback Escrow", () => {
       const notes = (
         await getWalletNotes(wallet, {
           contractAddress: token.address,
+          additionalScopes: [escrow.address],
         })
       ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
       expect(notes.length).toBe(1);
@@ -608,12 +615,14 @@ describe("Clawback Escrow", () => {
       const notes1 = (
         await getWalletNotes(wallet, {
           contractAddress: token.address,
+          additionalScopes: [escrow.address],
         })
       ).filter((note: any) => note.txHash.equals(clawbackTx1.txHash));
       expect(notes1.length).toBe(2);
       const claimNotes = (
         await getWalletNotes(wallet, {
           contractAddress: token.address,
+          additionalScopes: [escrow.address],
         })
       ).filter((note: any) => note.txHash.equals(clawbackTx1.txHash));
       expect(claimNotes.length).toBe(2);
@@ -644,6 +653,7 @@ describe("Clawback Escrow", () => {
       const notes2 = (
         await getWalletNotes(wallet, {
           contractAddress: token.address,
+          additionalScopes: [escrow.address],
         })
       ).filter((note: any) => note.txHash.equals(clawbackTx2.txHash));
       expect(notes2.length).toBe(1);
@@ -736,6 +746,7 @@ describe("Clawback Escrow", () => {
       const notes = (
         await getWalletNotes(wallet, {
           contractAddress: nft.address,
+          additionalScopes: [escrow.address],
         })
       ).filter((note: any) => note.txHash.equals(claimTx.txHash));
       expect(notes.length).toBe(1);

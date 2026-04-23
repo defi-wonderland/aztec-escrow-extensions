@@ -250,6 +250,7 @@ describe("Linear Vesting Escrow", () => {
 
       const notes = await getWalletNotes(wallet, {
         contractAddress: linearVestingEscrow.address,
+        additionalScopes: [escrow.address],
       });
 
       // We expect 2 notes: 1 for the linear vesting escrow and 1 for the released amount
@@ -259,12 +260,14 @@ describe("Linear Vesting Escrow", () => {
         await getWalletNotes(wallet, {
           contractAddress: linearVestingEscrow.address,
           storageSlot: slotEscrowNotes,
+          additionalScopes: [escrow.address],
         })
       )[0].note;
       const releasedAmountNotes = (
         await getWalletNotes(wallet, {
           contractAddress: linearVestingEscrow.address,
           storageSlot: slotReleasedAmountNotes,
+          additionalScopes: [escrow.address],
         })
       )[0].note;
 
@@ -397,6 +400,7 @@ describe("Linear Vesting Escrow", () => {
         // Assert that bob received the note
         const notes = await getWalletNotes(wallet, {
           contractAddress: token.address,
+          additionalScopes: [escrow.address],
         });
         expect(notes.length).toBe(1);
         expectUintNote(notes[0].note, AMOUNT, bob);
@@ -470,12 +474,14 @@ describe("Linear Vesting Escrow", () => {
         const notes = await getWalletNotes(wallet, {
           contractAddress: linearVestingEscrow.address,
           storageSlot: slotReleasedAmountNotes,
+          additionalScopes: [escrow.address],
         });
         expect(notes.length).toBe(1);
 
         const claimTokenNotes = (
           await getWalletNotes(wallet, {
             contractAddress: token.address,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(claimTx.txHash));
 
@@ -493,6 +499,7 @@ describe("Linear Vesting Escrow", () => {
           await getWalletNotes(wallet, {
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
+            additionalScopes: [escrow.address],
           })
         )[0].note;
         expect(releasedAmountNote.items[0].toBigInt()).toBe(receivedAmount);
@@ -595,6 +602,7 @@ describe("Linear Vesting Escrow", () => {
           const notes = (
             await getWalletNotes(wallet, {
               contractAddress: newToken.address,
+              additionalScopes: [escrow.address],
             })
           ).filter((note: any) => note.txHash.equals(claimTx.txHash));
 
@@ -602,6 +610,7 @@ describe("Linear Vesting Escrow", () => {
             await getWalletNotes(wallet, {
               contractAddress: linearVestingEscrow.address,
               storageSlot: slotReleasedAmountNotes,
+              additionalScopes: [escrow.address],
             })
           )[0].note;
           expect(releasedAmountNote.items[0].toBigInt()).toBe(
@@ -615,6 +624,7 @@ describe("Linear Vesting Escrow", () => {
             const bobTokenNote = (
               await getWalletNotes(wallet, {
                 contractAddress: newToken.address,
+                additionalScopes: [escrow.address],
               })
             ).filter((note: any) => note.txHash.equals(claimTx.txHash));
             expectUintNote(bobTokenNote[0].note, receivedAmount, bob);
@@ -625,6 +635,7 @@ describe("Linear Vesting Escrow", () => {
             const claimTokenNotes = (
               await getWalletNotes(wallet, {
                 contractAddress: newToken.address,
+                additionalScopes: [escrow.address],
               })
             ).filter((note: any) => note.txHash.equals(claimTx.txHash));
 
@@ -800,6 +811,7 @@ describe("Linear Vesting Escrow", () => {
           const notes = (
             await getWalletNotes(wallet, {
               contractAddress: token.address,
+              additionalScopes: [escrow.address],
             })
           ).filter((note: any) => note.txHash.equals(claimTx.txHash));
 
@@ -807,6 +819,7 @@ describe("Linear Vesting Escrow", () => {
             await getWalletNotes(wallet, {
               contractAddress: linearVestingEscrow.address,
               storageSlot: slotReleasedAmountNotes,
+              additionalScopes: [escrow.address],
             })
           )[0].note;
           expect(releasedAmountNote.items[0].toBigInt()).toBe(
@@ -820,6 +833,7 @@ describe("Linear Vesting Escrow", () => {
             const bobTokenNote = (
               await getWalletNotes(wallet, {
                 contractAddress: token.address,
+                additionalScopes: [escrow.address],
               })
             ).filter((note: any) => note.txHash.equals(claimTx.txHash));
             expectUintNote(bobTokenNote[0].note, receivedAmount, bob);
@@ -830,6 +844,7 @@ describe("Linear Vesting Escrow", () => {
             const claimTokenNotes = (
               await getWalletNotes(wallet, {
                 contractAddress: token.address,
+                additionalScopes: [escrow.address],
               })
             ).filter((note: any) => note.txHash.equals(claimTx.txHash));
 
@@ -995,6 +1010,7 @@ describe("Linear Vesting Escrow", () => {
           await getWalletNotes(wallet, {
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
+            additionalScopes: [escrow.address],
           })
         )[0].note;
 
@@ -1075,6 +1091,7 @@ describe("Linear Vesting Escrow", () => {
           await getWalletNotes(wallet, {
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
+            additionalScopes: [escrow.address],
           })
         )[0].note;
 
@@ -1315,6 +1332,7 @@ describe("Linear Vesting Escrow", () => {
         // Assert bob received the note
         const notes = await getWalletNotes(wallet, {
           contractAddress: token.address,
+          additionalScopes: [escrow.address],
         });
         expect(notes.length).toBe(1);
         expectUintNote(notes[0].note, AMOUNT, bob);
@@ -1470,6 +1488,7 @@ describe("Linear Vesting Escrow", () => {
         const notes = (
           await getWalletNotes(wallet, {
             contractAddress: token.address,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(1);
@@ -1557,6 +1576,7 @@ describe("Linear Vesting Escrow", () => {
         const notes = (
           await getWalletNotes(wallet, {
             contractAddress: token.address,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(1);
@@ -1602,6 +1622,7 @@ describe("Linear Vesting Escrow", () => {
         await getWalletNotes(wallet, {
           contractAddress: linearVestingEscrow.address,
           storageSlot: slotEscrowNotes,
+          additionalScopes: [escrow.address],
         })
       )[0].note;
 
@@ -1622,6 +1643,7 @@ describe("Linear Vesting Escrow", () => {
         await getWalletNotes(wallet, {
           contractAddress: linearVestingEscrow.address,
           storageSlot: slotEscrowNotes,
+          additionalScopes: [escrow.address],
         })
       )[0].note;
 
@@ -1770,6 +1792,7 @@ describe("Linear Vesting Escrow", () => {
         const notes = (
           await getWalletNotes(wallet, {
             contractAddress: token.address,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(2);
@@ -1857,6 +1880,7 @@ describe("Linear Vesting Escrow", () => {
         const notes = (
           await getWalletNotes(wallet, {
             contractAddress: token.address,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(1);
@@ -1944,6 +1968,7 @@ describe("Linear Vesting Escrow", () => {
         const notes = (
           await getWalletNotes(wallet, {
             contractAddress: token.address,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(2);
@@ -2108,6 +2133,7 @@ describe("Linear Vesting Escrow", () => {
         const notes = (
           await getWalletNotes(wallet, {
             contractAddress: token.address,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(2);
@@ -2206,6 +2232,7 @@ describe("Linear Vesting Escrow", () => {
         const notes = (
           await getWalletNotes(wallet, {
             contractAddress: token.address,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(clawbackTx.txHash));
         expect(notes.length).toBe(1);
@@ -2359,6 +2386,7 @@ describe("Linear Vesting Escrow", () => {
           await getWalletNotes(wallet, {
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(clawbackTx.txHash))[0].note;
 
@@ -2417,6 +2445,7 @@ describe("Linear Vesting Escrow", () => {
           await getWalletNotes(wallet, {
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(clawbackTx1.txHash))[0].note;
 
@@ -2448,6 +2477,7 @@ describe("Linear Vesting Escrow", () => {
           await getWalletNotes(wallet, {
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(clawbackTx2.txHash))[0].note;
 
@@ -2556,6 +2586,7 @@ describe("Linear Vesting Escrow", () => {
           await getWalletNotes(wallet, {
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(clawbackTx2.txHash))[0].note;
 
@@ -2635,6 +2666,7 @@ describe("Linear Vesting Escrow", () => {
         const notes = (
           await getWalletNotes(wallet, {
             contractAddress: token.address,
+            additionalScopes: [escrow.address],
           })
         ).filter((note: any) => note.txHash.equals(claimTx.txHash));
 
@@ -2642,6 +2674,7 @@ describe("Linear Vesting Escrow", () => {
           await getWalletNotes(wallet, {
             contractAddress: linearVestingEscrow.address,
             storageSlot: slotReleasedAmountNotes,
+            additionalScopes: [escrow.address],
           })
         )[0].note;
         expect(releasedAmountNote.items[0].toBigInt()).toBe(utilityVested);
@@ -2653,6 +2686,7 @@ describe("Linear Vesting Escrow", () => {
           const bobTokenNote = (
             await getWalletNotes(wallet, {
               contractAddress: token.address,
+              additionalScopes: [escrow.address],
             })
           ).filter((note: any) => note.txHash.equals(claimTx.txHash));
           expectUintNote(bobTokenNote[0].note, utilityReleasable, bob);
@@ -2663,6 +2697,7 @@ describe("Linear Vesting Escrow", () => {
           const claimTokenNotes = (
             await getWalletNotes(wallet, {
               contractAddress: token.address,
+              additionalScopes: [escrow.address],
             })
           ).filter((note: any) => note.txHash.equals(claimTx.txHash));
 

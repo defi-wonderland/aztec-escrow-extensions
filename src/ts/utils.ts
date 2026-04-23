@@ -383,6 +383,11 @@ export async function setPublicAuthWit(
 /**
  * Access getNotes via the PXE debug utilities.
  * In v4, getNotes moved from the wallet to PXEDebugUtils.
+ * In v4.2, scopes must be an AztecAddress[] (the string "ALL_SCOPES" is no longer accepted).
+ *
+ * If no `scopes` are provided, this defaults to all registered accounts plus any
+ * `additionalScopes` (useful to include contract addresses like escrows that were
+ * registered with a secret key via `wallet.registerContract(..., secretKey)`).
  */
 export async function getWalletNotes(
   wallet: EmbeddedWallet,
@@ -390,15 +395,26 @@ export async function getWalletNotes(
     contractAddress: AztecAddress;
     owner?: AztecAddress;
     storageSlot?: Fr;
-    scopes?: "ALL_SCOPES" | AztecAddress[];
+    scopes?: AztecAddress[];
+    additionalScopes?: AztecAddress[];
   },
 ) {
-  const fullFilter = {
-    scopes: "ALL_SCOPES" as const,
-    ...filter,
-  };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (wallet as any).pxe.debug.getNotes(fullFilter);
+  const w = wallet as any;
+  let scopes: AztecAddress[];
+  if (filter.scopes) {
+    scopes = filter.scopes;
+  } else {
+    const registered = await w.pxe.getRegisteredAccounts();
+    scopes = registered.map((a: any) => a.address);
+    if (filter.additionalScopes) {
+      scopes = [...scopes, ...filter.additionalScopes];
+    }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { additionalScopes: _ignored, ...rest } = filter;
+  const fullFilter = { ...rest, scopes };
+  return w.pxe.debug.getNotes(fullFilter);
 }
 
 /**
