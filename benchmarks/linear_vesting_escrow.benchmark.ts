@@ -3,7 +3,6 @@ import { deriveKeys } from "@aztec/stdlib/keys";
 import type { Wallet } from "@aztec/aztec.js/wallet";
 import type { AztecNode } from "@aztec/aztec.js/node";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
-import { type AztecLMDBStoreV2 } from "@aztec/kv-store/lmdb-v2";
 import { getContractClassFromArtifact } from "@aztec/stdlib/contract";
 import type { ContractInstanceWithAddress } from "@aztec/aztec.js/contracts";
 import type { ContractFunctionInteractionCallIntent } from "@aztec/aztec.js/authorization";
@@ -12,13 +11,12 @@ import type { ContractFunctionInteractionCallIntent } from "@aztec/aztec.js/auth
 import { Benchmark, BenchmarkContext } from "@defi-wonderland/aztec-benchmark";
 import type { NamedBenchmarkedInteraction } from "@defi-wonderland/aztec-benchmark/dist/types.js";
 
-import { TokenContract } from "../src/artifacts/Token.js";
+import { TokenContract } from "@defi-wonderland/aztec-standards/dist/src/artifacts/Token.js";
 import {
   AMOUNT,
   deployEscrowWithPublicKeysAndSalt,
   deployLinearVestingEscrow,
   deployTokenWithMinter,
-  grumpkinScalarToFr,
   setupTestSuite,
 } from "../src/ts/utils.js";
 
@@ -26,7 +24,7 @@ import { LinearVestingEscrowLogicContract } from "../src/artifacts/LinearVesting
 import {
   EscrowContractArtifact,
   EscrowContract,
-} from "../src/artifacts/Escrow.js";
+} from "@defi-wonderland/aztec-standards/dist/src/artifacts/Escrow.js";
 
 // Escrow key counter starting at 1000 (no overlap with clawback escrow key counter), incremented on each deployment
 let escrowKeyCounter = 1000n;
@@ -61,26 +59,21 @@ async function deployEscrow(
     );
   }
 
-  const secretKeys = {
-    nsk_m: grumpkinScalarToFr(escrowKeys.masterNullifierSecretKey),
-    ivsk_m: grumpkinScalarToFr(escrowKeys.masterIncomingViewingSecretKey),
-    ovsk_m: grumpkinScalarToFr(escrowKeys.masterOutgoingViewingSecretKey),
-    tsk_m: grumpkinScalarToFr(escrowKeys.masterTaggingSecretKey),
-  };
+  const secretKey = escrowSk;
 
-  return { escrowContract, secretKeys };
+  return { escrowContract, secretKey };
 }
 
 // Extend the BenchmarkContext from the new package
 interface LinearVestingEscrowBenchmarkContext extends BenchmarkContext {
-  store: AztecLMDBStoreV2;
+  cleanup: () => Promise<void>;
   deployer: AztecAddress;
   wallet: Wallet;
   accounts: AztecAddress[];
   linearVestingEscrowContract: LinearVestingEscrowLogicContract;
   escrows: {
     contract: EscrowContract;
-    secretKeys: { nsk_m: Fr; ivsk_m: Fr; ovsk_m: Fr; tsk_m: Fr };
+    secretKey: Fr;
   }[];
   tokenContract: TokenContract;
   additionalData: {
@@ -102,7 +95,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
    */
 
   async setup(): Promise<LinearVestingEscrowBenchmarkContext> {
-    const { store, node, wallet, accounts } = await setupTestSuite(
+    const { node, wallet, accounts, cleanup } = await setupTestSuite(
       "bench-linear-vesting",
       true,
     );
@@ -121,17 +114,17 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     // 0 - Create, partial and full claim
     // 1 - [Create] Stop vesting and clawback (withdraw to recipient)
     // 3 - [Create and stop vesting] Final claim and clawback (no withdraw to recipient)
-    const { escrowContract: escrowContract_1, secretKeys: secretKeys_1 } =
+    const { escrowContract: escrowContract_1, secretKey: secretKey_1 } =
       await deployEscrow(wallet, node, deployer, linearVestingEscrowContract);
-    const { escrowContract: escrowContract_2, secretKeys: secretKeys_2 } =
+    const { escrowContract: escrowContract_2, secretKey: secretKey_2 } =
       await deployEscrow(wallet, node, deployer, linearVestingEscrowContract);
-    const { escrowContract: escrowContract_3, secretKeys: secretKeys_3 } =
+    const { escrowContract: escrowContract_3, secretKey: secretKey_3 } =
       await deployEscrow(wallet, node, deployer, linearVestingEscrowContract);
 
     const escrows = [
-      { contract: escrowContract_1, secretKeys: secretKeys_1 },
-      { contract: escrowContract_2, secretKeys: secretKeys_2 },
-      { contract: escrowContract_3, secretKeys: secretKeys_3 },
+      { contract: escrowContract_1, secretKey: secretKey_1 },
+      { contract: escrowContract_2, secretKey: secretKey_2 },
+      { contract: escrowContract_3, secretKey: secretKey_3 },
     ];
 
     // Deploy a token contract and fund the escrows
@@ -178,7 +171,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         start_2,
         duration_2,
         AMOUNT,
-        escrows[1].secretKeys,
+        escrows[1].secretKey,
       )
       .send({ from: alice })
       .wait();
@@ -211,7 +204,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         start_3,
         duration_3,
         AMOUNT,
-        escrows[2].secretKeys,
+        escrows[2].secretKey,
       )
       .send({ from: alice })
       .wait();
@@ -258,7 +251,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     };
 
     return {
-      store,
+      cleanup,
       deployer,
       wallet,
       accounts,
@@ -306,7 +299,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
               additionalData.start_1,
               additionalData.duration_1,
               AMOUNT,
-              escrows[0].secretKeys,
+              escrows[0].secretKey,
             ),
         },
       },
@@ -389,9 +382,9 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
 
   /**
    * Cleans up the benchmark environment for the LinearVestingEscrowContract.
-   * Deletes the store.
+   * Cleans up the wallet and data directory.
    */
   async teardown(context: LinearVestingEscrowBenchmarkContext): Promise<void> {
-    await context.store.delete();
+    await context.cleanup();
   }
 }

@@ -48,36 +48,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Detect Aztec version
-        id: aztec-version
-        run: |
-          AZTEC_VERSION=$(node -p "require('./package.json').config.aztecVersion")
-          echo "version=$AZTEC_VERSION" >> "$GITHUB_OUTPUT"
-          echo "Aztec version is $AZTEC_VERSION" 
-
-      - name: Install Aztec CLI
-        run: |
-          curl -s https://install.aztec.network > tmp.sh
-          VERSION=${{ steps.aztec-version.outputs.version }} bash tmp.sh <<< yes "yes"
-
-      - name: Update path
-        run: echo "/home/runner/.aztec/bin" >> $GITHUB_PATH
-
-      - name: Set Aztec version
-        run: |
-          VERSION=${{ steps.aztec-version.outputs.version }} aztec-up
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Aztec environment
+        id: setup-aztec
+        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@feat/next
         with:
-          node-version: '22'
-          cache: 'yarn'
-
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
+          run-compile: 'false'
 
       - name: Check Noir formatting
-        run: aztec fmt --check
+        run: nargo fmt --check
 
       - name: Check Javascript & Typescript formatting
-        run: yarn prettier '**/*.{js,ts}' --check 
+        run: yarn prettier '**/*.{js,ts}' --check

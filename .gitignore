@@ -10,3 +10,4 @@ benchmarks/*.json
 store
 .cursor
 store*
+wallet_data_*

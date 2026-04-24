@@ -9,7 +9,7 @@ unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
     let escrow_class_id = escrow_utils::get_escrow_class_id();
     let logic_contract_address = utils::deploy_clawback_logic(env, owner, escrow_class_id);
 
-    let (_, vector_secret_keys_1, _, _) = utils::get_test_vector();
+    let (_, secret_key_1, _, _) = utils::get_test_vector();
 
     env.call_private(
         owner,
@@ -17,7 +17,7 @@ unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
             recipient,
             owner,
             env.last_block_timestamp() + 10,
-            vector_secret_keys_1,
+            secret_key_1,
         ),
     );
 
@@ -27,7 +27,7 @@ unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
             recipient,
             owner,
             env.last_block_timestamp() + 10,
-            vector_secret_keys_1,
+            secret_key_1,
         ),
     );
 }
@@ -38,11 +38,12 @@ unconstrained fn setup_clawback_escrow_cannot_use_same_escrow_twice() {
 unconstrained fn setup_clawback_escrow_success() {
     let (env, owner, recipient) = utils::setup(false);
 
-    let escrow_contract_address = escrow_utils::deploy_escrow_with_secret(env, 1);
     let escrow_class_id = escrow_utils::get_escrow_class_id();
     let logic_contract_address = utils::deploy_clawback_logic(env, owner, escrow_class_id);
+    let escrow_contract_address =
+        escrow_utils::deploy_escrow_with_secret(env, 1, logic_contract_address);
 
-    let (_, vector_secret_keys_1, _, _) = utils::get_test_vector();
+    let (_, secret_key_1, _, _) = utils::get_test_vector();
 
     let deadline = env.last_block_timestamp() + 10;
     env.call_private(
@@ -51,7 +52,7 @@ unconstrained fn setup_clawback_escrow_success() {
             recipient,
             owner,
             deadline,
-            vector_secret_keys_1,
+            secret_key_1,
         ),
     );
 

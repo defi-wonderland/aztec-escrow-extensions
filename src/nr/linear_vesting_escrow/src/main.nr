@@ -10,17 +10,15 @@ pub contract LinearVestingEscrowLogic {
         macros::{events::event, functions::{external, initializer, view}, storage::storage},
         messages::message_delivery::MessageDelivery,
         note::{note_getter_options::NoteGetterOptions, note_viewer_options::NoteViewerOptions},
-        protocol_types::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
-        state_vars::{Owned, private_set::PrivateSet, public_immutable::PublicImmutable},
+        protocol::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
+        state_vars::{Owned, PrivateSet, PublicImmutable},
         utils::comparison::Comparator,
     };
     // std library
     use std::field::bn254::assert_lt;
     // escrow standard library
-    use escrow_standard::library::logic::{
-        _get_escrow, _secret_keys_to_public_keys, _share_escrow, _withdraw,
-    };
-    use escrow_standard::types::escrow_details_event::MasterSecretKeys;
+    use escrow_standard::key_derivation::secret_key_to_public_keys as _secret_key_to_public_keys;
+    use escrow_standard::library::logic::{_get_escrow, _share_escrow, _withdraw};
     // vesting schedule, released amount, final claim note types
     use crate::types::{
         released_amount_note::ReleasedAmountNote, vesting_schedule_note::VestingScheduleNote,
@@ -28,18 +26,18 @@ pub contract LinearVestingEscrowLogic {
     // bignum library
     use bignum::{BigNum, bignum::to_field, U256};
     // router contract
-    use router::utils::privately_check_timestamp;
+    use public_checks_contract::utils::privately_check_timestamp;
 
     /// @notice Data privately emitted to an account that will use the escrow
     /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
     /// @dev #[allow(dead_code)] added because is used because EscrowDetailsLogContent is defined for logging but not directly instantiated.
     /// @param escrow The address of the escrow
-    /// @param master_secret_keys The master secret keys
+    /// @param secret_key The secret key used to derive master secret keys and public keys
     #[event]
     #[allow(dead_code)]
     struct EscrowDetailsLogContent {
         escrow: AztecAddress,
-        master_secret_keys: MasterSecretKeys,
+        secret_key: Field,
     }
 
     /// @notice Storage for the LinearVestingEscrowLogic contract
@@ -68,7 +66,7 @@ pub contract LinearVestingEscrowLogic {
     /// @param start The start time of the vesting
     /// @param duration The duration of the vesting
     /// @param amount The total amount of tokens to vest
-    /// @param master_secret_keys The master secret keys
+    /// @param secret_key The secret key used to derive master secret keys and public keys
     #[external("private")]
     fn setup_linear_vesting_escrow(
         recipient: AztecAddress,
@@ -77,7 +75,7 @@ pub contract LinearVestingEscrowLogic {
         start: u64,
         duration: u64,
         amount: u128,
-        master_secret_keys: MasterSecretKeys,
+        secret_key: Field,
     ) {
         // We check that start + duration does not overflow
         let _ = start + duration;
@@ -85,12 +83,12 @@ pub contract LinearVestingEscrowLogic {
         let escrow = _get_escrow(
             self.context,
             self.storage.escrow_class_id.read(),
-            master_secret_keys,
+            secret_key,
         );
         // Share the escrow with the recipient
-        _share_escrow(self.context, recipient, escrow, master_secret_keys);
+        _share_escrow(self.context, recipient, escrow, secret_key);
         // Share the escrow with the reclaimer
-        _share_escrow(self.context, reclaimer, escrow, master_secret_keys);
+        _share_escrow(self.context, reclaimer, escrow, secret_key);
 
         // Create and emit linear vesting schedule note
         _create_vesting_schedule_note(
@@ -139,10 +137,7 @@ pub contract LinearVestingEscrowLogic {
             claim_timestamp = block_header.global_variables.timestamp;
         } else {
             // Assert that the message sender is the recipient (final claim only possible for recipient)
-            assert(
-                self.msg_sender().unwrap() == vesting_schedule_note.recipient,
-                "caller is not recipient",
-            );
+            assert(self.msg_sender() == vesting_schedule_note.recipient, "caller is not recipient");
             // Get the stop timestamp from the vesting schedule note
             claim_timestamp = vesting_schedule_note.stop_timestamp;
             // This is the final claim since the vesting is stopped
@@ -194,10 +189,7 @@ pub contract LinearVestingEscrowLogic {
             _pop_vesting_schedule_note(self.storage, escrow);
 
         // Assert that the message sender is the reclaimer
-        assert(
-            self.msg_sender().unwrap() == vesting_schedule_note.reclaimer,
-            "caller is not reclaimer",
-        );
+        assert(self.msg_sender() == vesting_schedule_note.reclaimer, "caller is not reclaimer");
 
         // We assert that the vesting schedule is still active
         assert(vesting_schedule_note.stop_timestamp == 0, "Vesting schedule is not active");
@@ -233,10 +225,7 @@ pub contract LinearVestingEscrowLogic {
         let vesting_schedule_note = _get_vesting_schedule_note(self.storage, escrow);
 
         // Assert that the message sender is the reclaimer
-        assert(
-            self.msg_sender().unwrap() == vesting_schedule_note.reclaimer,
-            "caller is not reclaimer",
-        );
+        assert(self.msg_sender() == vesting_schedule_note.reclaimer, "caller is not reclaimer");
 
         // We assert that the vesting schedule is not active
         assert(vesting_schedule_note.stop_timestamp > 0, "Vesting schedule is active");
@@ -272,22 +261,22 @@ pub contract LinearVestingEscrowLogic {
         _withdraw(
             self.context,
             escrow,
-            self.msg_sender().unwrap(),
+            self.msg_sender(),
             vesting_schedule_note.token,
             reclaimer_amount,
         );
     }
 
-    /// @notice Returns the escrow address that corresponds to the given master secret keys and class ID.
-    /// @param master_secret_keys The master secret keys
+    /// @notice Returns the escrow address that corresponds to the given secret key and class ID.
+    /// @param secret_key The secret key used to derive master secret keys and public keys
     /// @return AztecAddress of the escrow.
     #[external("private")]
     #[view]
-    fn get_escrow(master_secret_keys: MasterSecretKeys) -> pub AztecAddress {
+    fn get_escrow(secret_key: Field) -> pub AztecAddress {
         _get_escrow(
             self.context,
             self.storage.escrow_class_id.read(),
-            master_secret_keys,
+            secret_key,
         )
     }
 
@@ -295,14 +284,12 @@ pub contract LinearVestingEscrowLogic {
      * ======================== UTILITIES ========================
      * ======================================================== */
 
-    /// @notice Derives public keys from secret keys.
-    /// @param master_secret_keys The master secret keys
+    /// @notice Derives public keys from a secret key.
+    /// @param secret_key The secret key used to derive master secret keys and public keys
     /// @return PublicKeys containing the derived public keys.
     #[external("utility")]
-    unconstrained fn secret_keys_to_public_keys(
-        master_secret_keys: MasterSecretKeys,
-    ) -> pub PublicKeys {
-        _secret_keys_to_public_keys(master_secret_keys)
+    unconstrained fn secret_key_to_public_keys(secret_key: Field) -> pub PublicKeys {
+        _secret_key_to_public_keys(secret_key)
     }
 
     /// @notice Calculates the releasable and vested amounts for a linear vesting note
@@ -363,7 +350,7 @@ pub contract LinearVestingEscrowLogic {
             stop_timestamp,
         };
         let note_insertion = storage.escrows.at(escrow).insert(note);
-        note_insertion.deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+        note_insertion.deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
     }
 
     /// @notice Creates and inserts a new released amount note into the storage and emits it to the escrow
@@ -381,7 +368,7 @@ pub contract LinearVestingEscrowLogic {
     ) {
         let note = ReleasedAmountNote { released_amount, claim_completed };
         let note_insertion = storage.released_notes.at(escrow).insert(note);
-        note_insertion.deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+        note_insertion.deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
     }
 
     /// @notice Finds a vesting schedule note in the storage

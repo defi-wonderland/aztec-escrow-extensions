@@ -2,9 +2,11 @@ use crate::ClawbackEscrowLogic;
 use crate::test::utils;
 use token::test::utils as token_utils;
 
-// TODO: cannot deploy escrow contract with custom salt. This should pass.
+// TODO (reenable test): TXE scope enforcement means only the caller's notes are accessible during
+// private execution. The escrow's notes are not in scope when called from the logic contract.
+// The TS tests handle this via `additionalScopes: [escrow.address]`, but TXE doesn't support it yet.
 // #[test]
-#[test(should_fail_with = "Incorrect escrow deployment")]
+#[allow(dead_code)]
 unconstrained fn clawback_tokens_success() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let timeout = 10;
@@ -34,9 +36,11 @@ unconstrained fn clawback_tokens_success() {
     token_utils::check_private_balance(*env, token_contract_address, owner, amount);
 }
 
-// TODO: cannot deploy escrow contract with custom salt. This should fail trying to claim after deadline.
+// TODO (reenable test): TXE scope enforcement means only the caller's notes are accessible during
+// private execution. The escrow's notes are not in scope when called from the logic contract.
+// The TS tests handle this via `additionalScopes: [escrow.address]`, but TXE doesn't support it yet.
 // #[test(should_fail_with = "Timestamp mismatch")]
-#[test(should_fail_with = "Incorrect escrow deployment")]
+#[allow(dead_code)]
 unconstrained fn clawback_tokens_fails_before_deadline() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let timeout = 10;
@@ -55,9 +59,11 @@ unconstrained fn clawback_tokens_fails_before_deadline() {
     );
 }
 
-// TODO: cannot deploy escrow contract with custom salt. This should pass.
+// TODO (reenable test): TXE scope enforcement means only the caller's notes are accessible during
+// private execution. The escrow's notes are not in scope when called from the logic contract.
+// The TS tests handle this via `additionalScopes: [escrow.address]`, but TXE doesn't support it yet.
 // #[test]
-#[test(should_fail_with = "Incorrect escrow deployment")]
+#[allow(dead_code)]
 unconstrained fn clawback_tokens_after_half_claim_success() {
     // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let timeout = 10;

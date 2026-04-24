@@ -2,17 +2,14 @@ import { Note } from "@aztec/aztec.js/note";
 import { PublicKeys } from "@aztec/stdlib/keys";
 import { createLogger } from "@aztec/aztec.js/log";
 import { type Wallet } from "@aztec/aztec.js/wallet";
-import { createStore } from "@aztec/kv-store/lmdb-v2";
 import { getDefaultInitializer } from "@aztec/stdlib/abi";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { getPXEConfig } from "@aztec/pxe/server";
-import { type AztecLMDBStoreV2 } from "@aztec/kv-store/lmdb-v2";
-import { Fr, type GrumpkinScalar } from "@aztec/aztec.js/fields";
+import { Fr } from "@aztec/aztec.js/fields";
+import { type Fq } from "@aztec/foundation/curves/bn254";
 import { createAztecNodeClient, waitForNode } from "@aztec/aztec.js/node";
-import {
-  registerInitialLocalNetworkAccountsInWallet,
-  TestWallet,
-} from "@aztec/test-wallet/server";
+import { EmbeddedWallet } from "@aztec/wallets/embedded";
+import { registerInitialLocalNetworkAccountsInWallet } from "@aztec/wallets/testing";
 import {
   Contract,
   DeployOptions,
@@ -21,6 +18,7 @@ import {
 } from "@aztec/aztec.js/contracts";
 import {
   AuthWitness,
+  SetPublicAuthwitContractInteraction,
   type ContractFunctionInteractionCallIntent,
 } from "@aztec/aztec.js/authorization";
 import {
@@ -37,59 +35,68 @@ import {
   ClawbackEscrowLogicContract,
   ClawbackEscrowLogicContractArtifact,
 } from "../artifacts/ClawbackEscrowLogic.js";
-import { EscrowContract, EscrowContractArtifact } from "../artifacts/Escrow.js";
-import { TokenContract, TokenContractArtifact } from "../artifacts/Token.js";
-import { NFTContract, NFTContractArtifact } from "../artifacts/NFT.js";
+import {
+  EscrowContract,
+  EscrowContractArtifact,
+} from "@defi-wonderland/aztec-standards/dist/src/artifacts/Escrow.js";
+import {
+  TokenContract,
+  TokenContractArtifact,
+} from "@defi-wonderland/aztec-standards/dist/src/artifacts/Token.js";
+import {
+  NFTContract,
+  NFTContractArtifact,
+} from "@defi-wonderland/aztec-standards/dist/src/artifacts/NFT.js";
 
 export const logger = createLogger("aztec:aztec-standards");
+
+import { randomBytes } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { rmSync } from "node:fs";
 
 const { NODE_URL = "http://localhost:8080" } = process.env;
 const node = createAztecNodeClient(NODE_URL);
 await waitForNode(node);
-const { PXE_VERSION = "2" } = process.env;
-const pxeVersion = parseInt(PXE_VERSION);
-const l1Contracts = await node.getL1ContractAddresses();
 const config = getPXEConfig();
-let fullConfig = { ...config, l1Contracts };
 
 /**
- * Setup the store, node, wallet and accounts
- * @param suffix - optional - The suffix to use for the store directory.
+ * Setup the node, wallet and accounts
+ * @param suffix - optional - The suffix to use for the store directory name.
  * @param proverEnabled - optional - Whether to enable the prover, used for benchmarking.
- * @returns The store, node, wallet and accounts
+ * @returns The node, wallet, accounts, and a cleanup function
  */
 export const setupTestSuite = async (
   suffix?: string,
   proverEnabled: boolean = false,
 ) => {
-  const storeDir = suffix ? `store-${suffix}` : "store";
+  const dirName = suffix
+    ? `aztec-escrow-${suffix}-${randomBytes(4).toString("hex")}`
+    : `aztec-escrow-${randomBytes(8).toString("hex")}`;
+  const dataDirectory = join(tmpdir(), dirName);
+  const pxeConfig = { ...config, dataDirectory, proverEnabled };
 
-  fullConfig = {
-    ...fullConfig,
-    dataDirectory: storeDir,
-    dataStoreMapSizeKb: 1e6,
-  };
-
-  // Create the store for manual cleanups
-  const store: AztecLMDBStoreV2 = await createStore("pxe_data", pxeVersion, {
-    dataDirectory: storeDir,
-    dataStoreMapSizeKb: 1e6,
+  const wallet: EmbeddedWallet = await EmbeddedWallet.create(node, {
+    pxeConfig,
   });
-
-  const wallet: TestWallet = await TestWallet.create(
-    node,
-    { ...fullConfig, proverEnabled },
-    { store },
-  );
 
   const accounts: AztecAddress[] =
     await registerInitialLocalNetworkAccountsInWallet(wallet);
 
+  const cleanup = async () => {
+    await wallet.stop();
+    try {
+      rmSync(dataDirectory, { recursive: true, force: true });
+    } catch {
+      // ignore cleanup errors
+    }
+  };
+
   return {
-    store,
     node,
     wallet,
     accounts,
+    cleanup,
   };
 };
 
@@ -124,10 +131,12 @@ export const expectTokenBalances = async (
   };
 
   expect(
-    await token.methods.balance_of_public(aztecAddress).simulate({ from }),
+    (await token.methods.balance_of_public(aztecAddress).simulate({ from }))
+      .result,
   ).toBe(toBigInt(publicBalance));
   expect(
-    await token.methods.balance_of_private(aztecAddress).simulate({ from }),
+    (await token.methods.balance_of_private(aztecAddress).simulate({ from }))
+      .result,
   ).toBe(toBigInt(privateBalance));
 };
 
@@ -146,15 +155,13 @@ export async function deployTokenWithMinter(
   deployer: AztecAddress,
   options?: DeployOptions,
 ) {
-  const contract = await Contract.deploy(
+  const result = await Contract.deploy(
     wallet,
     TokenContractArtifact,
-    ["PrivateToken", "PT", 18, deployer, AztecAddress.ZERO],
+    ["PrivateToken", "PT", 18, deployer],
     "constructor_with_minter",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
-  return contract;
+  ).send({ ...options, from: deployer });
+  return result.contract as TokenContract;
 }
 
 /**
@@ -168,15 +175,13 @@ export async function deployTokenWithInitialSupply(
   deployer: AztecAddress,
   options?: DeployOptions,
 ) {
-  const contract = await Contract.deploy(
+  const result = await Contract.deploy(
     wallet,
     TokenContractArtifact,
     ["PrivateToken", "PT", 18, 0, deployer, deployer],
     "constructor_with_initial_supply",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
-  return contract;
+  ).send({ ...options, from: deployer });
+  return result.contract as TokenContract;
 }
 
 /**
@@ -188,22 +193,20 @@ export async function deployTokenWithInitialSupply(
  */
 // Deploy NFT contract with a minter
 export async function deployNFTWithMinter(
-  wallet: TestWallet,
+  wallet: EmbeddedWallet,
   deployer: AztecAddress,
   options?: DeployOptions,
 ) {
-  const contract = await Contract.deploy(
+  const result = await Contract.deploy(
     wallet,
     NFTContractArtifact,
-    ["TestNFT", "TNFT", deployer, deployer],
+    ["TestNFT", "TNFT", deployer],
     "constructor_with_minter",
-  )
-    .send({
-      ...options,
-      from: deployer,
-    })
-    .deployed();
-  return contract;
+  ).send({
+    ...options,
+    from: deployer,
+  });
+  return result.contract as NFTContract;
 }
 
 // --- Tokenized Vault Utils ---
@@ -219,25 +222,19 @@ export async function deployVaultAndAssetWithMinter(
   deployer: AztecAddress,
   options?: DeployOptions,
 ): Promise<[Contract, Contract]> {
-  const assetContract = await Contract.deploy(
+  const assetResult = await Contract.deploy(
     wallet,
     TokenContractArtifact,
-    ["PrivateToken", "PT", 6, deployer, AztecAddress.ZERO],
+    ["PrivateToken", "PT", 6, deployer],
     "constructor_with_minter",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
-
-  const vaultContract = await Contract.deploy(
+  ).send({ ...options, from: deployer });
+  const vaultResult = await Contract.deploy(
     wallet,
     TokenContractArtifact,
-    ["VaultToken", "VT", 6, assetContract.address, AztecAddress.ZERO],
+    ["VaultToken", "VT", 6, assetResult.contract.address],
     "constructor_with_asset",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
-
-  return [vaultContract, assetContract];
+  ).send({ ...options, from: deployer });
+  return [vaultResult.contract, assetResult.contract];
 }
 
 // --- Escrow Utils ---
@@ -256,15 +253,13 @@ export async function deployLinearVestingEscrow(
   escrowClassId: Fr,
   options?: DeployOptions,
 ) {
-  const contract = await Contract.deploy(
+  const result = await Contract.deploy(
     wallet,
     LinearVestingEscrowLogicContractArtifact,
     [escrowClassId],
     "constructor",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
-  return contract as LinearVestingEscrowLogicContract;
+  ).send({ ...options, from: deployer });
+  return result.contract as LinearVestingEscrowLogicContract;
 }
 
 /**
@@ -281,15 +276,13 @@ export async function deployClawbackEscrow(
   escrowClassId: Fr,
   options?: DeployOptions,
 ) {
-  const contract = await Contract.deploy(
+  const result = await Contract.deploy(
     wallet,
     ClawbackEscrowLogicContractArtifact,
     [escrowClassId],
     "constructor",
-  )
-    .send({ ...options, from: deployer })
-    .deployed();
-  return contract as ClawbackEscrowLogicContract;
+  ).send({ ...options, from: deployer });
+  return result.contract as ClawbackEscrowLogicContract;
 }
 
 /**
@@ -310,20 +303,18 @@ export async function deployEscrowWithPublicKeysAndSalt(
   args: unknown[] = [],
   constructor?: string,
 ): Promise<EscrowContract> {
-  const contract = await Contract.deployWithPublicKeys(
+  const result = await Contract.deployWithPublicKeys(
     publicKeys,
     wallet,
     EscrowContractArtifact,
     args,
     constructor,
-  )
-    .send({
-      contractAddressSalt: salt,
-      universalDeploy: true,
-      from: deployer,
-    })
-    .deployed();
-  return contract as EscrowContract;
+  ).send({
+    contractAddressSalt: salt,
+    universalDeploy: true,
+    from: deployer,
+  });
+  return result.contract as EscrowContract;
 }
 
 // --- NFT Utils ---
@@ -341,9 +332,10 @@ export async function assertOwnsPrivateNFT(
       ? caller
       : caller
     : owner;
-  const [nfts, _] = await nft.methods
+  const simResult = await nft.methods
     .get_private_nfts(owner, 0)
     .simulate({ from });
+  const [nfts, _] = simResult.result;
   const hasNFT = nfts.some((id: bigint) => id === tokenId);
   expect(hasNFT).toBe(expectToBeTrue);
 }
@@ -358,22 +350,26 @@ export async function setPrivateAuthWit(
   caller: AztecAddress,
   action: ContractFunctionInteraction,
   authorizer: AztecAddress,
-  wallet: TestWallet,
+  wallet: EmbeddedWallet,
 ): Promise<AuthWitness> {
   const intent: ContractFunctionInteractionCallIntent = {
     caller: caller,
     action: action,
   };
-  return wallet.createAuthWit(authorizer, intent);
+  return wallet.createAuthWit(
+    authorizer,
+    intent as unknown as Parameters<typeof wallet.createAuthWit>[1],
+  );
 }
 
 export async function setPublicAuthWit(
   caller: AztecAddress,
   action: ContractFunctionInteraction,
   authorizer: AztecAddress,
-  wallet: TestWallet,
+  wallet: EmbeddedWallet,
 ) {
-  const validateAction = await wallet.setPublicAuthWit(
+  const validateAction = await SetPublicAuthwitContractInteraction.create(
+    wallet,
     authorizer,
     {
       caller: caller,
@@ -381,15 +377,61 @@ export async function setPublicAuthWit(
     },
     true,
   );
-  await validateAction.send().wait();
+  await validateAction.send();
 }
 
 /**
- * Converts a GrumpkinScalar to an Fr.
- * @param scalar - The GrumpkinScalar to convert.
+ * Access getNotes via the PXE debug utilities.
+ * In v4, getNotes moved from the wallet to PXEDebugUtils.
+ * In v4.2, scopes must be an AztecAddress[] (the string "ALL_SCOPES" is no longer accepted).
+ *
+ * If no `scopes` are provided, this defaults to all registered accounts plus any
+ * `additionalScopes` (useful to include contract addresses like escrows that were
+ * registered with a secret key via `wallet.registerContract(..., secretKey)`).
+ */
+export async function getWalletNotes(
+  wallet: EmbeddedWallet,
+  filter: {
+    contractAddress: AztecAddress;
+    owner?: AztecAddress;
+    storageSlot?: Fr;
+    scopes?: AztecAddress[];
+    additionalScopes?: AztecAddress[];
+  },
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = wallet as any;
+  let scopes: AztecAddress[];
+  if (filter.scopes) {
+    scopes = filter.scopes;
+  } else {
+    const registered = await w.pxe.getRegisteredAccounts();
+    scopes = registered.map((a: any) => a.address);
+    if (filter.additionalScopes) {
+      scopes = [...scopes, ...filter.additionalScopes];
+    }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { additionalScopes: _ignored, ...rest } = filter;
+  const fullFilter = { ...rest, scopes };
+  return w.pxe.debug.getNotes(fullFilter);
+}
+
+/**
+ * Syncs the PXE private state via debug utilities.
+ * In v4, sync_state() on contracts is forbidden via simulate.
+ */
+export async function syncPXE(wallet: EmbeddedWallet) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (wallet as any).pxe.debug.sync();
+}
+
+/**
+ * Converts an Fq to an Fr.
+ * @param scalar - The Fq to convert.
  * @returns The converted Fr.
  */
-export function grumpkinScalarToFr(scalar: GrumpkinScalar) {
+export function grumpkinScalarToFr(scalar: Fq) {
   return new Fr(scalar.toBigInt());
 }
 

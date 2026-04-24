@@ -115,7 +115,7 @@ jobs:
 
     steps:
       # ──────────────────────────────────────────────────────────────
-      # 0️⃣  SHARED TOOLING – Buildx + Aztec CLI skeleton
+      # 0️⃣  SHARED TOOLING
       # ──────────────────────────────────────────────────────────────
       - name: Checkout repo (full history)
         uses: actions/checkout@v5
@@ -125,21 +125,6 @@ jobs:
       - name: Set up Docker Buildx (Aztec sandbox needs BuildKit)
         uses: docker/setup-buildx-action@v2
 
-      - name: Detect Aztec version
-        id: aztec-version
-        run: |
-          AZTEC_VERSION=$(node -p "require('./package.json').config.aztecVersion")
-          echo "version=$AZTEC_VERSION" >> "$GITHUB_OUTPUT"
-          echo "Aztec version is $AZTEC_VERSION"
-
-      - name: Install Aztec CLI
-        run: |
-          curl -s https://install.aztec.network > tmp.sh
-          VERSION=${{ steps.aztec-version.outputs.version }} bash tmp.sh <<< yes "yes"
-    
-      - name: Update path
-        run: echo "/home/runner/.aztec/bin" >> $GITHUB_PATH
-
       # ──────────────────────────────────────────────────────────────
       # 1️⃣  BENCHMARK BASE COMMIT
       # ──────────────────────────────────────────────────────────────
@@ -148,46 +133,12 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.base.sha }}
 
-      - uses: actions/setup-node@v4
+      - name: Setup Aztec environment (BASE)
+        id: setup-aztec-base
+        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@feat/next
         with:
-          node-version: "22.17.0"
-
-      - name: Detect Aztec version (BASE)
-        id: basever
-        run: |
-          VER=$(node -p "require('./package.json').config.aztecVersion")
-          echo "ver=$VER" >> "$GITHUB_OUTPUT"
-          echo "Base Aztec version is $VER"
-
-      - name: Switch CLI to BASE version
-        run: |
-          VERSION=${{ steps.basever.outputs.ver }} aztec-up
-
-      - name: Start local network (BASE, background)
-        run: aztec start --local-network &
-
-      - name: Start PXE node (BASE, background)
-        run: |
-          VERSION=${{ steps.basever.outputs.ver }} aztec \
-            start --port 8081 --pxe --pxe.nodeUrl=http://localhost:8080/ \
-            --pxe.proverEnabled false &
-
-      # This is a temporary hack to fix a problem with v3 releases.
-      - name: Manually tag the aztec version as `latest`
-        run: |
-          docker tag aztecprotocol/aztec:${{ steps.basever.outputs.ver }} aztecprotocol/aztec:latest
-
-      - name: Install deps (BASE)
-        run: yarn --frozen-lockfile
-
-      - name: Compile contracts (BASE)
-        run: yarn compile
-
-      - name: Codegen wrappers (BASE)
-        run: yarn codegen
-
-      - name: Build aztec-standards (BASE)
-        run: yarn build-aztec-standards --force
+          start-pxe: 'true'
+          run-codegen: 'true'
 
       - name: Benchmark (BASE)
         run: |
@@ -219,7 +170,7 @@ jobs:
         run: |
           VER=$(node -p "require('./package.json').config.aztecVersion")
           echo "PR Aztec version is $VER"
-          if [ "${{ steps.basever.outputs.ver }}" != "$VER" ]; then
+          if [ "${{ steps.setup-aztec-base.outputs.aztec-version }}" != "$VER" ]; then
             echo "ver_diff=true" >> "$GITHUB_OUTPUT"
           else
             echo "ver_diff=false" >> "$GITHUB_OUTPUT"
@@ -231,40 +182,21 @@ jobs:
         run: |
           pkill -f "aztec.*--local-network" || true
           pkill -f "aztec.*--pxe.*8081" || true
-          sleep 5      
+          sleep 5
 
-      - name: Switch CLI to PR version
+      - name: Setup Aztec environment (PR)
         if: steps.prver.outputs.ver_diff == 'true'
-        run: |
-          VERSION=${{ steps.prver.outputs.ver }} aztec-up
+        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@feat/next
+        with:
+          start-pxe: 'true'
+          run-codegen: 'true'
 
-      - name: Start local network (PR, background)
-        if: steps.prver.outputs.ver_diff == 'true'
-        run: aztec start --local-network &
-
-      - name: Start PXE node (PR, background)
-        if: steps.prver.outputs.ver_diff == 'true'
-        run: |
-          VERSION=${{ steps.prver.outputs.ver }} aztec \
-            start --port 8081 --pxe --pxe.nodeUrl=http://localhost:8080/ \
-            --pxe.proverEnabled false &
-
-      # This is a temporary hack to fix a problem with v3 releases.
-      - name: Manually tag the aztec version as `latest`
-        run: |
-          docker tag aztecprotocol/aztec:${{ steps.prver.outputs.ver }} aztecprotocol/aztec:latest
-
-      - name: Install deps (PR)
-        run: yarn --frozen-lockfile
-
-      - name: Compile contracts (PR)
-        run: yarn compile
-
-      - name: Codegen wrappers (PR)
-        run: yarn codegen
-
-      - name: Build aztec-standards (PR)
-        run: yarn build-aztec-standards --force
+      - name: Setup Aztec environment (PR, same version)
+        if: steps.prver.outputs.ver_diff == 'false'
+        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@feat/next
+        with:
+          start-pxe: 'false'
+          run-codegen: 'true'
 
       # ──────────────────────────────────────────────────────────────
       # 3️⃣  DIFF &  COMMENT
