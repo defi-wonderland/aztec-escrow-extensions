@@ -19,7 +19,6 @@ import {
 import {
   AuthWitness,
   SetPublicAuthwitContractInteraction,
-  type ContractFunctionInteractionCallIntent,
 } from "@aztec/aztec.js/authorization";
 import {
   computeInitializationHash,
@@ -303,15 +302,13 @@ export async function deployEscrowWithPublicKeysAndSalt(
   args: unknown[] = [],
   constructor?: string,
 ): Promise<EscrowContract> {
-  const result = await Contract.deployWithPublicKeys(
-    publicKeys,
+  const result = await Contract.deploy(
     wallet,
     EscrowContractArtifact,
     args,
     constructor,
+    { publicKeys, salt, universalDeploy: true },
   ).send({
-    contractAddressSalt: salt,
-    universalDeploy: true,
     from: deployer,
   });
   return result.contract as EscrowContract;
@@ -352,14 +349,10 @@ export async function setPrivateAuthWit(
   authorizer: AztecAddress,
   wallet: EmbeddedWallet,
 ): Promise<AuthWitness> {
-  const intent: ContractFunctionInteractionCallIntent = {
-    caller: caller,
-    action: action,
-  };
-  return wallet.createAuthWit(
-    authorizer,
-    intent as unknown as Parameters<typeof wallet.createAuthWit>[1],
-  );
+  return wallet.createAuthWit(authorizer, {
+    caller,
+    call: await action.getFunctionCall(),
+  });
 }
 
 export async function setPublicAuthWit(

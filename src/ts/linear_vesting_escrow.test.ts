@@ -170,13 +170,13 @@ describe("Linear Vesting Escrow", () => {
       const deployer = new ContractDeployer(
         LinearVestingEscrowLogicContractArtifact,
         wallet,
-        undefined,
         "constructor",
       );
-      const deployResult = await deployer.deploy(escrowClassId).send({
-        contractAddressSalt: salt,
-        from: alice,
-      });
+      const deployResult = await deployer
+        .deploy([escrowClassId], { salt })
+        .send({
+          from: alice,
+        });
       const contract = deployResult.contract;
 
       const contractMetadata = await wallet.getContractMetadata(
