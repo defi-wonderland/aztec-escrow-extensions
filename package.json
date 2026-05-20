@@ -30,7 +30,7 @@
     "@aztec/pxe": "4.3.0",
     "@aztec/stdlib": "4.3.0",
     "@aztec/wallets": "4.3.0",
-    "@defi-wonderland/aztec-benchmark": "https://github.com/defi-wonderland/aztec-benchmark/releases/download/prerelease-56cd132/defi-wonderland-aztec-benchmark-4.3.0-prerelease.56cd132.tgz",
+    "@defi-wonderland/aztec-benchmark": "4.3.0",
     "@defi-wonderland/aztec-standards": "https://github.com/defi-wonderland/aztec-standards/releases/download/prerelease-eca9816/defi-wonderland-aztec-standards-4.2.0-prerelease.eca9816.tgz"
   },
   "devDependencies": {
