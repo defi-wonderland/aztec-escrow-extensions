@@ -2555,8 +2555,8 @@ describe("Linear Vesting Escrow", () => {
           escrow.address,
         );
 
-        // Second clawback - claim another 1/2
-        const secondClawbackAmount = totalClawbackAmount / 2n;
+        // Second clawback - claim the remaining amount (avoids losing the odd remainder)
+        const secondClawbackAmount = totalClawbackAmount - firstClawbackAmount;
         const clawbackTx2 = (
           await linearVestingEscrow
             .withWallet(wallet)
