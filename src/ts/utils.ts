@@ -7,9 +7,17 @@ import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { getPXEConfig } from "@aztec/pxe/server";
 import { Fr } from "@aztec/aztec.js/fields";
 import { type Fq } from "@aztec/foundation/curves/bn254";
-import { createAztecNodeClient, waitForNode } from "@aztec/aztec.js/node";
+import {
+  createAztecNodeClient,
+  waitForNode,
+  type AztecNode,
+} from "@aztec/aztec.js/node";
 import { EmbeddedWallet } from "@aztec/wallets/embedded";
 import { registerInitialLocalNetworkAccountsInWallet } from "@aztec/wallets/testing";
+import { getStandardAuthRegistry } from "@aztec/standard-contracts/auth-registry";
+import { getStandardHandshakeRegistry } from "@aztec/standard-contracts/handshake-registry";
+import { getStandardMultiCallEntrypoint } from "@aztec/standard-contracts/multi-call-entrypoint";
+import { getStandardPublicChecks } from "@aztec/standard-contracts/public-checks";
 import {
   Contract,
   DeployOptions,
@@ -73,7 +81,22 @@ export const setupTestSuite = async (
     ? `aztec-escrow-${suffix}-${randomBytes(4).toString("hex")}`
     : `aztec-escrow-${randomBytes(8).toString("hex")}`;
   const dataDirectory = join(tmpdir(), dirName);
-  const pxe = { ...config, dataDirectory, proverEnabled };
+  // Overriding the preload replaces the wallet's default set, so we must list every
+  // standard contract. PublicChecks is the addition the default omits, and the escrow
+  // logic needs it for `privately_check_timestamp`.
+  const pxe = {
+    ...config,
+    dataDirectory,
+    proverEnabled,
+    preloadedContractsProvider: {
+      getPreloadedContracts: async () => [
+        await getStandardMultiCallEntrypoint(),
+        await getStandardAuthRegistry(),
+        await getStandardHandshakeRegistry(),
+        await getStandardPublicChecks(),
+      ],
+    },
+  };
 
   const wallet: EmbeddedWallet = await EmbeddedWallet.create(node, {
     pxe,
@@ -81,6 +104,10 @@ export const setupTestSuite = async (
 
   const accounts: AztecAddress[] =
     await registerInitialLocalNetworkAccountsInWallet(wallet);
+
+  // PublicChecks isn't deployed at genesis, so publish it on-chain the first time a
+  // suite runs against the node.
+  await publishStandardPublicChecks(wallet, node, accounts[0]);
 
   const cleanup = async () => {
     await wallet.stop();
@@ -98,6 +125,32 @@ export const setupTestSuite = async (
     cleanup,
   };
 };
+
+/**
+ * Publishes the PublicChecks standard contract on the L2 network at its canonical address, if it
+ * is not already deployed. Idempotent across suites/runs sharing a node.
+ * @param wallet - The wallet used to send the deployment transaction.
+ * @param node - The Aztec node, used to check whether the contract is already deployed.
+ * @param deployer - The account that pays for and sends the deployment transaction.
+ */
+export async function publishStandardPublicChecks(
+  wallet: EmbeddedWallet,
+  node: AztecNode,
+  deployer: AztecAddress,
+) {
+  const { instance, artifact } = await getStandardPublicChecks();
+
+  // Nothing to do if it's already published on-chain.
+  if (await node.getContract(instance.address)) {
+    return;
+  }
+
+  // Deploy publishes the class and instance at the canonical address in a single tx.
+  await Contract.deploy(wallet, artifact, [], undefined, {
+    salt: instance.salt,
+    universalDeploy: true,
+  }).send({ from: deployer });
+}
 
 // --- Token Utils ---
 
@@ -411,12 +464,11 @@ export async function getWalletNotes(
 }
 
 /**
- * Syncs the PXE private state via debug utilities.
- * In v4, sync_state() on contracts is forbidden via simulate.
+ * Syncs the PXE private state with the node.
  */
 export async function syncPXE(wallet: EmbeddedWallet) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (wallet as any).pxe.debug.sync();
+  await (wallet as any).pxe.sync();
 }
 
 /**

@@ -27,6 +27,7 @@
     "@aztec/noir-contracts.js": "5.0.0-rc.1",
     "@aztec/protocol-contracts": "5.0.0-rc.1",
     "@aztec/pxe": "5.0.0-rc.1",
+    "@aztec/standard-contracts": "5.0.0-rc.1",
     "@aztec/stdlib": "5.0.0-rc.1",
     "@aztec/wallets": "5.0.0-rc.1",
     "@defi-wonderland/aztec-benchmark": "5.0.0-rc.1",
