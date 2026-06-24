@@ -125,9 +125,8 @@ pub unconstrained fn get_vesting_schedule_note(
 ) -> VestingScheduleNote {
     // Read through the contract's utility function so the escrow-owned note is in scope. A raw
     // `utility_context_at` read does not surface notes owned by an account other than the caller.
-    env.execute_utility(
-        LinearVestingEscrowLogic::at(logic_contract_address).view_vesting_schedule_note(escrow),
-    )
+    env.execute_utility(LinearVestingEscrowLogic::at(logic_contract_address)
+        .view_vesting_schedule_note(escrow))
 }
 
 pub unconstrained fn get_released_amount_note(
@@ -137,9 +136,8 @@ pub unconstrained fn get_released_amount_note(
 ) -> ReleasedAmountNote {
     // Read through the contract's utility function so the escrow-owned note is in scope. A raw
     // `utility_context_at` read does not surface notes owned by an account other than the caller.
-    env.execute_utility(
-        LinearVestingEscrowLogic::at(logic_contract_address).view_released_amount_note(escrow),
-    )
+    env.execute_utility(LinearVestingEscrowLogic::at(logic_contract_address)
+        .view_released_amount_note(escrow))
 }
 
 // TODO: import from aztec-standards logic library utils
