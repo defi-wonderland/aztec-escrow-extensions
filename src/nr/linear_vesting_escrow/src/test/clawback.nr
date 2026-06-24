@@ -1,14 +1,10 @@
 use crate::LinearVestingEscrowLogic;
 use crate::test::utils;
+use aztec::test::helpers::test_environment::CallPrivateOptions;
 use token::test::utils as token_utils;
 
-// TODO (reenable test): TXE scope enforcement means only the caller's notes are accessible during
-// private execution. The escrow's notes are not in scope when called from the logic contract.
-// The TS tests handle this via `additionalScopes: [escrow.address]`, but TXE doesn't support it yet.
-// #[test]
-#[allow(dead_code)]
+#[test]
 unconstrained fn clawback_success() {
-    // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let duration = 10;
     let amount: u128 = 10000;
 
@@ -32,8 +28,9 @@ unconstrained fn clawback_success() {
     )
         .releasable_and_vested_amounts(escrow_contract_address, stop_timestamp));
 
-    env.call_private(
+    env.call_private_opts(
         reclaimer,
+        CallPrivateOptions::new().with_additional_scopes([escrow_contract_address]),
         LinearVestingEscrowLogic::at(logic_contract_address).stop_vesting(
             escrow_contract_address,
             stop_timestamp,
@@ -42,8 +39,9 @@ unconstrained fn clawback_success() {
 
     let clawback_amount = amount - vested_amount;
 
-    env.call_private(
+    env.call_private_opts(
         reclaimer,
+        CallPrivateOptions::new().with_additional_scopes([escrow_contract_address]),
         LinearVestingEscrowLogic::at(logic_contract_address).clawback(
             escrow_contract_address,
             clawback_amount,
@@ -55,13 +53,8 @@ unconstrained fn clawback_success() {
     token_utils::check_private_balance(*env, token_contract_address, reclaimer, clawback_amount);
 }
 
-// TODO (reenable test): TXE scope enforcement means only the caller's notes are accessible during
-// private execution. The escrow's notes are not in scope when called from the logic contract.
-// The TS tests handle this via `additionalScopes: [escrow.address]`, but TXE doesn't support it yet.
-// #[test]
-#[allow(dead_code)]
+#[test]
 unconstrained fn clawback_after_claim_success() {
-    // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let duration = 10;
     let amount: u128 = 10000;
 
@@ -85,16 +78,18 @@ unconstrained fn clawback_after_claim_success() {
     )
         .releasable_and_vested_amounts(escrow_contract_address, stop_timestamp));
 
-    env.call_private(
+    env.call_private_opts(
         reclaimer,
+        CallPrivateOptions::new().with_additional_scopes([escrow_contract_address]),
         LinearVestingEscrowLogic::at(logic_contract_address).stop_vesting(
             escrow_contract_address,
             stop_timestamp,
         ),
     );
 
-    env.call_private(
+    env.call_private_opts(
         recipient,
+        CallPrivateOptions::new().with_additional_scopes([escrow_contract_address]),
         LinearVestingEscrowLogic::at(logic_contract_address).claim(
             escrow_contract_address,
             releasable_amount,
@@ -103,8 +98,9 @@ unconstrained fn clawback_after_claim_success() {
 
     let clawback_amount = amount - vested_amount;
 
-    env.call_private(
+    env.call_private_opts(
         reclaimer,
+        CallPrivateOptions::new().with_additional_scopes([escrow_contract_address]),
         LinearVestingEscrowLogic::at(logic_contract_address).clawback(
             escrow_contract_address,
             clawback_amount,

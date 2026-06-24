@@ -82,9 +82,7 @@ unconstrained fn create_linear_vesting_escrow_cannot_use_same_escrow_twice() {
     );
 }
 
-// TODO: cannot deploy escrow contract with custom salt. This should pass.
-// #[test]
-#[test(should_fail_with = "Note: recipient address mismatch")]
+#[test]
 unconstrained fn create_linear_vesting_escrow_success() {
     let (env, owner, recipient, reclaimer) = utils::setup(false);
 
