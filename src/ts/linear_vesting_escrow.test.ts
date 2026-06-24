@@ -1929,7 +1929,9 @@ describe("Linear Vesting Escrow", () => {
           .send({ from: bob, additionalScopes: [escrow.address] });
         await syncPXE(wallet);
 
-        // releasableAmount should be 0 after the claim transaction
+        // Remaining releasable after the partial claim. Bob claimed `releasableAmount / 2n`
+        // (floored), so what's left is the complement, which keeps the odd remainder.
+        const remainingReleasable = releasableAmount - releasableAmount / 2n;
         const [releasableAmountAfterClaim, _] = (
           await linearVestingEscrow
             .withWallet(wallet)
@@ -1940,7 +1942,7 @@ describe("Linear Vesting Escrow", () => {
             .simulate({ from: escrow.address })
         ).result;
 
-        expect(releasableAmountAfterClaim).toBe(releasableAmount / 2n);
+        expect(releasableAmountAfterClaim).toBe(remainingReleasable);
 
         // Assert post-claim balances
         await expectTokenBalances(token, alice, wad(0), wad(0));
