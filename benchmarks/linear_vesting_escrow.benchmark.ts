@@ -1,6 +1,7 @@
 import { Fr } from "@aztec/aztec.js/fields";
 import { deriveKeys } from "@aztec/stdlib/keys";
 import type { Wallet } from "@aztec/aztec.js/wallet";
+import { EmbeddedWallet } from "@aztec/wallets/embedded";
 import type { AztecNode } from "@aztec/aztec.js/node";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { getContractClassFromArtifact } from "@aztec/stdlib/contract";
@@ -18,6 +19,7 @@ import {
   deployLinearVestingEscrow,
   deployTokenWithMinter,
   setupTestSuite,
+  syncPXE,
 } from "../src/ts/utils.js";
 
 import { LinearVestingEscrowLogicContract } from "../src/artifacts/LinearVestingEscrowLogic.js";
@@ -68,7 +70,7 @@ async function deployEscrow(
 interface LinearVestingEscrowBenchmarkContext extends BenchmarkContext {
   cleanup: () => Promise<void>;
   deployer: AztecAddress;
-  wallet: Wallet;
+  wallet: EmbeddedWallet;
   accounts: AztecAddress[];
   linearVestingEscrowContract: LinearVestingEscrowLogicContract;
   escrows: {
@@ -135,18 +137,15 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     await tokenContract
       .withWallet(wallet)
       .methods.mint_to_private(escrowContract_1.address, AMOUNT)
-      .send({ from: deployer })
-      .wait();
+      .send({ from: deployer });
     await tokenContract
       .withWallet(wallet)
       .methods.mint_to_private(escrowContract_2.address, AMOUNT)
-      .send({ from: deployer })
-      .wait();
+      .send({ from: deployer });
     await tokenContract
       .withWallet(wallet)
       .methods.mint_to_private(escrowContract_3.address, AMOUNT)
-      .send({ from: deployer })
-      .wait();
+      .send({ from: deployer });
 
     const currentBlockNumber = await node.getBlockNumber();
     const currentBlock = await node.getBlock(currentBlockNumber);
@@ -173,11 +172,12 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         AMOUNT,
         escrows[1].secretKey,
       )
-      .send({ from: alice })
-      .wait();
+      .send({ from: alice });
 
     // Get the releasable amount of the second escrow
-    const [_, vestedAmount_2] = await linearVestingEscrowContract
+    const {
+      result: [, vestedAmount_2],
+    } = await linearVestingEscrowContract
       .withWallet(wallet)
       .methods.releasable_and_vested_amounts(
         escrows[1].contract.address,
@@ -206,31 +206,27 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         AMOUNT,
         escrows[2].secretKey,
       )
-      .send({ from: alice })
-      .wait();
+      .send({ from: alice });
 
     // Get the releasable amount of the third escrow
-    const [releasableAmount_3, vestedAmount_3] =
-      await linearVestingEscrowContract
-        .withWallet(wallet)
-        .methods.releasable_and_vested_amounts(
-          escrows[2].contract.address,
-          stopTimestamp_3,
-        )
-        .simulate({ from: alice });
+    const {
+      result: [releasableAmount_3, vestedAmount_3],
+    } = await linearVestingEscrowContract
+      .withWallet(wallet)
+      .methods.releasable_and_vested_amounts(
+        escrows[2].contract.address,
+        stopTimestamp_3,
+      )
+      .simulate({ from: alice });
     const clawbackAmount_3 = AMOUNT - vestedAmount_3;
 
     // Sync to get linear vesting escrow note
-    await linearVestingEscrowContract
-      .withWallet(wallet)
-      .methods.sync_private_state()
-      .simulate({ from: alice });
+    await syncPXE(wallet);
 
     await linearVestingEscrowContract
       .withWallet(wallet)
       .methods.stop_vesting(escrows[2].contract.address, stopTimestamp_3)
-      .send({ from: alice })
-      .wait();
+      .send({ from: alice });
 
     // Get the start timestamp of the first escrow
     const blockNumber = await node.getBlockNumber();

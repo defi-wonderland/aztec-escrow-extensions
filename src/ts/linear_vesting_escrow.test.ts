@@ -288,17 +288,18 @@ describe("Linear Vesting Escrow", () => {
         nullifier,
       );
 
-      const txReceipt = await node.getTxReceipt(tx.txHash);
+      const txReceipt = await node.getTxReceipt(tx.txHash, {
+        includeTxEffect: true,
+      });
       expect([
         TxStatus.CHECKPOINTED,
         TxStatus.PROVEN,
         TxStatus.FINALIZED,
       ]).toContain(txReceipt.status);
 
-      const txEffect = await node.getTxEffect(tx.txHash);
       let nullifierExists = false;
-      if (txEffect) {
-        const nullifiers = txEffect.data.nullifiers;
+      if (txReceipt.isMined() && txReceipt.txEffect) {
+        const nullifiers = txReceipt.txEffect.nullifiers;
         nullifierExists = nullifiers.some((n) => n.equals(siloedNullifier));
       }
 

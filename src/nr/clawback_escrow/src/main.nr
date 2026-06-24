@@ -9,15 +9,15 @@ pub contract ClawbackEscrowLogic {
     use aztec::{
         context::PrivateContext,
         macros::{events::event, functions::{external, initializer, view}, storage::storage},
-        messages::message_delivery::MessageDelivery,
+        messages::delivery::MessageDelivery,
         note::note_getter_options::NoteGetterOptions,
         protocol::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
+        public_checks::privately_check_timestamp,
         state_vars::{Owned, PrivateSet, PublicImmutable},
         utils::comparison::Comparator,
     };
     use escrow_standard::key_derivation;
     use escrow_standard::library::logic::{_get_escrow, _share_escrow, _withdraw, _withdraw_nft};
-    use public_checks_contract::utils::privately_check_timestamp;
 
     // @param escrow_class_id The contract class id of the escrow contract
     #[storage]
@@ -71,11 +71,11 @@ pub contract ClawbackEscrowLogic {
 
         // Create and emit note with gating logic parameters
         let note = ClawbackEscrowNote { recipient, reclaimer, deadline };
-        self.storage.escrows.at(escrow).insert(note).deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
+        self.storage.escrows.at(escrow).insert(note).deliver(MessageDelivery::onchain_constrained());
 
         // Check that a clawback escrow has not been created for the provided escrow
         let nullifier = std::hash::pedersen_hash([escrow.to_field()]);
-        self.context.push_nullifier(nullifier);
+        self.context.push_nullifier_unsafe(nullifier);
     }
 
     /// @notice Withdraws an amount of tokens from the provided escrow.

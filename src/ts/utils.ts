@@ -73,10 +73,10 @@ export const setupTestSuite = async (
     ? `aztec-escrow-${suffix}-${randomBytes(4).toString("hex")}`
     : `aztec-escrow-${randomBytes(8).toString("hex")}`;
   const dataDirectory = join(tmpdir(), dirName);
-  const pxeConfig = { ...config, dataDirectory, proverEnabled };
+  const pxe = { ...config, dataDirectory, proverEnabled };
 
   const wallet: EmbeddedWallet = await EmbeddedWallet.create(node, {
-    pxeConfig,
+    pxe,
   });
 
   const accounts: AztecAddress[] =
@@ -459,6 +459,7 @@ export async function deriveContractAddress(
     initializationHash,
     salt,
     deployer,
+    immutablesHash: Fr.ZERO,
   });
 
   const address = await computeContractAddressFromInstance({
