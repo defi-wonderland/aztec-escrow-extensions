@@ -15,7 +15,6 @@
     "test:nr": "yarn copy-standards-artifacts && aztec test",
     "lint:prettier": "prettier '**/*.{js,ts}' --write",
     "build": "yarn compile && yarn codegen -f",
-    "postinstall": "yarn copy-standards-artifacts",
     "prepare": "husky",
     "ccc": "yarn clean && yarn compile && yarn codegen",
     "bench": "NODE_NO_WARNINGS=1 aztec-benchmark --suffix _base"
