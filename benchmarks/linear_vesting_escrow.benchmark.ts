@@ -31,6 +31,13 @@ import {
 // Escrow key counter starting at 1000 (no overlap with clawback escrow key counter), incremented on each deployment
 let escrowKeyCounter = 1000n;
 const AZTEC_SLOT_TIME = 36n;
+// The benchmark runs with proving enabled, so each profiled/sent transaction takes
+// significant wall-clock time and the chain clock advances a lot between setup and the
+// `stop_vesting` interaction. `stop_vesting` enqueues a public check that requires
+// `block_timestamp <= stop_timestamp`, so the vesting schedules are anchored far enough in
+// the future to stay ahead of the chain clock for the whole run. Vested/clawback amounts are
+// derived purely from relative offsets (stop - start, duration), so this shift is amount-neutral.
+const FUTURE_BUFFER = AZTEC_SLOT_TIME * 5000n;
 
 async function deployEscrow(
   wallet: Wallet,
@@ -155,7 +162,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     const [alice, bob] = accounts;
 
     // Set the start timestamp equal to the start 1 slot before it is stopped
-    const start_2 = currentTimestamp + AZTEC_SLOT_TIME * 6n;
+    const start_2 = currentTimestamp + FUTURE_BUFFER + AZTEC_SLOT_TIME * 6n;
     // We choose a 30 slots duration be able to clawback the remaining amount
     const duration_2 = AZTEC_SLOT_TIME * 30n;
     // Stop timestamp (1 slot after starting)
@@ -191,7 +198,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     const clawbackAmount_2 = AMOUNT - vestedAmount_2;
 
     // Set the start timestamp equal to one previous to the stop
-    const start_3 = currentTimestamp + AZTEC_SLOT_TIME * 8n;
+    const start_3 = currentTimestamp + FUTURE_BUFFER + AZTEC_SLOT_TIME * 8n;
     // We choose a 4 slots duration be able to claim the remaining amount and then clawback the rest
     const duration_3 = AZTEC_SLOT_TIME * 30n;
     // Stop timestamp (1 slot after starting)
