@@ -156,7 +156,10 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
         pastDeadline,
         escrows[0].secretKey,
       )
-      .send({ from: deployer });
+      .send({
+        from: deployer,
+        additionalScopes: [escrows[0].contract.address],
+      });
 
     return {
       cleanup,
@@ -198,6 +201,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
       // Setup clawback escrow
       {
         name: "setup_clawback_escrow",
+        additionalScopes: [escrows[1].contract.address],
         interaction: {
           caller: alice,
           action: clawbackEscrowContract
@@ -213,6 +217,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
       // Full token claim escrow
       {
         name: "claim",
+        additionalScopes: [escrows[1].contract.address],
         interaction: {
           caller: bob,
           action: clawbackEscrowContract
@@ -227,6 +232,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
       // NFT claim escrow
       {
         name: "claim_nft",
+        additionalScopes: [escrows[1].contract.address],
         interaction: {
           caller: bob,
           action: clawbackEscrowContract
@@ -241,6 +247,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
       // Full token clawback escrow
       {
         name: "clawback",
+        additionalScopes: [escrows[0].contract.address],
         interaction: {
           caller: alice,
           action: clawbackEscrowContract
@@ -255,6 +262,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
       // NFT clawback escrow
       {
         name: "clawback_nft",
+        additionalScopes: [escrows[0].contract.address],
         interaction: {
           caller: alice,
           action: clawbackEscrowContract
