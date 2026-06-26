@@ -10,7 +10,7 @@ pub contract ClawbackEscrowLogic {
         context::PrivateContext,
         macros::{events::event, functions::{external, initializer, view}, storage::storage},
         messages::delivery::MessageDelivery,
-        note::note_getter_options::NoteGetterOptions,
+        note::{note_getter_options::NoteGetterOptions, note_viewer_options::NoteViewerOptions},
         protocol::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
         public_checks::privately_check_timestamp,
         state_vars::{Owned, PrivateSet, PublicImmutable},
@@ -159,6 +159,16 @@ pub contract ClawbackEscrowLogic {
     #[external("utility")]
     unconstrained fn secret_key_to_public_keys(secret_key: Field) -> pub PublicKeys {
         key_derivation::secret_key_to_public_keys(secret_key)
+    }
+
+    /// @notice Returns the clawback escrow note stored for the given escrow.
+    /// @param escrow The address of the escrow
+    /// @return The clawback escrow note
+    #[external("utility")]
+    unconstrained fn view_escrow_note(escrow: AztecAddress) -> pub ClawbackEscrowNote {
+        let options = NoteViewerOptions::new().set_limit(1);
+        let notes = self.storage.escrows.at(escrow).view_notes(options);
+        notes.get_unchecked(0)
     }
 
     /** ==========================================================

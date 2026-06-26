@@ -8,10 +8,11 @@
   "scripts": {
     "clean": "rm -rf ./src/artifacts ./target codegenCache.json",
     "codegen": "aztec codegen target --outdir src/artifacts --force",
+    "copy-standards-artifacts": "mkdir -p target && cp node_modules/@defi-wonderland/aztec-standards/target/*.json target/ && cp node_modules/@aztec/noir-contracts.js/artifacts/public_checks_contract-PublicChecks.json target/",
     "compile": "aztec compile",
     "test": "yarn test:nr && yarn test:js",
     "test:js": "vitest run",
-    "test:nr": "aztec test",
+    "test:nr": "yarn copy-standards-artifacts && aztec test",
     "lint:prettier": "prettier '**/*.{js,ts}' --write",
     "build": "yarn compile && yarn codegen -f",
     "prepare": "husky",

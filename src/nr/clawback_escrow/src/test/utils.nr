@@ -1,16 +1,13 @@
 use crate::ClawbackEscrowLogic;
 use crate::types::clawback_escrow_note::ClawbackEscrowNote;
 use aztec::{
-    note::{constants::MAX_NOTES_PER_PAGE, note_viewer_options::NoteViewerOptions},
     protocol::{
         address::AztecAddress,
         constants::{DEFAULT_FBPK_M_HASH, DEFAULT_MSPK_M_HASH},
         point::EmbeddedCurvePoint,
         public_keys::{hash_public_key, IvpkM, PublicKeys},
-        traits::Packable,
     },
-    state_vars::{OwnedStateVariable, PrivateSet},
-    test::helpers::test_environment::TestEnvironment,
+    test::helpers::test_environment::{DeployOptions, TestEnvironment},
 };
 use escrow_standard::test::utils as escrow_utils;
 use nft::NFT;
@@ -23,6 +20,10 @@ pub unconstrained fn setup(
 ) -> (&mut TestEnvironment, AztecAddress, AztecAddress) {
     // Setup env, generate keys
     let mut env = TestEnvironment::new();
+
+    // Deploy the public checks contract at its standard address so that timestamp checks can be enqueued.
+    deploy_public_checks(&mut env);
+
     let (owner, user) = if with_account_contracts {
         let owner = env.create_contract_account();
         let user = env.create_contract_account();
@@ -34,6 +35,20 @@ pub unconstrained fn setup(
     };
 
     (&mut env, owner, user)
+}
+
+/// Deploys the standard `PublicChecks` contract at its hardcoded standard address.
+///
+/// `privately_check_timestamp` enqueues a public call to `STANDARD_PUBLIC_CHECKS_ADDRESS`, which is no longer a
+/// protocol contract auto-deployed by the TXE. Deploying with `salt = 1` and `secret = 0` reproduces the standard
+/// deployment params (default public keys, zero deployer), yielding the expected standard address.
+pub unconstrained fn deploy_public_checks(env: &mut TestEnvironment) {
+    let _ = env
+        .deploy_opts(
+            DeployOptions::new().with_salt(1).with_secret(0),
+            "@public_checks_contract/PublicChecks",
+        )
+        .without_initializer();
 }
 
 pub unconstrained fn deploy_clawback_logic(
@@ -161,18 +176,7 @@ pub unconstrained fn get_escrow_note(
     logic_contract_address: AztecAddress,
     escrow: AztecAddress,
 ) -> ClawbackEscrowNote {
-    let offset = 0;
-    let notes = env.utility_context_at(logic_contract_address, |context| {
-        let options = NoteViewerOptions::<ClawbackEscrowNote, <ClawbackEscrowNote as Packable>::N>::new()
-            .set_limit(1)
-            .set_offset(offset);
-        let escrows_slot = ClawbackEscrowLogic::storage_layout().escrows.slot;
-        let set: PrivateSet<ClawbackEscrowNote, _> =
-            OwnedStateVariable::new(context, escrows_slot, escrow);
-        let notes: BoundedVec<ClawbackEscrowNote, MAX_NOTES_PER_PAGE> = set.view_notes(options);
-        notes
-    });
-
-    // We revert if there is no note in the filter so we can probably unwrap directly
-    notes.get_unchecked(0)
+    // Read through the contract's utility function so the escrow-owned note is in scope. A raw
+    // `utility_context_at` read does not surface notes owned by an account other than the caller.
+    env.execute_utility(ClawbackEscrowLogic::at(logic_contract_address).view_escrow_note(escrow))
 }

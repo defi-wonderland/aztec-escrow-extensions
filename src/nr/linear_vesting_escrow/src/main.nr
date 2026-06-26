@@ -291,6 +291,22 @@ pub contract LinearVestingEscrowLogic {
         _secret_key_to_public_keys(secret_key)
     }
 
+    /// @notice Returns the vesting schedule note stored for the given escrow.
+    /// @param escrow The address of the escrow
+    /// @return The vesting schedule note
+    #[external("utility")]
+    unconstrained fn view_vesting_schedule_note(escrow: AztecAddress) -> pub VestingScheduleNote {
+        _view_vesting_schedule_note(self.storage, escrow)
+    }
+
+    /// @notice Returns the released amount note stored for the given escrow.
+    /// @param escrow The address of the escrow
+    /// @return The released amount note
+    #[external("utility")]
+    unconstrained fn view_released_amount_note(escrow: AztecAddress) -> pub ReleasedAmountNote {
+        _view_released_amount_note(self.storage, escrow)
+    }
+
     /// @notice Calculates the releasable and vested amounts for a linear vesting note
     /// @param escrow The address of the escrow
     /// @param timestamp The timestamp

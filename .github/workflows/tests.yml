@@ -10,6 +10,49 @@ concurrency:
   group: pr-${{ github.head_ref }}
   cancel-in-progress: true
 
+# NOTE: The jobs below intentionally inline what
+# `defi-wonderland/aztec-ci-actions/.github/workflows/run-tests.yml@fix/testnr` does, but pin the composite
+# actions to `@fix/testnr` instead of `@v0`. The reusable workflow on `fix/testnr` still references the actions
+# at `@v0`, whose `noir-tests` runs `aztec test` directly and bypasses our `yarn test:nr` step (which copies the
+# standard-contract artifacts into `target/`). The `@fix/testnr` actions run `yarn test:nr` / `yarn test:js`, so
+# the copy happens *after* `aztec compile`, which is required for `needsRecompile()` to still produce our own
+# artifacts. Once run-tests.yml@fix/testnr is fixed to use `@fix/testnr` internally, this can go back to a single
+# `uses:` of the reusable workflow.
 jobs:
-  tests:
-    uses: defi-wonderland/aztec-ci-actions/.github/workflows/run-tests.yml@fix/testnr
+  js-tests:
+    name: JS Tests
+    runs-on: ubuntu-latest-m
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Aztec environment
+        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@fix/testnr
+        with:
+          start-pxe: 'true'
+          run-codegen: 'true'
+
+      - name: Run JS tests
+        uses: defi-wonderland/aztec-ci-actions/actions/js-tests@fix/testnr
+
+  noir-tests:
+    name: Noir Tests
+    runs-on: ubuntu-latest-m
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Aztec environment
+        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@fix/testnr
+        with:
+          start-pxe: 'false'
+          run-codegen: 'false'
+
+      - name: Run Noir tests
+        uses: defi-wonderland/aztec-ci-actions/actions/noir-tests@fix/testnr

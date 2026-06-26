@@ -1,4 +1,7 @@
-use aztec::{macros::notes::note, protocol::{address::AztecAddress, traits::{Packable, Serialize}}};
+use aztec::{
+    macros::notes::note,
+    protocol::{address::AztecAddress, traits::{Deserialize, Packable, Serialize}},
+};
 
 /// @param escrow The address of the escrow
 /// @param recipient The address of the recipient
@@ -8,7 +11,7 @@ use aztec::{macros::notes::note, protocol::{address::AztecAddress, traits::{Pack
 /// @param duration The duration of the vesting
 /// @param total_amount The total amount of tokens to vest
 /// @param stop_timestamp The timestamp at which the vesting stopped (if stopped by the reclaimer)
-#[derive(Eq, Packable, Serialize)]
+#[derive(Deserialize, Eq, Packable, Serialize)]
 #[note]
 pub struct VestingScheduleNote {
     pub recipient: AztecAddress,

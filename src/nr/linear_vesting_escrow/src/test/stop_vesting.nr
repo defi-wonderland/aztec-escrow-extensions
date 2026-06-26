@@ -1,23 +1,20 @@
 use crate::LinearVestingEscrowLogic;
 use crate::test::utils;
+use aztec::test::helpers::test_environment::CallPrivateOptions;
 
-// TODO (reenable test): TXE scope enforcement means only the caller's notes are accessible during
-// private execution. The escrow's notes are not in scope when called from the logic contract.
-// The TS tests handle this via `additionalScopes: [escrow.address]`, but TXE doesn't support it yet.
-// #[test]
-#[allow(dead_code)]
+#[test]
 unconstrained fn stop_vesting_success() {
-    // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let duration = 10;
     let amount: u128 = 10000;
 
-    let (env, owner, _, _, logic_contract_address, escrow_contract_address, _) =
+    let (env, _, _, reclaimer, logic_contract_address, escrow_contract_address, _) =
         utils::deploy_and_create_escrow(false, amount, duration);
 
     let stop_timestamp = env.last_block_timestamp() + duration;
 
-    env.call_private(
-        owner,
+    env.call_private_opts(
+        reclaimer,
+        CallPrivateOptions::new().with_additional_scopes([escrow_contract_address]),
         LinearVestingEscrowLogic::at(logic_contract_address).stop_vesting(
             escrow_contract_address,
             stop_timestamp,
@@ -30,31 +27,28 @@ unconstrained fn stop_vesting_success() {
     assert(vesting_schedule_note.stop_timestamp == stop_timestamp, "Note: stop timestamp mismatch");
 }
 
-// TODO (reenable test): TXE scope enforcement means only the caller's notes are accessible during
-// private execution. The escrow's notes are not in scope when called from the logic contract.
-// The TS tests handle this via `additionalScopes: [escrow.address]`, but TXE doesn't support it yet.
-// #[test(should_fail_with = "Vesting schedule is not active")]
-#[allow(dead_code)]
+#[test(should_fail_with = "Vesting schedule is not active")]
 unconstrained fn stop_vesting_already_stopped() {
-    // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let duration = 10;
     let amount: u128 = 10000;
 
-    let (env, owner, _, _, logic_contract_address, escrow_contract_address, _) =
+    let (env, _, _, reclaimer, logic_contract_address, escrow_contract_address, _) =
         utils::deploy_and_create_escrow(false, amount, duration);
 
     let stop_timestamp = env.last_block_timestamp() + duration;
 
-    env.call_private(
-        owner,
+    env.call_private_opts(
+        reclaimer,
+        CallPrivateOptions::new().with_additional_scopes([escrow_contract_address]),
         LinearVestingEscrowLogic::at(logic_contract_address).stop_vesting(
             escrow_contract_address,
             stop_timestamp,
         ),
     );
 
-    env.call_private(
-        owner,
+    env.call_private_opts(
+        reclaimer,
+        CallPrivateOptions::new().with_additional_scopes([escrow_contract_address]),
         LinearVestingEscrowLogic::at(logic_contract_address).stop_vesting(
             escrow_contract_address,
             stop_timestamp,
@@ -62,13 +56,8 @@ unconstrained fn stop_vesting_already_stopped() {
     );
 }
 
-// TODO (reenable test): TXE scope enforcement means only the caller's notes are accessible during
-// private execution. The escrow's notes are not in scope when called from the logic contract.
-// The TS tests handle this via `additionalScopes: [escrow.address]`, but TXE doesn't support it yet.
-// #[test(should_fail_with = "caller is not reclaimer")]
-#[allow(dead_code)]
+#[test(should_fail_with = "caller is not reclaimer")]
 unconstrained fn stop_vesting_not_reclaimer() {
-    // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let duration = 10;
     let amount: u128 = 100;
 
@@ -77,8 +66,9 @@ unconstrained fn stop_vesting_not_reclaimer() {
 
     let stop_timestamp = env.last_block_timestamp() + duration;
 
-    env.call_private(
+    env.call_private_opts(
         recipient,
+        CallPrivateOptions::new().with_additional_scopes([escrow_contract_address]),
         LinearVestingEscrowLogic::at(logic_contract_address).stop_vesting(
             escrow_contract_address,
             stop_timestamp,
@@ -86,23 +76,19 @@ unconstrained fn stop_vesting_not_reclaimer() {
     );
 }
 
-// TODO (reenable test): TXE scope enforcement means only the caller's notes are accessible during
-// private execution. The escrow's notes are not in scope when called from the logic contract.
-// The TS tests handle this via `additionalScopes: [escrow.address]`, but TXE doesn't support it yet.
-// #[test(should_fail_with = "app_logic_reverted")]
-#[allow(dead_code)]
+#[test(should_fail_with = "Timestamp mismatch")]
 unconstrained fn stop_vesting_invalid_stop_timestamp() {
-    // TODO: Pay attention to upgrades. With each call, blocks get mined but timestamps do not advance.
     let duration = 10;
     let amount: u128 = 100;
 
-    let (env, owner, _, _, logic_contract_address, escrow_contract_address, _) =
+    let (env, _, _, reclaimer, logic_contract_address, escrow_contract_address, _) =
         utils::deploy_and_create_escrow(false, amount, duration);
 
     let stop_timestamp = 1;
 
-    env.call_private(
-        owner,
+    env.call_private_opts(
+        reclaimer,
+        CallPrivateOptions::new().with_additional_scopes([escrow_contract_address]),
         LinearVestingEscrowLogic::at(logic_contract_address).stop_vesting(
             escrow_contract_address,
             stop_timestamp,

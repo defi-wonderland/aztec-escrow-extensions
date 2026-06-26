@@ -135,7 +135,7 @@ jobs:
 
       - name: Setup Aztec environment (BASE)
         id: setup-aztec-base
-        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@v0
+        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@fix/testnr
         with:
           start-pxe: 'true'
           run-codegen: 'true'
@@ -186,14 +186,14 @@ jobs:
 
       - name: Setup Aztec environment (PR)
         if: steps.prver.outputs.ver_diff == 'true'
-        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@v0
+        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@fix/testnr
         with:
           start-pxe: 'true'
           run-codegen: 'true'
 
       - name: Setup Aztec environment (PR, same version)
         if: steps.prver.outputs.ver_diff == 'false'
-        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@v0
+        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@fix/testnr
         with:
           start-pxe: 'false'
           run-codegen: 'true'
