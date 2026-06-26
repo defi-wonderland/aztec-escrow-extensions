@@ -172,7 +172,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         AMOUNT,
         escrows[1].secretKey,
       )
-      .send({ from: alice });
+      .send({ from: alice, additionalScopes: [escrows[1].contract.address] });
 
     // Get the releasable amount of the second escrow
     const {
@@ -183,7 +183,10 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         escrows[1].contract.address,
         stopTimestamp_2,
       )
-      .simulate({ from: alice });
+      .simulate({
+        from: alice,
+        additionalScopes: [escrows[1].contract.address],
+      });
 
     const clawbackAmount_2 = AMOUNT - vestedAmount_2;
 
@@ -206,7 +209,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         AMOUNT,
         escrows[2].secretKey,
       )
-      .send({ from: alice });
+      .send({ from: alice, additionalScopes: [escrows[2].contract.address] });
 
     // Get the releasable amount of the third escrow
     const {
@@ -217,7 +220,10 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
         escrows[2].contract.address,
         stopTimestamp_3,
       )
-      .simulate({ from: alice });
+      .simulate({
+        from: alice,
+        additionalScopes: [escrows[2].contract.address],
+      });
     const clawbackAmount_3 = AMOUNT - vestedAmount_3;
 
     // Sync to get linear vesting escrow note
@@ -226,7 +232,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
     await linearVestingEscrowContract
       .withWallet(wallet)
       .methods.stop_vesting(escrows[2].contract.address, stopTimestamp_3)
-      .send({ from: alice });
+      .send({ from: alice, additionalScopes: [escrows[2].contract.address] });
 
     // Get the start timestamp of the first escrow
     const blockNumber = await node.getBlockNumber();
@@ -284,6 +290,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
       // Setup linear vesting escrow
       {
         name: "setup_linear_vesting_escrow",
+        additionalScopes: [escrows[0].contract.address],
         interaction: {
           caller: alice,
           action: linearVestingEscrowContract
@@ -302,6 +309,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
       // Partial claim (emits released amount note)
       {
         name: "claim (partial)",
+        additionalScopes: [escrows[0].contract.address],
         interaction: {
           caller: bob,
           action: linearVestingEscrowContract
@@ -312,6 +320,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
       // Claim the remaining amount (does not emit released amount note)
       {
         name: "claim (full)",
+        additionalScopes: [escrows[0].contract.address],
         interaction: {
           caller: bob,
           action: linearVestingEscrowContract
@@ -322,6 +331,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
       // Stop vesting
       {
         name: "stop_vesting",
+        additionalScopes: [escrows[1].contract.address],
         interaction: {
           caller: alice,
           action: linearVestingEscrowContract
@@ -335,6 +345,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
       // Clawback the second escrow
       {
         name: "clawback",
+        additionalScopes: [escrows[1].contract.address],
         interaction: {
           caller: alice,
           action: linearVestingEscrowContract
@@ -348,6 +359,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
       // Claim after stop vesting
       {
         name: "claim (final)",
+        additionalScopes: [escrows[2].contract.address],
         interaction: {
           caller: bob,
           action: linearVestingEscrowContract
@@ -361,6 +373,7 @@ export default class LinearVestingEscrowContractBenchmark extends Benchmark {
       // Clawback without withdrawing to recipient
       {
         name: "clawback (only to reclaimer)",
+        additionalScopes: [escrows[2].contract.address],
         interaction: {
           caller: alice,
           action: linearVestingEscrowContract
