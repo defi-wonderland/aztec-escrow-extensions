@@ -3,7 +3,7 @@ import { FieldsOf } from "@aztec/foundation/types";
 import { type AztecNode } from "@aztec/aztec.js/node";
 import { type EmbeddedWallet } from "@aztec/wallets/embedded";
 import { pedersenHash } from "@aztec/foundation/crypto/pedersen";
-import { TxStatus, TxReceipt } from "@aztec/aztec.js/tx";
+import { TxReceipt } from "@aztec/aztec.js/tx";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { deriveKeys, PublicKeys } from "@aztec/stdlib/keys";
 import { ContractDeployer } from "@aztec/aztec.js/deployment";
@@ -291,11 +291,12 @@ describe("Linear Vesting Escrow", () => {
       const txReceipt = await node.getTxReceipt(tx.txHash, {
         includeTxEffect: true,
       });
-      expect([
-        TxStatus.CHECKPOINTED,
-        TxStatus.PROVEN,
-        TxStatus.FINALIZED,
-      ]).toContain(txReceipt.status);
+
+      // The tx only needs to be mined (PROPOSED, CHECKPOINTED, PROVEN or
+      // FINALIZED) for its tx effect/nullifiers to be available. Asserting a
+      // stricter status (e.g. CHECKPOINTED) is flaky in CI, where the tx can
+      // still be in the PROPOSED state by the time it is read.
+      expect(txReceipt.isMined()).toBe(true);
 
       let nullifierExists = false;
       if (txReceipt.isMined() && txReceipt.txEffect) {
