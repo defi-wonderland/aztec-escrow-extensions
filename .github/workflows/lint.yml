@@ -50,12 +50,12 @@ jobs:
 
       - name: Setup Aztec environment
         id: setup-aztec
-        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@feat/next
+        uses: defi-wonderland/aztec-ci-actions/actions/setup-aztec@fix/testnr
         with:
           run-compile: 'false'
 
       - name: Check Noir formatting
-        run: nargo fmt --check
+        run: aztec-nargo fmt --check
 
       - name: Check Javascript & Typescript formatting
         run: yarn prettier '**/*.{js,ts}' --check

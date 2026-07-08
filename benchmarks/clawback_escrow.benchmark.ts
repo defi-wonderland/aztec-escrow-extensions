@@ -1,6 +1,7 @@
 import { Fr } from "@aztec/aztec.js/fields";
 import { deriveKeys } from "@aztec/stdlib/keys";
 import type { Wallet } from "@aztec/aztec.js/wallet";
+import { EmbeddedWallet } from "@aztec/wallets/embedded";
 import type { AztecNode } from "@aztec/aztec.js/node";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { getContractClassFromArtifact } from "@aztec/stdlib/contract";
@@ -68,7 +69,7 @@ async function deployEscrow(
 interface ClawbackEscrowBenchmarkContext extends BenchmarkContext {
   cleanup: () => Promise<void>;
   deployer: AztecAddress;
-  wallet: Wallet;
+  wallet: EmbeddedWallet;
   accounts: AztecAddress[];
   clawbackEscrowContract: ClawbackEscrowLogicContract;
   escrows: {
@@ -121,13 +122,11 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
     await tokenContract
       .withWallet(wallet)
       .methods.mint_to_private(escrows[0].contract.address, AMOUNT)
-      .send({ from: deployer })
-      .wait();
+      .send({ from: deployer });
     await tokenContract
       .withWallet(wallet)
       .methods.mint_to_private(escrows[1].contract.address, AMOUNT)
-      .send({ from: deployer })
-      .wait();
+      .send({ from: deployer });
 
     // Deploy a nft contract
     const nftContract = (await deployNFTWithMinter(
@@ -137,13 +136,11 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
     await nftContract
       .withWallet(wallet)
       .methods.mint_to_private(escrows[0].contract.address, 1) // token ID: 1
-      .send({ from: deployer })
-      .wait();
+      .send({ from: deployer });
     await nftContract
       .withWallet(wallet)
       .methods.mint_to_private(escrows[1].contract.address, 2) // token ID: 2
-      .send({ from: deployer })
-      .wait();
+      .send({ from: deployer });
 
     const blockNumber = await node.getBlockNumber();
     const block = await node.getBlock(blockNumber);
@@ -159,8 +156,10 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
         pastDeadline,
         escrows[0].secretKey,
       )
-      .send({ from: deployer })
-      .wait();
+      .send({
+        from: deployer,
+        additionalScopes: [escrows[0].contract.address],
+      });
 
     return {
       cleanup,
@@ -202,6 +201,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
       // Setup clawback escrow
       {
         name: "setup_clawback_escrow",
+        additionalScopes: [escrows[1].contract.address],
         interaction: {
           caller: alice,
           action: clawbackEscrowContract
@@ -217,6 +217,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
       // Full token claim escrow
       {
         name: "claim",
+        additionalScopes: [escrows[1].contract.address],
         interaction: {
           caller: bob,
           action: clawbackEscrowContract
@@ -231,6 +232,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
       // NFT claim escrow
       {
         name: "claim_nft",
+        additionalScopes: [escrows[1].contract.address],
         interaction: {
           caller: bob,
           action: clawbackEscrowContract
@@ -245,6 +247,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
       // Full token clawback escrow
       {
         name: "clawback",
+        additionalScopes: [escrows[0].contract.address],
         interaction: {
           caller: alice,
           action: clawbackEscrowContract
@@ -259,6 +262,7 @@ export default class ClawbackEscrowContractBenchmark extends Benchmark {
       // NFT clawback escrow
       {
         name: "clawback_nft",
+        additionalScopes: [escrows[0].contract.address],
         interaction: {
           caller: alice,
           action: clawbackEscrowContract

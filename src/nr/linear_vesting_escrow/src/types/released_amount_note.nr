@@ -1,9 +1,9 @@
-use aztec::{macros::notes::note, protocol::traits::{Packable, Serialize}};
+use aztec::{macros::notes::note, protocol::traits::{Deserialize, Packable, Serialize}};
 
 /// @param escrow The address of the escrow
 /// @param released_amount The released amount of tokens
 /// @param claim_completed Whether the final claim is done
-#[derive(Eq, Packable, Serialize)]
+#[derive(Deserialize, Eq, Packable, Serialize)]
 #[note]
 pub struct ReleasedAmountNote {
     pub released_amount: u128,

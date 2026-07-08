@@ -5,8 +5,7 @@ compiler_version = ">=1.0.0"
 authors = [""]
 
 [dependencies]
-aztec = { git = "https://github.com/AztecProtocol/aztec-packages/", tag = "v4.2.0", directory = "noir-projects/aztec-nr/aztec" }
-public_checks_contract = { git = "https://github.com/AztecProtocol/aztec-packages/", tag = "v4.2.0", directory = "noir-projects/noir-contracts/contracts/protocol/public_checks_contract" }
-escrow_standard = { git = "https://github.com/defi-wonderland/aztec-standards/", tag = "prerelease-adcef17", directory = "src/escrow_contract" }
-token = { git = "https://github.com/defi-wonderland/aztec-standards/", tag = "prerelease-adcef17", directory = "src/token_contract" }
-nft = { git = "https://github.com/defi-wonderland/aztec-standards/", tag = "prerelease-adcef17", directory = "src/nft_contract" }
+aztec = { git = "https://github.com/AztecProtocol/aztec-packages/", tag = "v5.0.0-rc.1", directory = "noir-projects/aztec-nr/aztec" }
+escrow_standard = { git = "https://github.com/defi-wonderland/aztec-standards/", tag = "prerelease-15b49c2", directory = "src/escrow_contract" }
+token = { git = "https://github.com/defi-wonderland/aztec-standards/", tag = "prerelease-15b49c2", directory = "src/token_contract" }
+nft = { git = "https://github.com/defi-wonderland/aztec-standards/", tag = "prerelease-15b49c2", directory = "src/nft_contract" }

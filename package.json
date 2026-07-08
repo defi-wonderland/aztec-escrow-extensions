@@ -1,6 +1,6 @@
 {
   "name": "aztec-escrow-extensions",
-  "version": "4.2.0",
+  "version": "5.0.0-rc.1",
   "repository": "https://github.com/defi-wonderland/aztec-escrow-extensions.git",
   "author": "Wonderland",
   "license": "MIT",
@@ -8,12 +8,11 @@
   "scripts": {
     "clean": "rm -rf ./src/artifacts ./target codegenCache.json",
     "codegen": "aztec codegen target --outdir src/artifacts --force",
-    "copy-standards-artifacts": "mkdir -p target && cp node_modules/@defi-wonderland/aztec-standards/target/*.json target/ 2>/dev/null || true",
-    "compile": "aztec compile && yarn copy-standards-artifacts",
-    "postinstall": "yarn copy-standards-artifacts",
+    "copy-standards-artifacts": "mkdir -p target && cp node_modules/@defi-wonderland/aztec-standards/target/*.json target/ && cp node_modules/@aztec/noir-contracts.js/artifacts/public_checks_contract-PublicChecks.json target/",
+    "compile": "aztec compile",
     "test": "yarn test:nr && yarn test:js",
     "test:js": "vitest run",
-    "test:nr": "aztec test",
+    "test:nr": "yarn copy-standards-artifacts && aztec test",
     "lint:prettier": "prettier '**/*.{js,ts}' --write",
     "build": "yarn compile && yarn codegen -f",
     "prepare": "husky",
@@ -24,15 +23,16 @@
     "*.ts": "prettier --write -u"
   },
   "dependencies": {
-    "@aztec/accounts": "4.2.0",
-    "@aztec/aztec.js": "4.2.0",
-    "@aztec/noir-contracts.js": "4.2.0",
-    "@aztec/protocol-contracts": "4.2.0",
-    "@aztec/pxe": "4.2.0",
-    "@aztec/stdlib": "4.2.0",
-    "@aztec/wallets": "4.2.0",
-    "@defi-wonderland/aztec-benchmark": "https://github.com/defi-wonderland/aztec-benchmark/releases/download/prerelease-022ee63/defi-wonderland-aztec-benchmark-4.2.0-prerelease.022ee63.tgz",
-    "@defi-wonderland/aztec-standards": "https://github.com/defi-wonderland/aztec-standards/releases/download/prerelease-adcef17/defi-wonderland-aztec-standards-4.2.0-prerelease.adcef17.tgz"
+    "@aztec/accounts": "5.0.0-rc.1",
+    "@aztec/aztec.js": "5.0.0-rc.1",
+    "@aztec/noir-contracts.js": "5.0.0-rc.1",
+    "@aztec/protocol-contracts": "5.0.0-rc.1",
+    "@aztec/pxe": "5.0.0-rc.1",
+    "@aztec/standard-contracts": "5.0.0-rc.1",
+    "@aztec/stdlib": "5.0.0-rc.1",
+    "@aztec/wallets": "5.0.0-rc.1",
+    "@defi-wonderland/aztec-benchmark": "5.0.0-rc.1",
+    "@defi-wonderland/aztec-standards": "https://github.com/defi-wonderland/aztec-standards/releases/download/prerelease-15b49c2/defi-wonderland-aztec-standards-5.0.0-rc.1-prerelease.15b49c2.tgz"
   },
   "devDependencies": {
     "@commitlint/cli": "20.3.1",
@@ -46,7 +46,7 @@
     "vitest": "4.0.17"
   },
   "config": {
-    "aztecVersion": "4.2.0"
+    "aztecVersion": "5.0.0-rc.1"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
   "engines": {

@@ -8,9 +8,10 @@ pub contract LinearVestingEscrowLogic {
     use aztec::{
         context::{PrivateContext, UtilityContext},
         macros::{events::event, functions::{external, initializer, view}, storage::storage},
-        messages::message_delivery::MessageDelivery,
+        messages::delivery::MessageDelivery,
         note::{note_getter_options::NoteGetterOptions, note_viewer_options::NoteViewerOptions},
         protocol::{address::AztecAddress, public_keys::PublicKeys, traits::ToField},
+        public_checks::privately_check_timestamp,
         state_vars::{Owned, PrivateSet, PublicImmutable},
         utils::comparison::Comparator,
     };
@@ -25,8 +26,6 @@ pub contract LinearVestingEscrowLogic {
     };
     // bignum library
     use bignum::{BigNum, bignum::to_field, U256};
-    // router contract
-    use public_checks_contract::utils::privately_check_timestamp;
 
     /// @notice Data privately emitted to an account that will use the escrow
     /// @dev We declare the event struct here to expose it in the abi as macro event cannot be used in libraries, only in contracts
@@ -108,7 +107,7 @@ pub contract LinearVestingEscrowLogic {
 
         // Check that a linear vesting escrow has not been created for the provided escrow
         let nullifier = std::hash::pedersen_hash([escrow.to_field()]);
-        self.context.push_nullifier(nullifier);
+        self.context.push_nullifier_unsafe(nullifier);
     }
 
     /// @notice Claims what's available from the provided escrow
@@ -292,6 +291,22 @@ pub contract LinearVestingEscrowLogic {
         _secret_key_to_public_keys(secret_key)
     }
 
+    /// @notice Returns the vesting schedule note stored for the given escrow.
+    /// @param escrow The address of the escrow
+    /// @return The vesting schedule note
+    #[external("utility")]
+    unconstrained fn view_vesting_schedule_note(escrow: AztecAddress) -> pub VestingScheduleNote {
+        _view_vesting_schedule_note(self.storage, escrow)
+    }
+
+    /// @notice Returns the released amount note stored for the given escrow.
+    /// @param escrow The address of the escrow
+    /// @return The released amount note
+    #[external("utility")]
+    unconstrained fn view_released_amount_note(escrow: AztecAddress) -> pub ReleasedAmountNote {
+        _view_released_amount_note(self.storage, escrow)
+    }
+
     /// @notice Calculates the releasable and vested amounts for a linear vesting note
     /// @param escrow The address of the escrow
     /// @param timestamp The timestamp
@@ -350,7 +365,7 @@ pub contract LinearVestingEscrowLogic {
             stop_timestamp,
         };
         let note_insertion = storage.escrows.at(escrow).insert(note);
-        note_insertion.deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
+        note_insertion.deliver(MessageDelivery::onchain_constrained());
     }
 
     /// @notice Creates and inserts a new released amount note into the storage and emits it to the escrow
@@ -368,7 +383,7 @@ pub contract LinearVestingEscrowLogic {
     ) {
         let note = ReleasedAmountNote { released_amount, claim_completed };
         let note_insertion = storage.released_notes.at(escrow).insert(note);
-        note_insertion.deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
+        note_insertion.deliver(MessageDelivery::onchain_constrained());
     }
 
     /// @notice Finds a vesting schedule note in the storage

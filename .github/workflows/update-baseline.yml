@@ -1,0 +1,21 @@
+name: Update Benchmark Baseline
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  schedule:
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
+
+concurrency:
+  group: update-baseline-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  baseline:
+    uses: defi-wonderland/aztec-benchmark/.github/workflows/update-baseline.yml@prerelease-dc3da1e
+    permissions:
+      contents: read
+      actions: write

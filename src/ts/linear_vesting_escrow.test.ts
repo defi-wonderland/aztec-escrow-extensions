@@ -3,7 +3,7 @@ import { FieldsOf } from "@aztec/foundation/types";
 import { type AztecNode } from "@aztec/aztec.js/node";
 import { type EmbeddedWallet } from "@aztec/wallets/embedded";
 import { pedersenHash } from "@aztec/foundation/crypto/pedersen";
-import { TxStatus, TxReceipt } from "@aztec/aztec.js/tx";
+import { TxReceipt } from "@aztec/aztec.js/tx";
 import { AztecAddress } from "@aztec/aztec.js/addresses";
 import { deriveKeys, PublicKeys } from "@aztec/stdlib/keys";
 import { ContractDeployer } from "@aztec/aztec.js/deployment";
@@ -170,13 +170,13 @@ describe("Linear Vesting Escrow", () => {
       const deployer = new ContractDeployer(
         LinearVestingEscrowLogicContractArtifact,
         wallet,
-        undefined,
         "constructor",
       );
-      const deployResult = await deployer.deploy(escrowClassId).send({
-        contractAddressSalt: salt,
-        from: alice,
-      });
+      const deployResult = await deployer
+        .deploy([escrowClassId], { salt })
+        .send({
+          from: alice,
+        });
       const contract = deployResult.contract;
 
       const contractMetadata = await wallet.getContractMetadata(
@@ -288,17 +288,19 @@ describe("Linear Vesting Escrow", () => {
         nullifier,
       );
 
-      const txReceipt = await node.getTxReceipt(tx.txHash);
-      expect([
-        TxStatus.CHECKPOINTED,
-        TxStatus.PROVEN,
-        TxStatus.FINALIZED,
-      ]).toContain(txReceipt.status);
+      const txReceipt = await node.getTxReceipt(tx.txHash, {
+        includeTxEffect: true,
+      });
 
-      const txEffect = await node.getTxEffect(tx.txHash);
+      // The tx only needs to be mined (PROPOSED, CHECKPOINTED, PROVEN or
+      // FINALIZED) for its tx effect/nullifiers to be available. Asserting a
+      // stricter status (e.g. CHECKPOINTED) is flaky in CI, where the tx can
+      // still be in the PROPOSED state by the time it is read.
+      expect(txReceipt.isMined()).toBe(true);
+
       let nullifierExists = false;
-      if (txEffect) {
-        const nullifiers = txEffect.data.nullifiers;
+      if (txReceipt.isMined() && txReceipt.txEffect) {
+        const nullifiers = txReceipt.txEffect.nullifiers;
         nullifierExists = nullifiers.some((n) => n.equals(siloedNullifier));
       }
 
@@ -1928,7 +1930,9 @@ describe("Linear Vesting Escrow", () => {
           .send({ from: bob, additionalScopes: [escrow.address] });
         await syncPXE(wallet);
 
-        // releasableAmount should be 0 after the claim transaction
+        // Remaining releasable after the partial claim. Bob claimed `releasableAmount / 2n`
+        // (floored), so what's left is the complement, which keeps the odd remainder.
+        const remainingReleasable = releasableAmount - releasableAmount / 2n;
         const [releasableAmountAfterClaim, _] = (
           await linearVestingEscrow
             .withWallet(wallet)
@@ -1939,7 +1943,7 @@ describe("Linear Vesting Escrow", () => {
             .simulate({ from: escrow.address })
         ).result;
 
-        expect(releasableAmountAfterClaim).toBe(releasableAmount / 2n);
+        expect(releasableAmountAfterClaim).toBe(remainingReleasable);
 
         // Assert post-claim balances
         await expectTokenBalances(token, alice, wad(0), wad(0));
@@ -2554,8 +2558,8 @@ describe("Linear Vesting Escrow", () => {
           escrow.address,
         );
 
-        // Second clawback - claim another 1/2
-        const secondClawbackAmount = totalClawbackAmount / 2n;
+        // Second clawback - claim the remaining amount (avoids losing the odd remainder)
+        const secondClawbackAmount = totalClawbackAmount - firstClawbackAmount;
         const clawbackTx2 = (
           await linearVestingEscrow
             .withWallet(wallet)

@@ -2,14 +2,13 @@ use crate::LinearVestingEscrowLogic;
 use crate::types::released_amount_note::ReleasedAmountNote;
 use crate::types::vesting_schedule_note::VestingScheduleNote;
 use aztec::{
-    note::{constants::MAX_NOTES_PER_PAGE, note_viewer_options::NoteViewerOptions},
     protocol::{
         address::AztecAddress,
-        point::Point,
-        public_keys::{IvpkM, NpkM, OvpkM, PublicKeys, TpkM},
+        constants::{DEFAULT_FBPK_M_HASH, DEFAULT_MSPK_M_HASH},
+        point::EmbeddedCurvePoint,
+        public_keys::{hash_public_key, IvpkM, PublicKeys},
     },
-    state_vars::{OwnedStateVariable, PrivateSet},
-    test::helpers::test_environment::TestEnvironment,
+    test::helpers::test_environment::{DeployOptions, TestEnvironment},
 };
 use escrow_standard::test::utils as escrow_utils;
 use token::test::utils as token_utils;
@@ -20,6 +19,10 @@ pub unconstrained fn setup(
 ) -> (&mut TestEnvironment, AztecAddress, AztecAddress, AztecAddress) {
     // Setup env, generate keys
     let mut env = TestEnvironment::new();
+
+    // Deploy the public checks contract at its standard address so that timestamp checks can be enqueued.
+    deploy_public_checks(&mut env);
+
     let (owner, user1, user2) = if with_account_contracts {
         let owner = env.create_contract_account();
         let user1 = env.create_contract_account();
@@ -33,6 +36,20 @@ pub unconstrained fn setup(
     };
 
     (&mut env, owner, user1, user2)
+}
+
+/// Deploys the standard `PublicChecks` contract at its hardcoded standard address.
+///
+/// `privately_check_timestamp` enqueues a public call to `STANDARD_PUBLIC_CHECKS_ADDRESS`, which is no longer a
+/// protocol contract auto-deployed by the TXE. Deploying with `salt = 1` and `secret = 0` reproduces the standard
+/// deployment params (default public keys, zero deployer), yielding the expected standard address.
+pub unconstrained fn deploy_public_checks(env: &mut TestEnvironment) {
+    let _ = env
+        .deploy_opts(
+            DeployOptions::new().with_salt(1).with_secret(0),
+            "@public_checks_contract/PublicChecks",
+        )
+        .without_initializer();
 }
 
 pub unconstrained fn deploy_linear_vesting_escrow_logic(
@@ -106,18 +123,10 @@ pub unconstrained fn get_vesting_schedule_note(
     logic_contract_address: AztecAddress,
     escrow: AztecAddress,
 ) -> VestingScheduleNote {
-    let offset = 0;
-    let notes = env.utility_context_at(logic_contract_address, |context| {
-        let options = NoteViewerOptions::new().set_limit(1).set_offset(offset);
-        let vesting_schedule_slot = LinearVestingEscrowLogic::storage_layout().escrows.slot;
-        let set: PrivateSet<VestingScheduleNote, _> =
-            OwnedStateVariable::new(context, vesting_schedule_slot, escrow);
-        let notes: BoundedVec<VestingScheduleNote, MAX_NOTES_PER_PAGE> = set.view_notes(options);
-        notes
-    });
-
-    // We revert if there is no note in the filter so we can probably unwrap directly
-    notes.get_unchecked(0)
+    // Read through the contract's utility function so the escrow-owned note is in scope. A raw
+    // `utility_context_at` read does not surface notes owned by an account other than the caller.
+    env.execute_utility(LinearVestingEscrowLogic::at(logic_contract_address)
+        .view_vesting_schedule_note(escrow))
 }
 
 pub unconstrained fn get_released_amount_note(
@@ -125,18 +134,10 @@ pub unconstrained fn get_released_amount_note(
     logic_contract_address: AztecAddress,
     escrow: AztecAddress,
 ) -> ReleasedAmountNote {
-    let offset = 0;
-    let notes = env.utility_context_at(logic_contract_address, |context| {
-        let options = NoteViewerOptions::new().set_limit(1).set_offset(offset);
-        let released_notes_slot = LinearVestingEscrowLogic::storage_layout().released_notes.slot;
-        let set: PrivateSet<ReleasedAmountNote, _> =
-            OwnedStateVariable::new(context, released_notes_slot, escrow);
-        let notes: BoundedVec<ReleasedAmountNote, MAX_NOTES_PER_PAGE> = set.view_notes(options);
-        notes
-    });
-
-    // We revert if there is no note in the filter so we can probably unwrap directly
-    notes.get_unchecked(0)
+    // Read through the contract's utility function so the escrow-owned note is in scope. A raw
+    // `utility_context_at` read does not surface notes owned by an account other than the caller.
+    env.execute_utility(LinearVestingEscrowLogic::at(logic_contract_address)
+        .view_released_amount_note(escrow))
 }
 
 // TODO: import from aztec-standards logic library utils
@@ -154,10 +155,12 @@ pub unconstrained fn get_test_vector() -> (PublicKeys, Field, PublicKeys, Field)
     let tpk_y_1: Field = 0x1ef6fce001c800647bb2b7137517181306c713f671c0e65339dd11d57c863ee8;
 
     let public_keys_1 = PublicKeys {
-        npk_m: NpkM { inner: Point { x: npk_x_1, y: npk_y_1, is_infinite: false } },
-        ivpk_m: IvpkM { inner: Point { x: ivpk_x_1, y: ivpk_y_1, is_infinite: false } },
-        ovpk_m: OvpkM { inner: Point { x: ovpk_x_1, y: ovpk_y_1, is_infinite: false } },
-        tpk_m: TpkM { inner: Point { x: tpk_x_1, y: tpk_y_1, is_infinite: false } },
+        npk_m_hash: hash_public_key(EmbeddedCurvePoint { x: npk_x_1, y: npk_y_1 }),
+        ivpk_m: IvpkM { inner: EmbeddedCurvePoint { x: ivpk_x_1, y: ivpk_y_1 } },
+        ovpk_m_hash: hash_public_key(EmbeddedCurvePoint { x: ovpk_x_1, y: ovpk_y_1 }),
+        tpk_m_hash: hash_public_key(EmbeddedCurvePoint { x: tpk_x_1, y: tpk_y_1 }),
+        mspk_m_hash: DEFAULT_MSPK_M_HASH,
+        fbpk_m_hash: DEFAULT_FBPK_M_HASH,
     };
 
     // Secret key 2: string "RANDOM_SECRET_KEY" left-padded to 32 bytes with spaces
@@ -174,10 +177,12 @@ pub unconstrained fn get_test_vector() -> (PublicKeys, Field, PublicKeys, Field)
     let tpk_y_2: Field = 0x0cc1c1631501a99ed1797f4d701df03c9663989fee1fb311266459b47f523e07;
 
     let public_keys_2 = PublicKeys {
-        npk_m: NpkM { inner: Point { x: npk_x_2, y: npk_y_2, is_infinite: false } },
-        ivpk_m: IvpkM { inner: Point { x: ivpk_x_2, y: ivpk_y_2, is_infinite: false } },
-        ovpk_m: OvpkM { inner: Point { x: ovpk_x_2, y: ovpk_y_2, is_infinite: false } },
-        tpk_m: TpkM { inner: Point { x: tpk_x_2, y: tpk_y_2, is_infinite: false } },
+        npk_m_hash: hash_public_key(EmbeddedCurvePoint { x: npk_x_2, y: npk_y_2 }),
+        ivpk_m: IvpkM { inner: EmbeddedCurvePoint { x: ivpk_x_2, y: ivpk_y_2 } },
+        ovpk_m_hash: hash_public_key(EmbeddedCurvePoint { x: ovpk_x_2, y: ovpk_y_2 }),
+        tpk_m_hash: hash_public_key(EmbeddedCurvePoint { x: tpk_x_2, y: tpk_y_2 }),
+        mspk_m_hash: DEFAULT_MSPK_M_HASH,
+        fbpk_m_hash: DEFAULT_FBPK_M_HASH,
     };
 
     (public_keys_1, secret_key_1, public_keys_2, secret_key_2)
